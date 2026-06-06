@@ -111,6 +111,31 @@
     window.location.reload();
   }
 
+  // ── Root Blocker ──────────────────────────────────────────────────────────
+  // CSS !important rule injected BEFORE the Vite bundle loads — prevents
+  // React from overriding display:none with its own styles.
+  let _blockerEl = null;
+
+  function blockApp() {
+    if (_blockerEl) return;
+    _blockerEl = document.createElement('style');
+    _blockerEl.id = 'syson-root-blocker';
+    _blockerEl.textContent = '#root { display: none !important; }';
+    document.head.insertBefore(_blockerEl, document.head.firstChild);
+  }
+
+  function unblockApp() {
+    if (_blockerEl) {
+      _blockerEl.remove();
+      _blockerEl = null;
+    }
+    // Also remove any leftover inline display:none on #root
+    const root = document.getElementById('root');
+    if (root && root.style.display === 'none') {
+      root.style.display = '';
+    }
+  }
+
   // ── UI ───────────────────────────────────────────────────────────────────
   const STYLES = `
     #syson-auth-overlay {
@@ -176,6 +201,13 @@
   `;
 
   function showLogin(errorMsg) {
+    // auth.js is loaded in <head>, so body may not exist yet.
+    // Keep the root blocker active, then render the login overlay once <body> exists.
+    if (!document.body) {
+      document.addEventListener('DOMContentLoaded', () => showLogin(errorMsg), { once: true });
+      return;
+    }
+
     // Inject styles
     const styleEl = document.createElement('style');
     styleEl.textContent = STYLES;
@@ -217,9 +249,10 @@
       errorEl.textContent = '';
       try {
         await login(email, password);
-        overlay.remove();
-        styleEl.remove();
-        mountUserBar();
+        // Force a full reload so the React app initializes fresh with
+        // the token already in localStorage — avoids broken state from
+        // GraphQL queries that failed during the login overlay.
+        window.location.reload();
       } catch (err) {
         errorEl.textContent = err.message;
         btn.disabled = false;
@@ -280,9 +313,7 @@
     }
   } else {
     // Not authenticated — show login and block app load
-    // Hide the root element until login succeeds
-    const root = document.getElementById('root');
-    if (root) root.style.display = 'none';
+    blockApp();
     showLogin('');
   }
 })();
