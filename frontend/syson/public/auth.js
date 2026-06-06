@@ -221,8 +221,8 @@
         <h1>SysON</h1>
         <p class="subtitle">Sign in to continue</p>
         <form id="syson-login-form">
-          <label for="syson-email">Email</label>
-          <input id="syson-email" type="email" placeholder="admin@localhost" autocomplete="email" autofocus />
+          <label for="syson-email">Username</label>
+          <input id="syson-email" type="text" placeholder="admin" autocomplete="username" autofocus />
           <label for="syson-password">Password</label>
           <input id="syson-password" type="password" placeholder="••••••••" autocomplete="current-password" />
           <button type="submit" id="syson-login-btn">Sign In</button>
@@ -241,7 +241,7 @@
       const email = document.getElementById('syson-email').value.trim();
       const password = document.getElementById('syson-password').value;
       if (!email || !password) {
-        errorEl.textContent = 'Email and password are required';
+        errorEl.textContent = 'Username and password are required';
         return;
       }
       btn.disabled = true;

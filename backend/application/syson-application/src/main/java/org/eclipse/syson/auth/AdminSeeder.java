@@ -33,8 +33,8 @@ import jakarta.annotation.PostConstruct;
  * <p>
  * Reads credentials from environment variables:
  * <ul>
- *   <li>{@code SYSON_BOOTSTRAP_EMAIL} (default: {@code admin@localhost})</li>
- *   <li>{@code SYSON_BOOTSTRAP_PASSWORD} (required)</li>
+ *   <li>{@code SYSON_BOOTSTRAP_EMAIL} (default: {@code admin})</li>
+ *   <li>{@code SYSON_BOOTSTRAP_PASSWORD} (default: {@code admin})</li>
  * </ul>
  * If the user already exists, seeding is skipped.
  * </p>
@@ -46,7 +46,9 @@ public class AdminSeeder {
 
     private static final Logger LOG = LoggerFactory.getLogger(AdminSeeder.class);
 
-    private static final String DEFAULT_EMAIL = "admin@localhost";
+    private static final String DEFAULT_EMAIL = "admin";
+
+    private static final String DEFAULT_PASSWORD = "admin";
 
     private static final String DEFAULT_NAME = "SuperUser";
 
@@ -77,11 +79,10 @@ public class AdminSeeder {
     @PostConstruct
     public void seed() {
         String bootstrapEmail = this.getEnv("SYSON_BOOTSTRAP_EMAIL", this.getEnv("SYSON_AUTH_ADMIN_EMAIL", DEFAULT_EMAIL));
-        String bootstrapPassword = this.getEnv("SYSON_BOOTSTRAP_PASSWORD", this.getEnv("SYSON_AUTH_ADMIN_PASSWORD", null));
+        String bootstrapPassword = this.getEnv("SYSON_BOOTSTRAP_PASSWORD", this.getEnv("SYSON_AUTH_ADMIN_PASSWORD", DEFAULT_PASSWORD));
 
-        if (bootstrapPassword == null || bootstrapPassword.isBlank()) {
-            LOG.warn("SYSON_BOOTSTRAP_PASSWORD is not set. Skipping superuser seeding.");
-            return;
+        if (DEFAULT_PASSWORD.equals(bootstrapPassword)) {
+            LOG.warn("Using install-default superuser password. Change it after first login or set SYSON_BOOTSTRAP_PASSWORD/SYSON_AUTH_ADMIN_PASSWORD.");
         }
 
         // Ensure default tenant exists
