@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -39,6 +40,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    /** Request attribute names consumed by {@link TenantFilter}. */
+    static final String TENANT_ID_ATTR = "syson.tenant_id";
+    static final String USER_ID_ATTR = "syson.user_id";
 
     private static final List<String> PUBLIC_PATHS = List.of(
             "/api/auth/login",
@@ -93,6 +98,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                // Expose tenant and user as request attributes for downstream TenantFilter
+                UUID tenantId = this.jwtService.extractTenantId(token);
+                request.setAttribute(TENANT_ID_ATTR, tenantId);
+                request.setAttribute(USER_ID_ATTR, username);
             }
         }
 

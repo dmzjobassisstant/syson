@@ -38,8 +38,12 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    private final TenantFilter tenantFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          TenantFilter tenantFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.tenantFilter = tenantFilter;
     }
 
     @Bean
@@ -54,7 +58,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().permitAll()
                 )
-                .addFilterBefore(this.jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(this.jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(this.tenantFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
