@@ -29,7 +29,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MembershipRepository extends JpaRepository<TenantMembership, TenantMembershipId> {
 
-    Optional<TenantMembership> findByTenantMembershipIdUserIdAndTenantMembershipIdTenantId(UUID userId, UUID tenantId);
+    Optional<TenantMembership> findByIdUserIdAndIdTenantId(UUID userId, UUID tenantId);
 
-    List<TenantMembership> findByTenantMembershipIdUserId(UUID userId);
+    List<TenantMembership> findByIdUserId(UUID userId);
 }

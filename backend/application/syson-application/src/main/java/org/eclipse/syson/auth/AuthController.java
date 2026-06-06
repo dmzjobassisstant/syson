@@ -78,7 +78,7 @@ public class AuthController {
 
         // Pick the first membership's tenant
         UUID tenantId = this.membershipRepository
-                .findByTenantMembershipIdUserId(userId)
+                .findByIdUserId(userId)
                 .stream()
                 .findFirst()
                 .map(m -> m.getId().getTenantId())

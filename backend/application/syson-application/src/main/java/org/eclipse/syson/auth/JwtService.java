@@ -16,6 +16,9 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,7 +47,14 @@ public class JwtService {
     private final SecretKey signingKey;
 
     public JwtService(@Value("${syson.auth.jwt.secret}") String secret) {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes());
+        byte[] keyBytes;
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            keyBytes = sha256.digest(secret.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
+        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
     /**

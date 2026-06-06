@@ -50,7 +50,7 @@ public class SysonUserDetailsService implements UserDetailsService {
 
         // Derive Spring Security authorities from tenant memberships
         List<SimpleGrantedAuthority> authorities = this.membershipRepository
-                .findByTenantMembershipIdUserId(sysonUser.getId())
+                .findByIdUserId(sysonUser.getId())
                 .stream()
                 .map(m -> new SimpleGrantedAuthority("ROLE_" + m.getRole().toUpperCase()))
                 .collect(Collectors.toList());

@@ -76,8 +76,8 @@ public class AdminSeeder {
 
     @PostConstruct
     public void seed() {
-        String bootstrapEmail = this.getEnv("SYSON_BOOTSTRAP_EMAIL", DEFAULT_EMAIL);
-        String bootstrapPassword = this.getEnv("SYSON_BOOTSTRAP_PASSWORD", null);
+        String bootstrapEmail = this.getEnv("SYSON_BOOTSTRAP_EMAIL", this.getEnv("SYSON_AUTH_ADMIN_EMAIL", DEFAULT_EMAIL));
+        String bootstrapPassword = this.getEnv("SYSON_BOOTSTRAP_PASSWORD", this.getEnv("SYSON_AUTH_ADMIN_PASSWORD", null));
 
         if (bootstrapPassword == null || bootstrapPassword.isBlank()) {
             LOG.warn("SYSON_BOOTSTRAP_PASSWORD is not set. Skipping superuser seeding.");
