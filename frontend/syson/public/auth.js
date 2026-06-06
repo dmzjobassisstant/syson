@@ -2,6 +2,18 @@
  * SysON Auth — RBAC login overlay + JWT interceptor.
  * Injected into index.html before the Sirius Web app loads.
  * Zero dependencies. Self-contained.
+ *
+ * ⚠️ AI AGENTS: DO NOT REFACTOR THIS FILE CASUALLY.
+ * The login overlay has been broken multiple times by broad auth.js rewrites.
+ * Keep the unauthenticated boot path intact: loadState() -> blockApp() -> showLogin('').
+ * blockApp() MUST inject '#root { display: none !important; }' because Vite/React
+ * can override root.style.display. showLogin() MUST wait for document.body because
+ * this script is loaded from <head>. Successful login MUST reload the page so the
+ * React app boots fresh with the JWT already present.
+ *
+ * Before claiming success after any change, run:
+ *   bash scripts/check-syson-login-regression.sh
+ * See AGENTS.md for the full guardrail notes.
  */
 (function () {
   'use strict';

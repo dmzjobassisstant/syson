@@ -1,0 +1,72 @@
+# Notes for AI coding agents working on this SysON fork
+
+## Critical: do not break the login overlay
+
+The production site is `https://syson.damuza-consulting.com`. Authentication is injected by `frontend/syson/public/auth.js` and is also direct-served by nginx at `/var/www/syson/auth.js`.
+
+Less-capable agents have repeatedly introduced the same regression: after changing `auth.js`, the login screen disappears or the React app renders over/behind it. Avoid large rewrites.
+
+### Hard rules for `frontend/syson/public/auth.js`
+
+1. **Do not refactor the login boot path.** Leave these functions and their call order intact unless you are specifically fixing login:
+   - `loadState()`
+   - `blockApp()`
+   - `showLogin()`
+   - `login()`
+   - `mountUserBar()`
+   - `logout()`
+   - `refreshToken()`
+2. **If there is no token, the boot path must be exactly:**
+   - `loadState()`
+   - `blockApp()`
+   - `showLogin('')`
+3. **`blockApp()` must inject:** `#root { display: none !important; }` as a `<style id="syson-root-blocker">` in `<head>`.
+   - Do not replace this with `root.style.display = 'none'`; Vite/React can override that.
+4. **`showLogin()` must tolerate being called while `document.body` is still null.**
+   - `auth.js` loads in `<head>` before body exists.
+   - If body does not exist, register a one-time `DOMContentLoaded` callback and return.
+5. **After successful login, call `window.location.reload()`.**
+   - Do not simply remove the overlay. The React app may have already booted with failed unauthenticated GraphQL requests and can stay blank.
+6. **Add optional UI features as self-contained functions.**
+   - Do not restructure existing login/interceptor code.
+   - Prefer inline styles for feature overlays to avoid interfering with login CSS.
+7. **Use `_origFetch` for login/dashboard API calls.**
+   - The global `window.fetch` is monkey-patched to add JWT headers.
+8. **Do not trust syntax checks alone.** `node -c auth.js` can pass while the login overlay is broken.
+
+### Required verification after any `auth.js` change
+
+Run the regression check before claiming success:
+
+```bash
+cd /root/syson-fork
+bash scripts/check-syson-login-regression.sh
+```
+
+This verifies:
+- `/auth.js` is served by nginx.
+- the source `auth.js` and live `/var/www/syson/auth.js` match.
+- a fresh no-localStorage Chromium session renders `#syson-auth-overlay`.
+- `#syson-root-blocker` is present.
+- `#root` is hidden while unauthenticated.
+- login API accepts the install-default `admin` / `admin` credentials.
+- protected user endpoint works with the returned token.
+
+### Deployment note for fast auth.js iteration
+
+For an `auth.js`-only fix, do this instead of rebuilding the full Docker image:
+
+```bash
+cp frontend/syson/public/auth.js /var/www/syson/auth.js
+systemctl reload nginx
+bash scripts/check-syson-login-regression.sh
+```
+
+Only rebuild/repackage the JAR when you need the change baked into the application image.
+
+### Known-good login details for smoke tests
+
+- Username: `admin`
+- Password: `admin`
+
+Do not put stronger passwords back into source-controlled docs.
