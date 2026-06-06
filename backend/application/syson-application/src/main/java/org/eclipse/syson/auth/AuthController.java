@@ -84,7 +84,7 @@ public class AuthController {
                 .map(m -> m.getId().getTenantId())
                 .orElse(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
-        String token = this.jwtService.generateToken(userDetails, tenantId);
+        String token = this.jwtService.generateToken(userDetails, tenantId, userId);
 
         // Resolve roles
         List<String> roles = userDetails.getAuthorities().stream()
@@ -112,7 +112,9 @@ public class AuthController {
         }
 
         UUID tenantId = this.jwtService.extractTenantId(token);
-        String newToken = this.jwtService.generateToken(userDetails, tenantId);
+        String userIdStr = this.jwtService.extractUserId(token);
+        UUID userId = UUID.fromString(userIdStr);
+        String newToken = this.jwtService.generateToken(userDetails, tenantId, userId);
 
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(a -> a.getAuthority().replace("ROLE_", "").toLowerCase())

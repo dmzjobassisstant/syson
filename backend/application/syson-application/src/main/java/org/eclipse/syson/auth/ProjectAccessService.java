@@ -19,11 +19,11 @@ public class ProjectAccessService {
     }
 
     private UUID currentUserId() {
-        String uid = TenantContext.getUserId();
+        UUID uid = TenantContext.getUserIdAsUuid();
         if (uid == null) {
             throw new IllegalStateException("No authenticated user in context");
         }
-        return UUID.fromString(uid);
+        return uid;
     }
 
     public List<ProjectMembership> getMyProjects() {

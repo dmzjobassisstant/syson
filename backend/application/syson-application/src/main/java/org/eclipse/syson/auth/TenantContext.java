@@ -55,6 +55,14 @@ public final class TenantContext {
     }
 
     /**
+     * Returns the user ID as a UUID, or {@code null} if not set.
+     */
+    public static UUID getUserIdAsUuid() {
+        String uid = CURRENT_USER_ID.get();
+        return uid != null ? UUID.fromString(uid) : null;
+    }
+
+    /**
      * Clears the thread-local storage. Must be called at the end of each
      * request to prevent leaking context across requests.
      */

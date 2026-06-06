@@ -44,6 +44,8 @@ public class JwtService {
 
     private static final String CLAIM_TENANT_ID = "tenantId";
 
+    private static final String CLAIM_USER_ID = "userId";
+
     private final SecretKey signingKey;
 
     public JwtService(@Value("${syson.auth.jwt.secret}") String secret) {
@@ -62,11 +64,13 @@ public class JwtService {
      *
      * @param userDetails the authenticated user
      * @param tenantId    the tenant context for this token
+     * @param userId      the user's UUID
      * @return a compact JWT string
      */
-    public String generateToken(UserDetails userDetails, UUID tenantId) {
+    public String generateToken(UserDetails userDetails, UUID tenantId, UUID userId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(CLAIM_TENANT_ID, tenantId.toString());
+        claims.put(CLAIM_USER_ID, userId.toString());
         return this.buildToken(claims, userDetails.getUsername());
     }
 
@@ -83,6 +87,13 @@ public class JwtService {
     public UUID extractTenantId(String token) {
         String tenantIdStr = this.extractClaim(token, claims -> claims.get(CLAIM_TENANT_ID, String.class));
         return UUID.fromString(tenantIdStr);
+    }
+
+    /**
+     * Extracts the user ID from a token.
+     */
+    public String extractUserId(String token) {
+        return this.extractClaim(token, claims -> claims.get(CLAIM_USER_ID, String.class));
     }
 
     /**

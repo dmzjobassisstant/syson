@@ -101,8 +101,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 // Expose tenant and user as request attributes for downstream TenantFilter
                 UUID tenantId = this.jwtService.extractTenantId(token);
+                String userIdStr = this.jwtService.extractUserId(token);
                 request.setAttribute(TENANT_ID_ATTR, tenantId);
-                request.setAttribute(USER_ID_ATTR, username);
+                request.setAttribute(USER_ID_ATTR, userIdStr);
             }
         }
 
