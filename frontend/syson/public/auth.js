@@ -198,6 +198,82 @@
       font-size: 0.75rem;
     }
     #syson-logout-btn:hover { background: rgba(255,255,255,0.08); }
+    #syson-dashboard-btn {
+      background: none; border: 1px solid #4a90d9; color: #4a90d9;
+      padding: 2px 8px; border-radius: 4px; cursor: pointer;
+      font-size: 0.75rem;
+    }
+    #syson-dashboard-btn:hover { background: rgba(74,144,217,0.12); }
+    /* Dashboard overlay */
+    #syson-dashboard-overlay {
+      position: fixed; inset: 0; z-index: 100000;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.65);
+      font-family: 'Lato', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    }
+    #syson-dashboard-card {
+      background: #16213e; border-radius: 12px; padding: 2rem;
+      width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      color: #e0e0e0;
+      position: relative;
+    }
+    #syson-dashboard-card h2 {
+      color: #e0e0e0; font-size: 1.2rem; font-weight: 600;
+      margin: 0 0 0.75rem; border-bottom: 1px solid #2a2a4a; padding-bottom: 0.5rem;
+    }
+    #syson-dashboard-card h3 {
+      color: #ccc; font-size: 0.95rem; font-weight: 600;
+      margin: 0 0 0.4rem;
+    }
+    #syson-dashboard-close {
+      position: absolute; top: 12px; right: 16px;
+      background: none; border: none; color: #888; font-size: 1.4rem;
+      cursor: pointer; line-height: 1;
+    }
+    #syson-dashboard-close:hover { color: #e0e0e0; }
+    .syson-dash-section {
+      background: #0f0f23; border-radius: 8px; padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .syson-dash-section p {
+      margin: 0.25rem 0; font-size: 0.85rem; color: #bbb;
+    }
+    .syson-dash-section p strong { color: #e0e0e0; }
+    .syson-dash-section .role-badge {
+      background: #4a90d9; color: #fff; font-size: 0.7rem;
+      padding: 1px 6px; border-radius: 4px; font-weight: 600;
+      text-transform: uppercase; margin-right: 4px;
+    }
+    .syson-dash-section .role-badge.superuser { background: #e67e22; }
+    .syson-dash-section .role-badge.admin { background: #9b59b6; }
+    .syson-dash-section label {
+      display: block; color: #aaa; font-size: 0.78rem;
+      margin-bottom: 0.2rem; margin-top: 0.5rem; font-weight: 500;
+    }
+    .syson-dash-section input {
+      width: 100%; padding: 0.55rem 0.7rem; border-radius: 6px;
+      border: 1px solid #2a2a4a; background: #16213e; color: #e0e0e0;
+      font-size: 0.9rem; margin-bottom: 0.4rem; box-sizing: border-box;
+    }
+    .syson-dash-section input:focus {
+      outline: none; border-color: #4a90d9;
+    }
+    .syson-dash-section button {
+      padding: 0.55rem 1rem; border-radius: 6px; border: none;
+      background: #4a90d9; color: #fff; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; margin-top: 0.4rem; transition: background 0.2s;
+    }
+    .syson-dash-section button:hover { background: #3a7bc8; }
+    .syson-dash-section button:disabled { background: #555; cursor: not-allowed; }
+    .syson-dash-section .dash-msg {
+      font-size: 0.8rem; margin-top: 0.4rem; min-height: 1.2em;
+    }
+    .syson-dash-section .dash-msg.error { color: #e74c3c; }
+    .syson-dash-section .dash-msg.success { color: #2ecc71; }
+    .syson-dash-empty {
+      color: #666; font-size: 0.82rem; font-style: italic; padding: 0.5rem 0;
+    }
   `;
 
   function showLogin(errorMsg) {
@@ -285,12 +361,146 @@
       bar.innerHTML = `
         <span>${state.email}</span>
         ${badgeHTML}
+        <button id="syson-dashboard-btn" title="Dashboard">Dashboard</button>
         <button id="syson-logout-btn" title="Sign out">Sign out</button>
       `;
       bar.style.display = 'flex';
       document.getElementById('syson-logout-btn').addEventListener('click', logout);
+      document.getElementById('syson-dashboard-btn').addEventListener('click', showDashboard);
     };
     tryMount();
+  }
+
+  // ── Dashboard ──────────────────────────────────────────────────────────────
+  async function showDashboard() {
+    // Remove existing overlay if any
+    const existing = document.getElementById('syson-dashboard-overlay');
+    if (existing) existing.remove();
+
+    // Fetch user profile and projects in parallel
+    const headers = { 'Authorization': 'Bearer ' + state.token };
+    let userData = null;
+    let projectsData = null;
+
+    try {
+      const userRes = await _origFetch(API_BASE + '/api/v1/user/me', { headers });
+      if (userRes.ok) userData = await userRes.json();
+    } catch (_) { /* fallback to state.email below */ }
+
+    try {
+      const projRes = await _origFetch(API_BASE + '/api/v1/user/me/projects', { headers });
+      if (projRes.ok) projectsData = await projRes.json();
+    } catch (_) { /* projectsData stays null */ }
+
+    const email = (userData && userData.email) || state.email || 'N/A';
+    const name = (userData && userData.name) || email;
+    const roles = (userData && userData.roles) || state.roles || [];
+
+    // Build overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'syson-dashboard-overlay';
+    overlay.innerHTML = `
+      <div id="syson-dashboard-card">
+        <button id="syson-dashboard-close">&times;</button>
+
+        <h2>Profile</h2>
+        <div class="syson-dash-section">
+          <p><strong>Name:</strong> ${escapeHTML(name)}</p>
+          <p><strong>Email:</strong> ${escapeHTML(email)}</p>
+          <p><strong>Roles:</strong>
+            ${roles.length ? roles.map(r => `<span class="role-badge ${r.toLowerCase()}">${escapeHTML(r)}</span>`).join('') : '<span style="color:#666">None</span>'}
+          </p>
+        </div>
+
+        <h2>Change Password</h2>
+        <div class="syson-dash-section">
+          <form id="syson-password-form">
+            <label for="syson-current-password">Current Password</label>
+            <input id="syson-current-password" type="password" placeholder="Enter current password" autocomplete="current-password" />
+            <label for="syson-new-password">New Password</label>
+            <input id="syson-new-password" type="password" placeholder="Enter new password" autocomplete="new-password" />
+            <button type="submit" id="syson-password-btn">Change Password</button>
+            <div class="dash-msg" id="syson-password-msg"></div>
+          </form>
+        </div>
+
+        <h2>My Projects</h2>
+        <div class="syson-dash-section" id="syson-projects-section">
+          ${renderProjects(projectsData)}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    function close() { overlay.remove(); }
+    document.getElementById('syson-dashboard-close').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+
+    // Password form handler
+    const pwForm = document.getElementById('syson-password-form');
+    const pwBtn = document.getElementById('syson-password-btn');
+    const pwMsg = document.getElementById('syson-password-msg');
+    pwForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const currentPw = document.getElementById('syson-current-password').value;
+      const newPw = document.getElementById('syson-new-password').value;
+      if (!currentPw || !newPw) {
+        pwMsg.textContent = 'Both fields are required';
+        pwMsg.className = 'dash-msg error';
+        return;
+      }
+      pwBtn.disabled = true;
+      pwBtn.textContent = 'Changing…';
+      pwMsg.textContent = '';
+      pwMsg.className = 'dash-msg';
+      try {
+        const res = await _origFetch(API_BASE + '/api/v1/user/me/password', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+          body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          let errMsg = 'Password change failed';
+          try { const j = JSON.parse(errText); errMsg = j.message || j.error || errMsg; } catch (_) {}
+          throw new Error(errMsg);
+        }
+        pwMsg.textContent = 'Password changed successfully';
+        pwMsg.className = 'dash-msg success';
+        document.getElementById('syson-current-password').value = '';
+        document.getElementById('syson-new-password').value = '';
+      } catch (err) {
+        pwMsg.textContent = err.message;
+        pwMsg.className = 'dash-msg error';
+      } finally {
+        pwBtn.disabled = false;
+        pwBtn.textContent = 'Change Password';
+      }
+    });
+  }
+
+  function renderProjects(projectsData) {
+    if (!projectsData) return '<div class="syson-dash-empty">Loading projects failed</div>';
+    const projects = Array.isArray(projectsData) ? projectsData : (projectsData.projects || projectsData.data || []);
+    if (!projects.length) return '<div class="syson-dash-empty">No projects assigned</div>';
+    return projects.map(p => {
+      const pid = p.id || p.projectId || 'N/A';
+      const pname = p.name || '';
+      const proles = p.roles || [];
+      const badges = proles.length
+        ? proles.map(r => `<span class="role-badge ${r.toLowerCase()}">${escapeHTML(r)}</span>`).join('')
+        : '';
+      const namePart = pname ? ` — <strong>${escapeHTML(pname)}</strong>` : '';
+      return `<p>ID: <strong>${escapeHTML(String(pid))}</strong>${namePart} ${badges}</p>`;
+    }).join('');
+  }
+
+  function escapeHTML(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   // ── Boot ─────────────────────────────────────────────────────────────────
