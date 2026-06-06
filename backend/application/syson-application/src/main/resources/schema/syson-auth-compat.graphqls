@@ -1,0 +1,40 @@
+# Compatibility fields required by the bundled Sirius Web frontend.
+# Without these Viewer fields, the initial getLocale query fails GraphQL validation
+# and the React app never mounts, leaving an authenticated user on a blank page.
+extend type Viewer {
+  language: String!
+  namespaces: [String!]!
+  capabilities: ViewerCapabilities!
+}
+
+type ViewerCapabilities {
+  projects: ViewerProjectsCapabilities!
+  libraries: ViewerLibrariesCapabilities!
+}
+
+type ViewerProjectsCapabilities {
+  canList: Boolean!
+  canCreate: Boolean!
+  canUpload: Boolean!
+}
+
+type ViewerLibrariesCapabilities {
+  canList: Boolean!
+}
+
+extend type Project {
+  capabilities: ProjectCapabilities!
+}
+
+type ProjectCapabilities {
+  canDownload: Boolean!
+  canRename: Boolean!
+  canDelete: Boolean!
+  canEdit: Boolean!
+  canDuplicate: Boolean!
+  settings: ProjectSettingsCapabilities!
+}
+
+type ProjectSettingsCapabilities {
+  canView: Boolean!
+}

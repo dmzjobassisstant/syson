@@ -52,6 +52,23 @@ This verifies:
 - login API accepts the install-default `admin` / `admin` credentials.
 - protected user endpoint works with the returned token.
 
+### Authenticated blank-screen regression
+
+The login overlay can pass while an already-authenticated browser still shows a blank app. If a user reports a blank page after login, inspect the browser network/console with a real token. The known root cause here was a frontend/backend GraphQL contract mismatch:
+
+- frontend startup queries required `viewer.language`, `viewer.namespaces`, and `viewer.capabilities`;
+- project list queries required `project.capabilities`;
+- without those fields, GraphQL validation errors occurred before/while the React app mounted, leaving `#root` effectively blank.
+
+Do **not** try to fix that by refactoring `auth.js`. The compatibility fields live in:
+
+- `backend/application/syson-application/src/main/resources/schema/syson-auth-compat.graphqls`
+- `backend/application/syson-application/src/main/java/org/eclipse/syson/auth/*CapabilitiesDataFetcher.java`
+- `backend/application/syson-application/src/main/java/org/eclipse/syson/auth/ViewerLanguageDataFetcher.java`
+- `backend/application/syson-application/src/main/java/org/eclipse/syson/auth/ViewerNamespacesDataFetcher.java`
+
+Deploying this fix requires rebuilding and restarting the backend Docker container, not just copying `/var/www/syson/auth.js`.
+
 ### Deployment note for fast auth.js iteration
 
 For an `auth.js`-only fix, do this instead of rebuilding the full Docker image:
