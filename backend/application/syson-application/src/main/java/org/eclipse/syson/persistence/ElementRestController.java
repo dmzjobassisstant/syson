@@ -12,7 +12,6 @@
  *******************************************************************************/
 package org.eclipse.syson.persistence;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,8 +40,12 @@ public class ElementRestController {
 
     private final ElementPersistenceService persistenceService;
 
-    public ElementRestController(ElementPersistenceService persistenceService) {
+    private final CanonicalJsonService canonicalJsonService;
+
+    public ElementRestController(ElementPersistenceService persistenceService,
+                                  CanonicalJsonService canonicalJsonService) {
         this.persistenceService = persistenceService;
+        this.canonicalJsonService = canonicalJsonService;
     }
 
     /**
@@ -102,18 +105,14 @@ public class ElementRestController {
 
     /**
      * Exports the canonical JSON assembly for a project branch:
-     * elements + relationships + diagram nodes.
+     * elements + relationships + diagrams (with nodes and edges).
+     * Uses {@link CanonicalJsonService} which assembles a complete
+     * serialization from the element-level persistence tables.
      */
     @GetMapping("/projects/{projectId}/branches/{branchId}/export")
     public ResponseEntity<Map<String, Object>> exportBranch(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("projectId", projectId);
-        payload.put("branchId", branchId);
-        payload.put("elements", this.persistenceService.getElements(projectId, branchId));
-        payload.put("relationships", this.persistenceService.getRelationships(projectId, branchId));
-        payload.put("exportedAt", java.time.OffsetDateTime.now());
-        return ResponseEntity.ok(payload);
+        return ResponseEntity.ok(this.canonicalJsonService.exportCanonicalMap(projectId, branchId));
     }
 }
