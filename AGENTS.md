@@ -18,6 +18,14 @@ bash scripts/check-syson-login-regression.sh
 BASE_URL=http://localhost:8080 bash scripts/check-syson-enterprise-access-regression.sh
 ```
 
+## Critical: element history / warehouse / version-control planning
+
+Before implementing granular SysML element history, data warehouse queries, branch/merge/baseline/tag workflows, locks, or GitGraph UI, read:
+
+- `doc/plans/2026-06-07-syson-enterprise-element-history-vc-plan.md`
+
+This plan intentionally adapts BowTie Pilot's append-only `model_changes` + materialized `head_*` pattern for SysON. Do not replace it with naive full-blob history. Do not use random UUIDs for extracted elements. Preserve Sirius editor compatibility and keep `document.content` / `representation_content.content` as compatibility storage while adding stable object-level history.
+
 ## Critical: do not break the login overlay
 
 The production site is `https://syson.damuza-consulting.com`. Authentication is injected by `frontend/syson/public/auth.js` and is also direct-served by nginx at `/var/www/syson/auth.js`.

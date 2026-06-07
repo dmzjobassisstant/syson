@@ -161,6 +161,21 @@ Primary files:
 - `frontend/syson/public/auth.js`
 - `scripts/check-syson-enterprise-access-regression.sh`
 
+## Enterprise element history / warehouse / VC plan
+
+The next major architecture step is documented here:
+
+- `doc/plans/2026-06-07-syson-enterprise-element-history-vc-plan.md`
+
+That plan evaluates the BowTie Pilot append-only history + materialized head-table pattern and adapts it for SysON/Sirius Web. Future agents implementing granular element history, warehouse queries, locks, branches, merges, baselines, tags, and GitGraph UI must start from that plan. Key rules from the plan:
+
+- preserve Sirius `document.content` and `representation_content.content` compatibility storage;
+- do not store full blobs on every commit as the primary history mechanism;
+- extract stable SysML object IDs, never random UUIDs;
+- use append-only changes plus branch-specific materialized head tables;
+- use branch UUIDs only, not display names as keys;
+- keep existing login/admin regressions green.
+
 ## If something fails later
 
 Do not revert the whole feature. First check:
