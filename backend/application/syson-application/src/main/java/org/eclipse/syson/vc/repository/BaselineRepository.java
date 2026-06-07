@@ -32,4 +32,6 @@ public interface BaselineRepository extends JpaRepository<BaselineEntity, UUID> 
     List<BaselineEntity> findByProjectIdOrderByCreatedAtDesc(UUID projectId);
 
     long countByProjectIdAndCommitId(UUID projectId, UUID commitId);
+
+    long countByProjectId(UUID projectId);
 }

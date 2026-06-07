@@ -18,6 +18,8 @@ import java.util.UUID;
 
 import org.eclipse.syson.vc.entity.BranchEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -35,4 +37,11 @@ public interface BranchRepository extends JpaRepository<BranchEntity, UUID> {
     Optional<BranchEntity> findByBranchIdAndIsDeletedFalse(UUID branchId);
 
     long countByProjectIdAndTenantIdAndIsDeletedFalse(UUID projectId, UUID tenantId);
+    long countByProjectIdAndIsDeletedFalse(UUID projectId);
+
+
+    List<BranchEntity> findByProjectIdAndIsDeletedFalse(UUID projectId);
+
+    @Query("SELECT b.parentBranchId FROM BranchEntity b WHERE b.branchId = :branchId AND b.isDeleted = false")
+    UUID getParentBranchId(@Param("branchId") UUID branchId);
 }

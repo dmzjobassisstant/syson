@@ -12,6 +12,27 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class AuditLogService {
+    /**
+     * Logs an audit event with the given parameters.
+     *
+     * @param actorId the actor ID as a string (will be parsed to UUID)
+     * @param targetType the target type
+     * @param targetId the target ID
+     * @param type the audit event type
+     * @param message the message to log
+     */
+    public void log(String actorId, String targetType, String targetId, AuditEventType type, String message) {
+        UUID actor = null;
+        try {
+            actor = UUID.fromString(actorId);
+        } catch (IllegalArgumentException e) {
+            // leave as null
+        }
+        String action = type.name().toLowerCase().replace('_', '.');
+        String metadata = jsonObject("message", message);
+        this.record(action, actor, targetType, targetId, "success", metadata);
+    }
+
     private final AuditEventRepository auditEventRepository;
 
     public AuditLogService(AuditEventRepository auditEventRepository) {

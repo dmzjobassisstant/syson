@@ -10,31 +10,28 @@
  * Contributors:
  *     Obeo - initial API and implementation
  *******************************************************************************/
-package org.eclipse.syson.vc.repository;
+package org.eclipse.syson.history.repository;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.eclipse.syson.vc.entity.CommitEntity;
+import org.eclipse.syson.history.entity.HeadRelationship;
+import org.eclipse.syson.history.entity.HeadRelationshipId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 /**
- * Spring Data JPA repository for {@link CommitEntity}.
+ * Spring Data JPA repository for {@link HeadRelationship}.
  *
  * @author syson-team
  */
 @Repository
-public interface CommitRepository extends JpaRepository<CommitEntity, UUID> {
+public interface HeadRelationshipRepository extends JpaRepository<HeadRelationship, HeadRelationshipId> {
 
-    List<CommitEntity> findByProjectIdAndBranchIdOrderByCommittedAtDesc(UUID projectId, UUID branchId);
+    List<HeadRelationship> findByProjectIdAndBranchIdAndDeletedFalse(String projectId, UUID branchId);
 
-    Optional<CommitEntity> findTopByProjectIdAndBranchIdOrderByCommitNumberDesc(UUID projectId, UUID branchId);
+    List<HeadRelationship> findByProjectIdAndBranchIdAndSourceId(String projectId, UUID branchId, String sourceId);
 
-    Optional<CommitEntity> findByCommitIdAndProjectId(UUID commitId, UUID projectId);
-
-    long countByProjectIdAndBranchId(UUID projectId, UUID branchId);
-
-    long countByProjectId(UUID projectId);
+    Optional<HeadRelationship> findByProjectIdAndBranchIdAndStableId(String projectId, UUID branchId, String stableId);
 }

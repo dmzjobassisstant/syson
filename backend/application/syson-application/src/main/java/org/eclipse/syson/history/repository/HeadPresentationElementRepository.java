@@ -10,31 +10,24 @@
  * Contributors:
  *     Obeo - initial API and implementation
  *******************************************************************************/
-package org.eclipse.syson.vc.repository;
+package org.eclipse.syson.history.repository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
-import org.eclipse.syson.vc.entity.CommitEntity;
+import org.eclipse.syson.history.entity.HeadPresentationElement;
+import org.eclipse.syson.history.entity.HeadPresentationElementId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 /**
- * Spring Data JPA repository for {@link CommitEntity}.
+ * Spring Data JPA repository for {@link HeadPresentationElement}.
  *
  * @author syson-team
  */
 @Repository
-public interface CommitRepository extends JpaRepository<CommitEntity, UUID> {
+public interface HeadPresentationElementRepository extends JpaRepository<HeadPresentationElement, HeadPresentationElementId> {
 
-    List<CommitEntity> findByProjectIdAndBranchIdOrderByCommittedAtDesc(UUID projectId, UUID branchId);
-
-    Optional<CommitEntity> findTopByProjectIdAndBranchIdOrderByCommitNumberDesc(UUID projectId, UUID branchId);
-
-    Optional<CommitEntity> findByCommitIdAndProjectId(UUID commitId, UUID projectId);
-
-    long countByProjectIdAndBranchId(UUID projectId, UUID branchId);
-
-    long countByProjectId(UUID projectId);
+    List<HeadPresentationElement> findByProjectIdAndBranchIdAndDiagramIdAndDeletedFalse(
+            String projectId, UUID branchId, String diagramId);
 }

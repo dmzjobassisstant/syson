@@ -17,6 +17,8 @@ import java.util.UUID;
 
 import org.eclipse.syson.vc.entity.ChangeEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -33,4 +35,11 @@ public interface ChangeRepository extends JpaRepository<ChangeEntity, UUID> {
             UUID projectId, String objectType, UUID objectId);
 
     long countByCommitId(UUID commitId);
+
+    long countByProjectId(UUID projectId);
+
+    @Query("SELECT c.commitId, c.operation, c.objectType, c.createdBy, c.patch, c.createdAt, c.afterObject, c.patch "
+            + "FROM ChangeEntity c WHERE c.objectId = :objectId AND c.projectId = :projectId "
+            + "ORDER BY c.createdAt DESC")
+    List<Object[]> findByObjectIdAndProjectId(@Param("objectId") UUID objectId, @Param("projectId") UUID projectId);
 }
