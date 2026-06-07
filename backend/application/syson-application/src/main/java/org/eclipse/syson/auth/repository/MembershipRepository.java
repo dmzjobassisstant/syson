@@ -32,4 +32,6 @@ public interface MembershipRepository extends JpaRepository<TenantMembership, Te
     Optional<TenantMembership> findByIdUserIdAndIdTenantId(UUID userId, UUID tenantId);
 
     List<TenantMembership> findByIdUserId(UUID userId);
+
+    List<TenantMembership> findByIdTenantId(UUID tenantId);
 }

@@ -1,5 +1,23 @@
 # Notes for AI coding agents working on this SysON fork
 
+## Critical: enterprise account/access/audit work is live — do not overwrite
+
+Read `SYSON_ENTERPRISE_ACCESS_AUDIT_HANDOFF.md` before modifying auth, admin APIs, security config, audit logging, or `auth.js`.
+
+Hard rules:
+
+1. Do not move admin endpoints out of `UserController` into a new controller unless you first prove the new controller mappings are hit live. New SysON/Sirius `@RestController` classes have previously compiled but fallen through to SPA `index.html`.
+2. Do not remove the `/api/**` `AuthenticationEntryPoint` and `AccessDeniedHandler` in `SecurityConfig`; they prevent protected API failures from being swallowed by SPA fallback as HTTP 200 HTML.
+3. Do not treat HTTP 200 as API success unless `Content-Type` and JSON body shape are correct.
+4. Audit metadata is JSONB. Do not write raw strings into `syson_audit_events.metadata`.
+5. Before claiming success, run both regression scripts:
+
+```bash
+cd /root/syson-fork
+bash scripts/check-syson-login-regression.sh
+BASE_URL=http://localhost:8080 bash scripts/check-syson-enterprise-access-regression.sh
+```
+
 ## Critical: do not break the login overlay
 
 The production site is `https://syson.damuza-consulting.com`. Authentication is injected by `frontend/syson/public/auth.js` and is also direct-served by nginx at `/var/www/syson/auth.js`.

@@ -59,6 +59,24 @@ public class SysonUser {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    @Column(name = "email_verified")
+    private boolean emailVerified;
+
+    @Column(name = "last_login_at")
+    private OffsetDateTime lastLoginAt;
+
+    @Column(name = "password_changed_at")
+    private OffsetDateTime passwordChangedAt;
+
+    @Column(name = "created_by")
+    private UUID createdBy;
+
+    @Column(name = "deactivated_at")
+    private OffsetDateTime deactivatedAt;
+
+    @Column(name = "deactivated_by")
+    private UUID deactivatedBy;
+
     public SysonUser() {
     }
 
@@ -132,5 +150,53 @@ public class SysonUser {
 
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public boolean isEmailVerified() {
+        return this.emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
+    }
+
+    public OffsetDateTime getLastLoginAt() {
+        return this.lastLoginAt;
+    }
+
+    public void setLastLoginAt(OffsetDateTime lastLoginAt) {
+        this.lastLoginAt = lastLoginAt;
+    }
+
+    public OffsetDateTime getPasswordChangedAt() {
+        return this.passwordChangedAt;
+    }
+
+    public void setPasswordChangedAt(OffsetDateTime passwordChangedAt) {
+        this.passwordChangedAt = passwordChangedAt;
+    }
+
+    public UUID getCreatedBy() {
+        return this.createdBy;
+    }
+
+    public void setCreatedBy(UUID createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public OffsetDateTime getDeactivatedAt() {
+        return this.deactivatedAt;
+    }
+
+    public void setDeactivatedAt(OffsetDateTime deactivatedAt) {
+        this.deactivatedAt = deactivatedAt;
+    }
+
+    public UUID getDeactivatedBy() {
+        return this.deactivatedBy;
+    }
+
+    public void setDeactivatedBy(UUID deactivatedBy) {
+        this.deactivatedBy = deactivatedBy;
     }
 }

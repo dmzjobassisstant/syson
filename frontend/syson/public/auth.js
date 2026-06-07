@@ -294,15 +294,19 @@
       const badgeHTML = state.roles.map(r =>
         `<span class="role-badge ${r.toLowerCase()}">${r}</span>`
       ).join('');
+      var adminButtonHTML = isAdminUser() ? '<button id="syson-admin-btn" title="Administration">Admin</button>' : '';
       bar.innerHTML = `
         <span>${state.email}</span>
         ${badgeHTML}
         <button id="syson-dashboard-btn" title="Dashboard">Dashboard</button>
+        ${adminButtonHTML}
         <button id="syson-logout-btn" title="Sign out">Sign out</button>
       `;
       bar.style.display = 'flex';
       document.getElementById('syson-logout-btn').addEventListener('click', logout);
       document.getElementById('syson-dashboard-btn').addEventListener('click', showDashboard);
+      var adminBtn = document.getElementById('syson-admin-btn');
+      if (adminBtn) adminBtn.addEventListener('click', showAdminConsole);
     };
     tryMount();
   }
@@ -391,6 +395,94 @@
         showOverlay(userData, projectsData);
       });
     })['catch'](function() { showOverlay(null, null); });
+  }
+
+  // ── Enterprise Admin Console ─────────────────────────────────────────────
+  function isAdminUser() {
+    var roles = state.roles || [];
+    return roles.some(function(role) {
+      var normalized = String(role || '').toLowerCase();
+      return normalized === 'admin' || normalized === 'superuser';
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function adminFetch(path, options) {
+    var opts = options || {};
+    opts.headers = opts.headers || {};
+    opts.headers['Authorization'] = 'Bearer ' + state.token;
+    if (opts.body && !opts.headers['Content-Type']) opts.headers['Content-Type'] = 'application/json';
+    return _origFetch(API_BASE + path, opts).then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json()['catch'](function() { return {}; });
+    });
+  }
+
+  function showAdminConsole() {
+    if (!isAdminUser()) return;
+    var existing = document.getElementById('syson-admin-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-admin-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.72);font-family:Lato,Roboto,Arial,sans-serif;';
+    overlay.innerHTML = '<div style="background:#111827;border:1px solid #24324a;border-radius:14px;width:min(1100px,94vw);max-height:86vh;overflow:auto;box-shadow:0 18px 60px rgba(0,0,0,.55);color:#e5e7eb;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid #24324a;">'
+      + '<div><h2 style="margin:0;font-size:1.15rem;">Access Administration</h2><p style="margin:4px 0 0;color:#8b98aa;font-size:.82rem;">Accounts, password resets, project roles, and audit history</p></div>'
+      + '<button id="syson-admin-close" style="background:none;border:none;color:#8b98aa;font-size:1.6rem;cursor:pointer;">×</button></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:20px;">'
+      + '<section style="background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Users</h3><div id="syson-admin-users" style="font-size:.84rem;color:#94a3b8;">Loading users…</div></section>'
+      + '<section style="background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Create User</h3>'
+      + '<form id="syson-admin-create-user"><input id="syson-admin-email" placeholder="email" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-name" placeholder="name" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-password" type="password" placeholder="temporary password" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-admin-role" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option><option value="superuser">Superuser</option></select><button style="width:100%;padding:9px;border:0;border-radius:6px;background:#2563eb;color:white;font-weight:700;cursor:pointer;">Create Account</button><div id="syson-admin-create-msg" style="min-height:18px;margin-top:8px;font-size:.8rem;"></div></form></section>'
+      + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Audit History</h3><div id="syson-admin-audit" style="font-size:.82rem;color:#94a3b8;">Loading audit events…</div></section>'
+      + '</div></div>';
+    document.body.appendChild(overlay);
+    document.getElementById('syson-admin-close').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    var renderUsers = function(users) {
+      var box = document.getElementById('syson-admin-users');
+      if (!users || !users.length) { box.textContent = 'No users found.'; return; }
+      box.innerHTML = users.map(function(u) {
+        var active = u.active ? 'Active' : 'Disabled';
+        return '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #1f2a3d;">'
+          + '<div><div style="color:#e5e7eb;font-weight:600;">' + escapeHtml(u.email) + '</div><div style="font-size:.76rem;color:#64748b;">' + escapeHtml(u.name || '') + ' · ' + active + '</div></div>'
+          + '<button data-reset-user="' + escapeHtml(u.id) + '" style="padding:5px 8px;border:1px solid #334155;border-radius:5px;background:#111827;color:#cbd5e1;cursor:pointer;">Reset PW</button></div>';
+      }).join('');
+      Array.prototype.slice.call(box.querySelectorAll('[data-reset-user]')).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var pw = window.prompt('New temporary password');
+          if (!pw) return;
+          adminFetch('/api/v1/user/admin/users/' + btn.getAttribute('data-reset-user') + '/password', { method:'PUT', body: JSON.stringify({ password: pw }) })
+            .then(function() { btn.textContent = 'Reset'; })['catch'](function(err) { btn.textContent = err.message; });
+        });
+      });
+    };
+
+    var renderAudit = function(events) {
+      var box = document.getElementById('syson-admin-audit');
+      if (!events || !events.length) { box.textContent = 'No audit events yet.'; return; }
+      box.innerHTML = events.slice(0, 50).map(function(ev) {
+        return '<div style="display:grid;grid-template-columns:180px 1fr 90px;gap:10px;padding:7px 0;border-bottom:1px solid #1f2a3d;">'
+          + '<span style="color:#64748b;">' + escapeHtml(ev.createdAt || '') + '</span><span style="color:#e5e7eb;">' + escapeHtml(ev.action || '') + ' → ' + escapeHtml(ev.targetType || '') + ':' + escapeHtml(ev.targetId || '') + '</span><span style="color:#94a3b8;">' + escapeHtml(ev.outcome || '') + '</span></div>';
+      }).join('');
+    };
+
+    adminFetch('/api/v1/user/admin/users').then(renderUsers)['catch'](function(err) { document.getElementById('syson-admin-users').textContent = err.message; });
+    adminFetch('/api/v1/user/admin/audit/events?limit=50').then(renderAudit)['catch'](function(err) { document.getElementById('syson-admin-audit').textContent = err.message; });
+
+    document.getElementById('syson-admin-create-user').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var msg = document.getElementById('syson-admin-create-msg');
+      var payload = { email: document.getElementById('syson-admin-email').value.trim(), name: document.getElementById('syson-admin-name').value.trim(), password: document.getElementById('syson-admin-password').value, tenantId: state.tenantId, tenantRole: document.getElementById('syson-admin-role').value };
+      if (!payload.email || !payload.password) { msg.style.color = '#f87171'; msg.textContent = 'Email and password required'; return; }
+      adminFetch('/api/v1/user/admin/users', { method:'POST', body: JSON.stringify(payload) }).then(function() {
+        msg.style.color = '#4ade80'; msg.textContent = 'Account created'; return adminFetch('/api/v1/user/admin/users').then(renderUsers);
+      })['catch'](function(err) { msg.style.color = '#f87171'; msg.textContent = err.message; });
+    });
   }
 
   // ── Boot ─────────────────────────────────────────────────────────────────

@@ -12,13 +12,16 @@
  *******************************************************************************/
 package org.eclipse.syson.auth;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import org.eclipse.syson.auth.entity.SysonUser;
+import org.eclipse.syson.auth.model.AuditEventType;
 import org.eclipse.syson.auth.repository.MembershipRepository;
 import org.eclipse.syson.auth.repository.UserRepository;
+import org.eclipse.syson.auth.service.AuditLogService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -48,16 +51,20 @@ public class AuthController {
 
     private final UserRepository userRepository;
 
+    private final AuditLogService auditLogService;
+
     public AuthController(SysonUserDetailsService userDetailsService,
                           JwtService jwtService,
                           PasswordEncoder passwordEncoder,
                           MembershipRepository membershipRepository,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          AuditLogService auditLogService) {
         this.userDetailsService = userDetailsService;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -72,9 +79,9 @@ public class AuthController {
         }
 
         // Look up the SysonUser to get the UUID for membership resolution
-        UUID userId = this.userRepository.findByEmail(request.email())
-                .map(SysonUser::getId)
+        SysonUser user = this.userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+        UUID userId = user.getId();
 
         // Pick the first membership's tenant
         UUID tenantId = this.membershipRepository
@@ -85,6 +92,10 @@ public class AuthController {
                 .orElse(UUID.fromString("00000000-0000-0000-0000-000000000001"));
 
         String token = this.jwtService.generateToken(userDetails, tenantId, userId);
+        user.setLastLoginAt(OffsetDateTime.now());
+        user.setFailedLoginAttempts(0);
+        this.userRepository.save(user);
+        this.auditLogService.recordAccountEvent(AuditEventType.AUTH_LOGIN_SUCCESS, userId, userId, user.getEmail());
 
         // Resolve roles
         List<String> roles = userDetails.getAuthorities().stream()

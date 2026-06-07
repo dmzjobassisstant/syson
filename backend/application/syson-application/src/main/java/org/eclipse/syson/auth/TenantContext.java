@@ -48,6 +48,13 @@ public final class TenantContext {
     }
 
     /**
+     * Returns the tenant ID for the current request as a UUID, or {@code null} if not set.
+     */
+    public static UUID getTenantIdAsUuid() {
+        return CURRENT_TENANT.get();
+    }
+
+    /**
      * Returns the user ID for the current request, or {@code null} if not set.
      */
     public static String getUserId() {
