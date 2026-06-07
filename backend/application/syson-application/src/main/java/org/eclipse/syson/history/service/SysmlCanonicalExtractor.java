@@ -327,4 +327,145 @@ public class SysmlCanonicalExtractor {
         }
         return path.toString();
     }
+
+    /**
+     * Extracts a canonical model snapshot from serialized document content strings.
+     * <p>
+     * This is the non-EMF path used by the save event listener. It parses the
+     * EMF JSON format directly to produce elements and relationships without
+     * requiring an active editing context.
+     * </p>
+     *
+     * @param documents map of document ID to document content JSON
+     * @param projectId the project identifier
+     * @param branchId  the branch identifier
+     * @return canonical model snapshot
+     */
+    @SuppressWarnings("unchecked")
+    public CanonicalModelSnapshot extractFromDocuments(
+            Map<UUID, String> documents, String projectId, UUID branchId) {
+
+        List<CanonicalElement> elements = new ArrayList<>();
+        List<CanonicalRelationship> relationships = new ArrayList<>();
+
+        for (Map.Entry<UUID, String> entry : documents.entrySet()) {
+            UUID docId = entry.getKey();
+            String content = entry.getValue();
+            if (content == null || content.isBlank()) {
+                continue;
+            }
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                Map<String, Object> root = mapper.readValue(content, Map.class);
+
+                // EMF JSON has "json" and "ns" metadata plus object entries
+                // Walk all top-level keys that are object entries (have "eClass" or similar)
+                for (Map.Entry<String, Object> objEntry : root.entrySet()) {
+                    if (objEntry.getKey().equals("json") || objEntry.getKey().equals("ns")
+                            || objEntry.getKey().equals("migration")) {
+                        continue;
+                    }
+                    if (objEntry.getValue() instanceof Map<?, ?> objMap) {
+                        processJsonObject(objMap, docId.toString(), projectId, branchId, null, elements, relationships);
+                    }
+                }
+            } catch (Exception e) {
+                // Skip malformed documents
+            }
+        }
+
+        // Build canonical JSON from elements and relationships
+        String canonicalJson = buildCanonicalJson(elements, relationships);
+        String canonicalHash = this.sysmlObjectHasher.hashObject(canonicalJson);
+
+        return new CanonicalModelSnapshot(projectId, branchId, elements, relationships, canonicalJson, canonicalHash);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void processJsonObject(Map<?, ?> obj, String docId, String projectId, UUID branchId,
+                                    String ownerId, List<CanonicalElement> elements,
+                                    List<CanonicalRelationship> relationships) {
+        String id = getStringValue(obj, "id");
+        String eClass = getStringValue(obj, "eClass");
+        if (id == null) {
+            return;
+        }
+
+        // Extract name from various SysML name features
+        String name = getStringValue(obj, "name");
+        if (name == null) name = getStringValue(obj, "declaredName");
+        if (name == null) name = getStringValue(obj, "label");
+
+        String sysmlType = eClass != null ? extractTypeName(eClass) : "Unknown";
+
+        // Build stable ID
+        String stableId = this.stableSysmlIdService.stableIdFor(docId, ownerId != null ? ownerId : "", sysmlType, name != null ? name : "");
+
+        // Build attributes map
+        Map<String, Object> attributes = new TreeMap<>();
+        for (Map.Entry<?, ?> feature : obj.entrySet()) {
+            String key = (String) feature.getKey();
+            if (!key.equals("id") && !key.equals("eClass")) {
+                attributes.put(key, feature.getValue());
+            }
+        }
+
+        String rawJson = this.sysmlObjectHasher.canonicalizeJson((Map<String, Object>) obj);
+        String objectHash = this.sysmlObjectHasher.hashObject(rawJson);
+
+        elements.add(new CanonicalElement(stableId, id, sysmlType, name, ownerId, null, attributes, rawJson, objectHash));
+
+        // Process containment children
+        for (Map.Entry<?, ?> feature : obj.entrySet()) {
+            Object value = feature.getValue();
+            if (value instanceof Map<?, ?> childMap) {
+                if (childMap.containsKey("eClass") || childMap.containsKey("id")) {
+                    processJsonObject(childMap, docId, projectId, branchId, id, elements, relationships);
+                }
+            } else if (value instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> childMap) {
+                        if (childMap.containsKey("eClass") || childMap.containsKey("id")) {
+                            processJsonObject(childMap, docId, projectId, branchId, id, elements, relationships);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private String getStringValue(Map<?, ?> map, String key) {
+        Object val = map.get(key);
+        return val != null ? val.toString() : null;
+    }
+
+    private String extractTypeName(String eClassUrl) {
+        if (eClassUrl == null) return "Unknown";
+        // eClass URLs look like "http://www.eclipse.org/syson/sysml#/PartDefinition"
+        int lastSlash = eClassUrl.lastIndexOf('/');
+        int lastHash = eClassUrl.lastIndexOf('#');
+        int start = Math.max(lastSlash, lastHash);
+        if (start >= 0 && start < eClassUrl.length() - 1) {
+            return eClassUrl.substring(start + 1);
+        }
+        return eClassUrl;
+    }
+
+    private String buildCanonicalJson(List<CanonicalElement> elements, List<CanonicalRelationship> relationships) {
+        Map<String, Object> result = new TreeMap<>();
+        Map<String, Map<String, Object>> elementMap = new TreeMap<>();
+        for (CanonicalElement e : elements) {
+            Map<String, Object> em = new TreeMap<>();
+            em.put("id", e.elementId());
+            em.put("type", e.sysmlType());
+            em.put("name", e.name());
+            if (e.ownerId() != null) em.put("owner", e.ownerId());
+            em.put("hash", e.objectHash());
+            elementMap.put(e.stableId(), em);
+        }
+        result.put("elements", elementMap);
+        result.put("elementCount", elements.size());
+        result.put("relationshipCount", relationships.size());
+        return this.sysmlObjectHasher.canonicalizeJson(result);
+    }
 }
