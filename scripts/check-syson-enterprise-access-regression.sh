@@ -148,4 +148,41 @@ assert 'auth.login.success' in actions, actions
 assert new_id in targets, targets
 PY
 
-printf 'OK: enterprise regression passed — unauth blocked/no JSON leak, admin APIs work, viewer denied with JSON 403, password reset works, audit logs populated.\n'
+# RBAC Audit Trail endpoint — admin-only, returns paginated JSON.
+code=$(http_json GET '/api/v1/user/admin/audit-trail?size=10&page=0&sort=createdAt,desc' "$ADMIN_TOKEN")
+assert_json_status "$code" "200" "admin audit trail"
+
+python3 - "$RESPONSE_FILE" <<'PY' || fail "audit trail response missing required fields"
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+assert isinstance(data, dict), f"expected dict, got {type(data)}"
+assert "content" in data, f"missing 'content' key: {list(data.keys())}"
+assert "totalElements" in data, f"missing 'totalElements' key: {list(data.keys())}"
+assert isinstance(data["content"], list), f"'content' should be list"
+assert data["totalElements"] >= 0, f"totalElements should be >= 0"
+PY
+
+# Audit trail — viewer must get 403.
+code=$(http_json GET '/api/v1/user/admin/audit-trail?size=5' "$USER_TOKEN")
+assert_json_status "$code" "403" "viewer audit trail denial"
+
+# Audit trail — unauthenticated must get 401/403.
+code=$(http_json GET '/api/v1/user/admin/audit-trail?size=5')
+if [[ "$code" != "401" && "$code" != "403" ]]; then
+  fail "unauthenticated audit trail returned HTTP $code, expected 401/403"
+fi
+
+# Audit trail — verify login_success events exist after our test logins.
+code=$(http_json GET '/api/v1/user/admin/audit-trail?size=50&page=0&sort=createdAt,desc' "$ADMIN_TOKEN")
+assert_json_status "$code" "200" "audit trail for event check"
+python3 - "$RESPONSE_FILE" <<'PY' || fail "audit trail missing login_success events"
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+events = data.get("content", [])
+event_types = [e.get("eventType") for e in events]
+assert "login_success" in event_types, f"no login_success in: {event_types}"
+PY
+
+printf 'OK: enterprise regression passed — unauth blocked/no JSON leak, admin APIs work, viewer denied with JSON 403, password reset works, audit logs populated, RBAC audit trail verified.\n'
