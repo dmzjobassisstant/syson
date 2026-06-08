@@ -78,6 +78,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/graphql").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/v1/user/password/reset/**").permitAll()
+                        .requestMatchers("/api/v1/user/admin/audit-trail", "/api/v1/user/admin/audit/**").hasAuthority("ROLE_SUPERUSER")
                         .requestMatchers("/api/v1/user/admin/**").hasAnyAuthority("ROLE_SUPERUSER", "ROLE_ADMIN")
                         .requestMatchers("/api/v1/user/**").authenticated()
                         .requestMatchers("/api/v1/**").authenticated()

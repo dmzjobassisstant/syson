@@ -10,6 +10,7 @@ import org.eclipse.syson.auth.entity.SysonUser;
 import org.eclipse.syson.auth.model.ProjectRole;
 import org.eclipse.syson.auth.model.TenantRole;
 import org.eclipse.syson.auth.repository.UserRepository;
+import org.eclipse.syson.auth.repository.ProjectMembershipRepository;
 import org.eclipse.syson.auth.service.AccessControlService;
 import org.eclipse.syson.auth.service.AccountAdministrationService;
 import org.eclipse.syson.auth.service.AuditEventSearchCriteria;
@@ -34,11 +35,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 @RestController
 @RequestMapping("/api/v1/user")
 public class UserController {
 
     private final UserRepository userRepository;
+    private final ProjectMembershipRepository projectMembershipRepository;
     private final ProjectAccessService projectAccessService;
     private final PasswordEncoder passwordEncoder;
     private final AccountAdministrationService accountAdministrationService;
@@ -46,16 +50,22 @@ public class UserController {
     private final RoleManagementService roleManagementService;
     private final AccessControlService accessControlService;
     private final AuditLogService auditLogService;
+    private final AdminService adminService;
+    private final org.eclipse.syson.auth.audit.RbacAuditTrailService rbacAuditTrailService;
 
     public UserController(UserRepository userRepository,
+                          ProjectMembershipRepository projectMembershipRepository,
                           ProjectAccessService projectAccessService,
                           PasswordEncoder passwordEncoder,
                           AccountAdministrationService accountAdministrationService,
                           PasswordResetService passwordResetService,
                           RoleManagementService roleManagementService,
                           AccessControlService accessControlService,
-                          AuditLogService auditLogService) {
+                          AuditLogService auditLogService,
+                          AdminService adminService,
+                          org.eclipse.syson.auth.audit.RbacAuditTrailService rbacAuditTrailService) {
         this.userRepository = userRepository;
+        this.projectMembershipRepository = projectMembershipRepository;
         this.projectAccessService = projectAccessService;
         this.passwordEncoder = passwordEncoder;
         this.accountAdministrationService = accountAdministrationService;
@@ -63,6 +73,8 @@ public class UserController {
         this.roleManagementService = roleManagementService;
         this.accessControlService = accessControlService;
         this.auditLogService = auditLogService;
+        this.adminService = adminService;
+        this.rbacAuditTrailService = rbacAuditTrailService;
     }
 
     private SysonUser currentUser() {
@@ -132,34 +144,43 @@ public class UserController {
     }
 
     @PostMapping("/admin/users")
-    public ResponseEntity<UserProfile> adminCreateUser(@RequestBody CreateUserRequest req) {
+    public ResponseEntity<UserProfile> adminCreateUser(@RequestBody CreateUserRequest req, HttpServletRequest request) {
         SysonUser saved = this.accountAdministrationService.createUser(new CreateUserCommand(
                 req.email(), req.name(), req.password(), req.tenantId(), TenantRole.from(req.tenantRole())));
+        this.adminService.logEvent("user_created", "user", saved.getId().toString(), saved.getEmail(), null, null, null, null, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(new UserProfile(saved.getId(), saved.getEmail(), saved.getName(), saved.isActive(), saved.isEmailVerified(), saved.getLastLoginAt(), List.of()));
     }
 
     @PutMapping("/admin/users/{userId}/deactivate")
-    public ResponseEntity<Map<String, String>> adminDeactivateUser(@PathVariable UUID userId) {
+    public ResponseEntity<Map<String, String>> adminDeactivateUser(@PathVariable UUID userId, HttpServletRequest request) {
+        SysonUser targetUser = this.userRepository.findById(userId).orElse(null);
         this.accountAdministrationService.deactivateUser(userId);
+        this.adminService.logEvent("user_deactivated", "user", userId.toString(), targetUser != null ? targetUser.getEmail() : null, null, null, null, null, request);
         return ResponseEntity.ok(Map.of("message", "User deactivated"));
     }
 
     @PutMapping("/admin/users/{userId}/reactivate")
-    public ResponseEntity<Map<String, String>> adminReactivateUser(@PathVariable UUID userId) {
+    public ResponseEntity<Map<String, String>> adminReactivateUser(@PathVariable UUID userId, HttpServletRequest request) {
+        SysonUser targetUser = this.userRepository.findById(userId).orElse(null);
         this.accountAdministrationService.reactivateUser(userId);
+        this.adminService.logEvent("user_reactivated", "user", userId.toString(), targetUser != null ? targetUser.getEmail() : null, null, null, null, null, request);
         return ResponseEntity.ok(Map.of("message", "User reactivated"));
     }
 
     @PutMapping("/admin/users/{userId}/password")
-    public ResponseEntity<Map<String, String>> adminResetPassword(@PathVariable UUID userId, @RequestBody ResetPasswordRequest req) {
+    public ResponseEntity<Map<String, String>> adminResetPassword(@PathVariable UUID userId, @RequestBody ResetPasswordRequest req, HttpServletRequest request) {
+        SysonUser targetUser = this.userRepository.findById(userId).orElse(null);
         this.passwordResetService.adminResetPassword(userId, req.password());
+        this.adminService.logEvent("password_reset", "user", userId.toString(), targetUser != null ? targetUser.getEmail() : null, null, null, null, null, request);
         return ResponseEntity.ok(Map.of("message", "Password reset"));
     }
 
     @PutMapping("/admin/tenants/{tenantId}/roles/{userId}")
     public ResponseEntity<Map<String, String>> adminAssignTenantRole(@PathVariable UUID tenantId, @PathVariable UUID userId,
-            @RequestBody AssignTenantRoleRequest req) {
+            @RequestBody AssignTenantRoleRequest req, HttpServletRequest request) {
+        SysonUser targetUser = this.userRepository.findById(userId).orElse(null);
         this.roleManagementService.assignTenantRole(userId, tenantId, TenantRole.from(req.role()));
+        this.adminService.logEvent("platform_role_changed", "user", userId.toString(), targetUser != null ? targetUser.getEmail() : null, null, null, "{\"role\":\"" + req.role() + "\"}", null, request);
         return ResponseEntity.ok(Map.of("message", "Tenant role assigned"));
     }
 
@@ -175,14 +196,20 @@ public class UserController {
     }
 
     @PostMapping("/admin/projects/{projectId}/members")
-    public ResponseEntity<Map<String, String>> adminGrantProjectRole(@PathVariable String projectId, @RequestBody AssignMemberRequest req) {
+    public ResponseEntity<Map<String, String>> adminGrantProjectRole(@PathVariable String projectId, @RequestBody AssignMemberRequest req, HttpServletRequest request) {
+        boolean exists = this.projectMembershipRepository.existsByIdProjectIdAndIdUserId(projectId, req.userId());
+        SysonUser targetUser = this.userRepository.findById(req.userId()).orElse(null);
         this.accessControlService.grantProjectRole(projectId, req.userId(), ProjectRole.from(req.role()));
+        String eventType = exists ? "member_role_changed" : "member_added";
+        this.adminService.logEvent(eventType, "project_member", req.userId().toString(), targetUser != null ? targetUser.getEmail() : null, projectId, null, "{\"role\":\"" + req.role() + "\"}", null, request);
         return ResponseEntity.ok(Map.of("message", "Project role granted"));
     }
 
     @DeleteMapping("/admin/projects/{projectId}/members/{userId}")
-    public ResponseEntity<Map<String, String>> adminRevokeProjectRole(@PathVariable String projectId, @PathVariable UUID userId) {
+    public ResponseEntity<Map<String, String>> adminRevokeProjectRole(@PathVariable String projectId, @PathVariable UUID userId, HttpServletRequest request) {
+        SysonUser targetUser = this.userRepository.findById(userId).orElse(null);
         this.accessControlService.revokeProjectRole(projectId, userId);
+        this.adminService.logEvent("member_removed", "project_member", userId.toString(), targetUser != null ? targetUser.getEmail() : null, projectId, null, null, null, request);
         return ResponseEntity.ok(Map.of("message", "Project role revoked"));
     }
 
@@ -206,4 +233,36 @@ public class UserController {
     public record PasswordResetRequest(String email) {}
     public record CompletePasswordResetRequest(String token, String newPassword) {}
     public record PasswordResetTokenResponse(String message, String token) {}
+
+    // ── RBAC Audit Trail (SuperUser only) ──────────────────────────────────
+
+    @GetMapping("/admin/audit-trail")
+    public ResponseEntity<?> getRbacAuditTrail(
+            @RequestParam(required = false) String eventType,
+            @RequestParam(required = false) String targetType,
+            @RequestParam(required = false) String targetId,
+            @RequestParam(required = false) String projectId,
+            @RequestParam(required = false) UUID actorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        try {
+            var pageable = org.springframework.data.domain.PageRequest.of(page, size,
+                    org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "created_at"));
+            var result = this.rbacAuditTrailService.queryEvents(eventType, targetType, targetId, projectId, actorId, null, null, pageable);
+            return ResponseEntity.ok(result);
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @GetMapping("/admin/audit-trail/stats")
+    public ResponseEntity<?> getRbacAuditTrailStats() {
+        try {
+            return ResponseEntity.ok(this.rbacAuditTrailService.getStats());
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", ex.getMessage()));
+        }
+    }
 }

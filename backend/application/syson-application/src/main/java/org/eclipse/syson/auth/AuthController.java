@@ -22,6 +22,7 @@ import org.eclipse.syson.auth.model.AuditEventType;
 import org.eclipse.syson.auth.repository.MembershipRepository;
 import org.eclipse.syson.auth.repository.UserRepository;
 import org.eclipse.syson.auth.service.AuditLogService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -53,34 +54,42 @@ public class AuthController {
 
     private final AuditLogService auditLogService;
 
+    private final AdminService adminService;
+
     public AuthController(SysonUserDetailsService userDetailsService,
                           JwtService jwtService,
                           PasswordEncoder passwordEncoder,
                           MembershipRepository membershipRepository,
                           UserRepository userRepository,
-                          AuditLogService auditLogService) {
+                          AuditLogService auditLogService,
+                          AdminService adminService) {
         this.userDetailsService = userDetailsService;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
         this.auditLogService = auditLogService;
+        this.adminService = adminService;
     }
 
     /**
      * Authenticates a user with email and password, returning a JWT.
      */
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         UserDetails userDetails = this.userDetailsService.loadUserByUsername(request.email());
 
         if (!this.passwordEncoder.matches(request.password(), userDetails.getPassword())) {
+            this.adminService.logEventAs("login_failed", null, request.email(), "auth", null, request.email(), httpRequest);
             throw new BadCredentialsException("Invalid email or password");
         }
 
         // Look up the SysonUser to get the UUID for membership resolution
         SysonUser user = this.userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+                .orElseThrow(() -> {
+                    this.adminService.logEventAs("login_failed", null, request.email(), "auth", null, request.email(), httpRequest);
+                    return new BadCredentialsException("Invalid email or password");
+                });
         UUID userId = user.getId();
 
         // Pick the first membership's tenant
@@ -96,6 +105,7 @@ public class AuthController {
         user.setFailedLoginAttempts(0);
         this.userRepository.save(user);
         this.auditLogService.recordAccountEvent(AuditEventType.AUTH_LOGIN_SUCCESS, userId, userId, user.getEmail());
+        this.adminService.logEventAs("login_success", userId, user.getEmail(), "auth", userId.toString(), user.getEmail(), httpRequest);
 
         // Resolve roles
         List<String> roles = userDetails.getAuthorities().stream()
