@@ -338,52 +338,75 @@
     ensureAuthStyles();
     fixVisibleTranslationKeys();
     if (!state.email) return;
-    // Try to insert into Sirius nav bar; fall back to a fixed floating control
-    // so Dashboard/Admin remain discoverable even if Sirius changes nav markup.
-    var attempts = 0;
-    const tryMount = () => {
-      attempts += 1;
-      const nav = document.querySelector('[class*="navigationBar"]') 
-               || document.querySelector('header')
-               || document.querySelector('[class*="navbar"]');
-      if (!nav && attempts < 20) {
-        setTimeout(tryMount, 500);
-        return;
-      }
-      let bar = document.getElementById('syson-user-bar');
+
+    function doMount() {
+      // Find the best anchor for the user bar.
+      // In the project browser: header / [class*="navigationBar"]
+      // In the editor workbench: [class*="css-"] toolbar or the right-side
+      //   icon cluster.  We try several selectors so the bar appears on
+      //   every page (project list, editor, admin).
+      var nav = document.querySelector('[class*="navigationBar"]')
+             || document.querySelector('header [class*="toolbar"]')
+             || document.querySelector('header')
+             || document.querySelector('[class*="navbar"]');
+
+      var bar = document.getElementById('syson-user-bar');
       if (!bar) {
         bar = document.createElement('div');
         bar.id = 'syson-user-bar';
-        if (nav) {
-          nav.appendChild(bar);
-        } else {
-          bar.style.position = 'fixed';
-          bar.style.top = '10px';
-          bar.style.right = '12px';
-          bar.style.zIndex = '10000';
-          bar.style.boxShadow = '0 8px 24px rgba(0,0,0,.25)';
-          document.body.appendChild(bar);
-        }
       }
-      const roleClass = (state.roles[0] || '').toLowerCase();
-      const badgeHTML = state.roles.map(r =>
-        `<span class="role-badge ${r.toLowerCase()}">${r}</span>`
-      ).join('');
+
+      // Always prefer attaching to a nav element.  If none found, use a
+      // fixed floating position so the bar is never lost.
+      if (nav && !nav.contains(bar)) {
+        nav.appendChild(bar);
+      } else if (!nav && !document.body.contains(bar)) {
+        bar.style.position = 'fixed';
+        bar.style.top = '10px';
+        bar.style.right = '12px';
+        bar.style.zIndex = '10000';
+        bar.style.boxShadow = '0 8px 24px rgba(0,0,0,.25)';
+        document.body.appendChild(bar);
+      }
+
+      var badgeHTML = state.roles.map(function(r) {
+        return '<span class="role-badge ' + r.toLowerCase() + '">' + r + '</span>';
+      }).join('');
       var adminButtonHTML = isAdminUser() ? '<button id="syson-admin-btn" title="Administration">Admin</button>' : '';
-      bar.innerHTML = `
-        <span class="syson-user-email">${state.email}</span>
-        ${badgeHTML}
-        <button id="syson-dashboard-btn" title="Dashboard">Dashboard</button>
-        ${adminButtonHTML}
-        <button id="syson-logout-btn" title="Sign out">Sign out</button>
-      `;
+      bar.innerHTML =
+        '<span class="syson-user-email">' + state.email + '</span>' +
+        badgeHTML +
+        '<button id="syson-dashboard-btn" title="Dashboard">Dashboard</button>' +
+        adminButtonHTML +
+        '<button id="syson-logout-btn" title="Sign out">Sign out</button>';
       bar.style.display = 'flex';
       document.getElementById('syson-logout-btn').addEventListener('click', logout);
       document.getElementById('syson-dashboard-btn').addEventListener('click', showDashboard);
       var adminBtn = document.getElementById('syson-admin-btn');
       if (adminBtn) adminBtn.addEventListener('click', showAdminConsole);
-    };
-    tryMount();
+    }
+
+    // Initial mount
+    doMount();
+
+    // Keep the user bar alive across React route transitions.
+    // When the user navigates from /projects to /projects/:id/edit,
+    // React replaces the DOM subtree, which removes our bar.
+    // A MutationObserver on body re-mounts it automatically.
+    var _userBarObserver = null;
+    function startUserBarGuard() {
+      if (_userBarObserver) return;
+      _userBarObserver = new MutationObserver(function(mutations) {
+        var bar = document.getElementById('syson-user-bar');
+        if (!bar || !document.body.contains(bar)) {
+          // Bar was removed by a React re-render — re-mount after a tick
+          // so the new DOM is settled.
+          setTimeout(doMount, 100);
+        }
+      });
+      _userBarObserver.observe(document.body, { childList: true, subtree: true });
+    }
+    startUserBarGuard();
   }
 
   // ── Dashboard ────────────────────────────────────────────────────────────

@@ -263,37 +263,27 @@ def test_09_details_panel(page):
 
 
 def test_10_select_tree_element(page):
-    """T10: Selecting a tree element updates the Details panel."""
-    # First expand a document node to reveal model elements (Packages, etc.)
-    toggles = page.locator('[data-testid*="toggle"]')
-    if toggles.count() > 0:
-        toggles.first.click(timeout=5000)
+    """T10: Selecting a model element updates the Details panel."""
+    # Expand the first tree node to reveal model elements
+    toggle = page.locator('[data-testid*="toggle"]').first
+    if toggle.count() > 0:
+        toggle.click(timeout=5000)
         page.wait_for_timeout(2000)
-
-    # Find a non-document tree item (Package, Part, etc.) — documents (.sysml)
-    # don't populate the Details panel.
-    all_rows = page.locator('[data-testid*="fullrow"]')
-    target = None
-    for i in range(all_rows.count()):
-        tdid = all_rows.nth(i).get_attribute("data-testid") or ""
-        # Skip .sysml document rows — they won't populate Details
-        if ".sysml" in tdid.lower():
-            continue
-        target = all_rows.nth(i)
-        break
-    if target is None:
-        # Fallback: try clicking second row if only documents exist
-        if all_rows.count() > 1:
-            target = all_rows.nth(1)
-        else:
-            log_result("T10 Select element", False, "No non-document tree item found")
-            return
-    target.click(timeout=5000)
-    page.wait_for_timeout(3000)
+    # Click on a model element (Package 1), NOT a document or container
+    pkg = page.locator('[data-testid="Package 1-fullrow"], [data-testid*="Package 1"]').first
+    if pkg.count() == 0:
+        # Try expanding more nodes
+        toggles = page.locator('[data-testid*="toggle"]')
+        for i in range(min(toggles.count(), 3)):
+            toggles.nth(i).click(timeout=3000)
+            page.wait_for_timeout(1000)
+        pkg = page.locator('[data-testid="Package 1-fullrow"], [data-testid*="Package 1"]').first
+    if pkg.count() > 0:
+        pkg.click(timeout=5000)
+        page.wait_for_timeout(3000)
     details = page.locator('[data-testid="view-Details"]')
     details_text = details.inner_text(timeout=5000) or ""
-    # After selecting, details should show something (not just "No object selected")
-    has_selection = "No object selected" not in details_text
+    has_selection = "No object selected" not in details_text and len(details_text.strip()) > 20
     passed = has_selection
     log_result("T10 Select element", passed, f"details={details_text[:200]}", take_screenshot(page, "t10-element-selected"))
 
@@ -365,29 +355,22 @@ def test_14_toolbar_elements(page):
 
 
 def test_15_user_menu(page):
-    """T15: User menu opens and shows user info."""
-    # The auth.js user bar is injected into the top nav and shows
-    # "admin | SUPERUSER | Dashboard | Admin | Sign out".
-    # The [data-testid="user-menu"] is the Sirius Web hamburger menu (Projects/Libraries/Help),
-    # NOT the auth.js user bar. Check for auth.js-injected elements directly.
-    body = page.locator("body").inner_text(timeout=5000) or ""
-    has_admin = "admin" in body.lower()
-    has_signout = "sign out" in body.lower() or "signout" in body.lower()
-    has_superuser = "superuser" in body.lower()
-    has_user_info = has_admin and (has_signout or has_superuser)
-    if not has_user_info:
-        # Fallback: check if the auth.js user bar div is present via JS
-        try:
-            bar_present = page.evaluate(
-                "() => { const el = document.querySelector('#syson-user-bar, [id*=user-bar]'); return !!el && el.offsetHeight > 0; }"
-            )
-            if bar_present:
-                has_user_info = True
-        except Exception:
-            pass
-    passed = has_user_info
+    """T15: User bar shows admin info, Dashboard, Admin, and Sign out at all levels."""
+    # The auth.js user bar (#syson-user-bar) is now kept alive across React
+    # route transitions by a MutationObserver.  It should be visible on both
+    # the project browser and the editor workbench.
+    bar = page.locator('#syson-user-bar')
+    bar_visible = bar.count() > 0 and bar.is_visible() if bar.count() > 0 else False
+    if bar_visible:
+        bar_text = bar.inner_text(timeout=3000) or ''
+    else:
+        bar_text = ''
+    has_admin = 'admin' in bar_text.lower()
+    has_signout = 'sign out' in bar_text.lower()
+    has_dashboard = 'dashboard' in bar_text.lower()
+    passed = bar_visible and has_admin and has_signout
     log_result("T15 User menu", passed,
-               f"admin={has_admin} signout={has_signout} superuser={has_superuser}",
+               f"visible={bar_visible} admin={has_admin} signout={has_signout} dashboard={has_dashboard} text={bar_text[:100]}",
                take_screenshot(page, "t15-user-menu"))
 
 
@@ -444,32 +427,25 @@ def test_19_console_errors(page):
 
 
 def test_20_logout(page):
-    """T20: Logout returns to login overlay."""
-    # Close any open menus/modals first
+    """T20: Logout from editor returns to login overlay."""
+    # The auth.js user bar has a #syson-logout-btn button.
+    # It should be visible in the editor workbench thanks to the MutationObserver.
     page.keyboard.press("Escape")
     page.wait_for_timeout(500)
     page.keyboard.press("Escape")
     page.wait_for_timeout(500)
-    # The auth.js user bar has a "Sign out" link in the top nav area.
-    # Look for it directly — it may be an <a>, <button>, or <span>.
-    sign_out = page.locator('a:has-text("Sign out"), button:has-text("Sign out"), span:has-text("Sign out")')
-    if sign_out.count() == 0:
-        # Fallback: try broader text match
-        sign_out = page.locator('text=Sign out')
-    if sign_out.count() == 0:
-        # Last resort: try clicking via JS if element exists but is hidden/overlapped
-        try:
-            clicked = page.evaluate(
-                "() => { const els = document.querySelectorAll('a,button,span,div'); for(const e of els){ if(e.textContent.trim()==='Sign out'){e.click();return true;}} return false;}"
-            )
-        except Exception:
-            clicked = False
-        page.wait_for_timeout(3000)
+    logout_btn = page.locator('#syson-logout-btn')
+    if logout_btn.count() > 0 and logout_btn.is_visible():
+        logout_btn.click(timeout=5000)
     else:
-        sign_out.first.click(timeout=5000)
-        page.wait_for_timeout(3000)
+        # Fallback: try clicking via JS
+        try:
+            page.evaluate("() => { var el = document.getElementById('syson-logout-btn'); if(el) el.click(); }")
+        except Exception:
+            pass
+    page.wait_for_timeout(5000)
     overlay = wait_and_check(page, "#syson-auth-overlay", timeout=15000)
-    log_result("T20 Logout", overlay, f"login_overlay={overlay}", take_screenshot(page, "t20-logout"))
+    log_result("T20 Logout from editor", overlay, f"login_overlay={overlay}", take_screenshot(page, "t20-logout"))
 
 
 def test_21_project_delete(page):
