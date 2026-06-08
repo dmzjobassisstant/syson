@@ -1,5 +1,13 @@
 # Notes for AI coding agents working on this SysON fork
 
+## Critical: stabilization guide
+
+Before making any architectural, build, or deployment decision, read:
+
+- `SYSON_STABILIZATION_GUIDE.md` — the correct build/deploy path, sidecar extension architecture, upstream-aligned recovery procedure, and known pitfalls from the June 2026 stabilization.
+
+This document defines the non-negotiable rules for extending SysON without breaking the Sirius editor path.
+
 ## Critical: enterprise account/access/audit work is live — do not overwrite
 
 Read `SYSON_ENTERPRISE_ACCESS_AUDIT_HANDOFF.md` before modifying auth, admin APIs, security config, audit logging, or `auth.js`.
@@ -78,6 +86,15 @@ This verifies:
 - login API accepts the install-default `admin` / `admin` credentials.
 - protected user endpoint works with the returned token.
 
+### Sirius Web interface control + integration KB
+
+Before debugging any Sirius Web UI snackbar, project open/create failure, raw i18n key, blank workbench, GraphQL validation error, or bundled frontend/backend mismatch, read both documents in this order:
+
+- `SIRIUS_WEB_INTERFACE_CONTROL_DOCUMENT.md` — authoritative Interface Control Document for the compatible frontend/backend protocol: GraphQL fields/types/arguments/input drift, i18n endpoint/namespaces, auth.js request normalization, verification rules, and error-to-contract mapping.
+- `SIRIUS_WEB_INTEGRATION_KB.md` — symptom/fix knowledge base and operational debugging notes.
+
+Do not second-guess or rediscover known Sirius Web messages before checking the ICD. It documents the required compatibility surface (`ProjectTemplateContext`, `allProjectTemplates`, `CreateProjectInput.templateId/libraryIds/natures`, `workbenchConfiguration`, viewer/project capabilities, i18n locale fallback), the correct GraphQL compatibility patterns, and the verification commands.
+
 ### Authenticated blank-screen regression
 
 The login overlay can pass while an already-authenticated browser still shows a blank app. If a user reports a blank page after login, inspect the browser network/console with a real token. The known root cause here was a frontend/backend GraphQL contract mismatch:
@@ -113,3 +130,23 @@ Only rebuild/repackage the JAR when you need the change baked into the applicati
 - Password: `admin`
 
 Do not put stronger passwords back into source-controlled docs.
+
+## Critical: build command rules
+
+See `SYSON_STABILIZATION_GUIDE.md` §3 for the full build/deploy path. Summary:
+
+1. **Never use `-am`** in Maven builds. It rebuilds the frontend stub JAR (2 KB, no index.html).
+2. **Always use `-o`** (offline) to avoid GitHub Packages auth failures.
+3. **Verify the frontend JAR is 1.75 MB+** with `static/index.html` before Docker build.
+4. **Preserve existing Docker environment** when restarting — never lose DB credentials.
+
+## Critical: sidecar architecture
+
+Enterprise features (auth, RBAC, element persistence, version control, history/warehouse, locks) are **additive sidecars** that run alongside the upstream Sirius Web editor. They must never:
+
+- Modify upstream core tables (`project`, `semantic_data`, `document`, `representation_*`)
+- Replace or bypass `document.content` persistence
+- Block editor saves when sidecar extraction fails
+- Redefine upstream GraphQL types
+
+See `SYSON_STABILIZATION_GUIDE.md` §2 for the full sidecar architecture rules.

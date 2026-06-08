@@ -14,6 +14,10 @@ SysON is a **web-based SysML v2 modeling workbench** built on **Eclipse Sirius W
 
 **Key fact for access control design:** The entire model is hierarchical (packages containing elements), and the current access model only gates at the **project** level. There's no per-element, per-package, or per-diagram access control. This is the primary gap.
 
+**Sidecar architecture:** Enterprise features (auth, RBAC, element persistence, version control, history/warehouse, locks) are **additive sidecars** that run alongside the upstream Sirius Web editor. They never modify upstream core tables, never replace `document.content` persistence, never block editor saves, and never redefine upstream GraphQL types. See `SYSON_STABILIZATION_GUIDE.md` for the full build/deploy path, sidecar rules, and recovery procedure.
+
+**Upstream-aligned commit:** `540ea78c86ab9b3af3acc9413a6e51dd7e795a19` — the known-good Sirius Web/SysON baseline. All enterprise extensions were added on top of this commit.
+
 ---
 
 ## 2. REPOSITORY STRUCTURE
