@@ -202,7 +202,8 @@ The enterprise extension commits (after `540ea78c`) add these features that shou
 | Locks/tags/merge/integrity | V8 | `BranchLockService`, `IntegrityCheckService` |
 | GraphQL compat | — | `syson-auth-compat.graphqls`, `TypeDefinitionConfigurer` classes |
 | i18n translations | — | `i18n/{en,fr}/*.json`, `LocaleController.java` |
-| document.is_read_only DEFAULT | V9 | `V9__document_read_only_default.sql` |
+| `document.is_read_only DEFAULT` | V9 | `V9__document_read_only_default.sql` |
+| `representation_metadata_id DEFAULT` | V10 | `V10__representation_metadata_id_default.sql` |
 
 ---
 
@@ -315,7 +316,7 @@ Should return empty (no GraphQL validation errors).
 3. **New migrations must be idempotent** — use `CREATE TABLE IF NOT EXISTS`, `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object ... END $$`.
 4. **New migrations must only touch `syson_*` tables** except for carefully-audited FK references to upstream `project(id)`.
 5. **New project_id columns must be TEXT**, not UUID. This matches upstream `project(id)`.
-6. **V9 is the only migration that touches an upstream table** (`document.is_read_only DEFAULT false`). This was a one-time fix. Do not add more upstream table modifications.
+6. **V9 and V10 are migrations that touch upstream tables** (`document.is_read_only DEFAULT`, `representation_metadata_id DEFAULT`). These were one-time fixes. Do not add more upstream table modifications without auditing the full upstream Liquibase changelog.
 
 ---
 
