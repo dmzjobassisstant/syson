@@ -52,6 +52,7 @@ public class UserController {
     private final AuditLogService auditLogService;
     private final AdminService adminService;
     private final org.eclipse.syson.auth.audit.RbacAuditTrailService rbacAuditTrailService;
+    private final org.eclipse.syson.history.service.ElementHistoryService elementHistoryService;
 
     public UserController(UserRepository userRepository,
                           ProjectMembershipRepository projectMembershipRepository,
@@ -63,7 +64,8 @@ public class UserController {
                           AccessControlService accessControlService,
                           AuditLogService auditLogService,
                           AdminService adminService,
-                          org.eclipse.syson.auth.audit.RbacAuditTrailService rbacAuditTrailService) {
+                          org.eclipse.syson.auth.audit.RbacAuditTrailService rbacAuditTrailService,
+                          org.eclipse.syson.history.service.ElementHistoryService elementHistoryService) {
         this.userRepository = userRepository;
         this.projectMembershipRepository = projectMembershipRepository;
         this.projectAccessService = projectAccessService;
@@ -75,6 +77,7 @@ public class UserController {
         this.auditLogService = auditLogService;
         this.adminService = adminService;
         this.rbacAuditTrailService = rbacAuditTrailService;
+        this.elementHistoryService = elementHistoryService;
     }
 
     private SysonUser currentUser() {
@@ -260,6 +263,31 @@ public class UserController {
     public ResponseEntity<?> getRbacAuditTrailStats() {
         try {
             return ResponseEntity.ok(this.rbacAuditTrailService.getStats());
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    /**
+     * Element history: returns all changes for a specific element.
+     * Accessible to any authenticated user who is a member of the project.
+     */
+    @GetMapping("/projects/{projectId}/elements/{stableId}/history")
+    public ResponseEntity<?> getElementHistory(
+            @PathVariable String projectId,
+            @PathVariable String stableId,
+            @RequestParam(required = false) UUID branchId) {
+        try {
+            // Default to a null branch (service will query all branches)
+            UUID branch = branchId != null ? branchId : UUID.fromString("00000000-0000-0000-0000-000000000000");
+            var history = this.elementHistoryService.getElementHistory(projectId, stableId, branch);
+            Map<String, Object> response = new java.util.LinkedHashMap<>();
+            response.put("projectId", projectId);
+            response.put("stableId", stableId);
+            response.put("history", history);
+            response.put("totalVersions", history.size());
+            return ResponseEntity.ok(response);
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", ex.getMessage()));

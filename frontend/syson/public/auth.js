@@ -686,6 +686,141 @@
     }
   }
 
+  // ── Element History Button ────────────────────────────────────────────────
+  // Injects a "📋 History" button into the Sirius properties panel header.
+  // When clicked, fetches element change history and shows an overlay.
+
+  function injectHistoryButton() {
+    if (!state.token) return;
+    // Watch for the properties panel to appear
+    var observer = new MutationObserver(function(mutations) {
+      // Look for the properties panel — it has a header with the element type name
+      var propsPanel = document.querySelector('[data-testid="properties"], .properties-panel, [class*="PropertiesView"], [class*="properties-view"]');
+      if (!propsPanel) {
+        // Try alternative: look for the details/properties section in the right panel
+        var panels = document.querySelectorAll('[class*="panel"], [class*="Panel"]');
+        for (var i = 0; i < panels.length; i++) {
+          var text = panels[i].textContent || '';
+          if (text.indexOf('Properties') !== -1 && text.indexOf('Declared Name') !== -1) {
+            propsPanel = panels[i];
+            break;
+          }
+        }
+      }
+      if (!propsPanel) return;
+      // Don't add duplicate
+      if (propsPanel.querySelector('#syson-history-btn')) return;
+      // Find the header area
+      var header = propsPanel.querySelector('h3, h4, [class*="header"], [class*="Header"]');
+      if (!header) header = propsPanel.firstElementChild;
+      if (!header) return;
+      // Create history button
+      var btn = document.createElement('button');
+      btn.id = 'syson-history-btn';
+      btn.textContent = '📋 History';
+      btn.title = 'View element change history';
+      btn.style.cssText = 'margin-left:8px;padding:2px 8px;font-size:11px;background:#1a73e8;color:#fff;border:none;border-radius:3px;cursor:pointer;vertical-align:middle;';
+      btn.addEventListener('click', function() { showElementHistory(); });
+      header.appendChild(btn);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function getElementIdFromPanel() {
+    // Try to extract the element ID from the properties panel or URL
+    // Sirius Web stores the selected object ID in the URL hash or in React state
+    var hash = window.location.hash || '';
+    var match = hash.match(/objectId=([^&]+)/);
+    if (match) return match[1];
+    // Try from the URL path
+    var pathMatch = window.location.pathname.match(/\/projects\/([^/]+)/);
+    var projectId = pathMatch ? pathMatch[1] : null;
+    // Try to find element ID from the details panel content
+    var detailsPanel = document.querySelector('[data-testid="details"], [class*="DetailsView"], [class*="details-view"]');
+    if (detailsPanel) {
+      // The element ID might be in a hidden data attribute or in the React fiber
+      var allAttrs = detailsPanel.querySelectorAll('[data-elementid], [data-objectid]');
+      if (allAttrs.length > 0) return allAttrs[0].getAttribute('data-elementid') || allAttrs[0].getAttribute('data-objectid');
+    }
+    return null;
+  }
+
+  function getProjectIdFromUrl() {
+    var match = window.location.pathname.match(/\/projects\/([^/]+)/);
+    return match ? match[1] : null;
+  }
+
+  function showElementHistory() {
+    var projectId = getProjectIdFromUrl();
+    var elementId = getElementIdFromPanel();
+    if (!projectId || !elementId) {
+      alert('Cannot determine project or element ID. Open a project and select an element first.');
+      return;
+    }
+    // Fetch element history
+    var url = '/api/v1/user/projects/' + projectId + '/elements/' + elementId + '/history';
+    _origFetch(url).then(function(resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return resp.json();
+    }).then(function(data) {
+      renderHistoryOverlay(data, projectId, elementId);
+    }).catch(function(err) {
+      alert('Failed to load element history: ' + err.message);
+    });
+  }
+
+  function renderHistoryOverlay(data, projectId, elementId) {
+    // Remove existing overlay
+    var existing = document.getElementById('syson-history-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-history-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;right:0;width:480px;height:100vh;background:#1a1a2e;color:#e0e0e0;z-index:10001;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;';
+
+    var header = document.createElement('div');
+    header.style.cssText = 'padding:16px;background:#16213e;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;';
+    header.innerHTML = '<div><strong style="font-size:14px;">📋 Element History</strong><br><span style="font-size:11px;color:#888;">' + elementId.substring(0, 30) + '...</span></div>';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    closeBtn.style.cssText = 'background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;';
+    closeBtn.addEventListener('click', function() { overlay.remove(); });
+    header.appendChild(closeBtn);
+    overlay.appendChild(header);
+
+    var content = document.createElement('div');
+    content.style.cssText = 'padding:16px;';
+
+    var history = data.history || [];
+    if (history.length === 0) {
+      content.innerHTML = '<p style="color:#888;text-align:center;margin-top:40px;">No change history found for this element.</p>';
+    } else {
+      content.innerHTML = '<p style="color:#888;font-size:12px;margin-bottom:12px;">' + history.length + ' version(s) found</p>';
+      for (var i = 0; i < history.length; i++) {
+        var entry = history[i];
+        var op = entry.operation || 'unknown';
+        var color = op === 'create' ? '#4caf50' : op === 'delete' ? '#f44336' : '#ff9800';
+        var card = document.createElement('div');
+        card.style.cssText = 'background:#16213e;border-left:3px solid ' + color + ';padding:10px 12px;margin-bottom:8px;border-radius:0 4px 4px 0;';
+        card.innerHTML =
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span style="color:' + color + ';font-weight:bold;text-transform:uppercase;font-size:11px;">' + op + '</span>' +
+            '<span style="color:#666;font-size:10px;">' + (entry.committedAt || '') + '</span>' +
+          '</div>' +
+          '<div style="font-size:12px;margin-top:4px;">' +
+            '<span style="color:#aaa;">Branch:</span> ' + (entry.branchName || 'main') +
+            (entry.author ? ' &nbsp;<span style="color:#aaa;">Author:</span> ' + entry.author : '') +
+          '</div>' +
+          (entry.changedFields ? '<div style="font-size:11px;margin-top:4px;color:#888;">Changed: ' + entry.changedFields + '</div>' : '') +
+          (entry.message ? '<div style="font-size:11px;margin-top:2px;color:#666;">' + entry.message + '</div>' : '');
+        content.appendChild(card);
+      }
+    }
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+  }
+
   // ── Boot ─────────────────────────────────────────────────────────────────
   loadState();
 
@@ -700,10 +835,11 @@
     }, 4 * 60 * 60 * 1000);
     // Mount user bar after DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); });
+      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); injectHistoryButton(); });
     } else {
       mountUserBar();
       handleAdminDeepLink();
+      injectHistoryButton();
     }
   } else {
     // Not authenticated — show login and block app load
