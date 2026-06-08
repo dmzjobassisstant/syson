@@ -75,6 +75,22 @@ public class ChangeEntity {
     @Column(name = "created_by")
     private UUID createdBy;
 
+    @Column(name = "project_ref")
+    private String projectRef;
+
+    @Column(name = "branch_id")
+    private UUID branchId;
+
+    @Column(name = "stable_object_id")
+    private String stableObjectId;
+
+    @Column(name = "changed_fields", columnDefinition = "jsonb")
+    @org.hibernate.annotations.ColumnTransformer(write = "?::jsonb")
+    private String changedFields;
+
+    @Column(name = "extractor_version")
+    private String extractorVersion;
+
     public ChangeEntity() {
     }
 
@@ -189,4 +205,15 @@ public class ChangeEntity {
     public void setCreatedBy(UUID createdBy) {
         this.createdBy = createdBy;
     }
+
+    public String getProjectRef() { return projectRef; }
+    public void setProjectRef(String v) { this.projectRef = v; }
+    public UUID getBranchId() { return branchId; }
+    public void setBranchId(UUID v) { this.branchId = v; }
+    public String getStableObjectId() { return stableObjectId; }
+    public void setStableObjectId(String v) { this.stableObjectId = v; }
+    public String getChangedFields() { return changedFields; }
+    public void setChangedFields(String v) { this.changedFields = v; }
+    public String getExtractorVersion() { return extractorVersion; }
+    public void setExtractorVersion(String v) { this.extractorVersion = v; }
 }
