@@ -20,6 +20,8 @@ import org.eclipse.syson.auth.service.RoleManagementService;
 import org.eclipse.syson.auth.service.UserSearchCriteria;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -75,7 +77,17 @@ public class UserController {
     @GetMapping("/me")
     public UserProfile me() {
         SysonUser u = this.currentUser();
-        return new UserProfile(u.getId(), u.getEmail(), u.getName(), u.isActive(), u.isEmailVerified(), u.getLastLoginAt());
+        return new UserProfile(u.getId(), u.getEmail(), u.getName(), u.isActive(), u.isEmailVerified(), u.getLastLoginAt(), currentRoles());
+    }
+
+    private List<String> currentRoles() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return List.of();
+        }
+        return authentication.getAuthorities().stream()
+                .map(authority -> authority.getAuthority().replace("ROLE_", "").toLowerCase())
+                .toList();
     }
 
     @PutMapping("/me/password")
@@ -115,7 +127,7 @@ public class UserController {
     @GetMapping("/admin/users")
     public List<UserProfile> adminListUsers(@RequestParam(required = false) String query, @RequestParam(required = false) Boolean active) {
         return this.accountAdministrationService.listUsers(new UserSearchCriteria(query, active)).stream()
-                .map(user -> new UserProfile(user.getId(), user.getEmail(), user.getName(), user.isActive(), user.isEmailVerified(), user.getLastLoginAt()))
+                .map(user -> new UserProfile(user.getId(), user.getEmail(), user.getName(), user.isActive(), user.isEmailVerified(), user.getLastLoginAt(), List.of()))
                 .toList();
     }
 
@@ -123,7 +135,7 @@ public class UserController {
     public ResponseEntity<UserProfile> adminCreateUser(@RequestBody CreateUserRequest req) {
         SysonUser saved = this.accountAdministrationService.createUser(new CreateUserCommand(
                 req.email(), req.name(), req.password(), req.tenantId(), TenantRole.from(req.tenantRole())));
-        return ResponseEntity.status(HttpStatus.CREATED).body(new UserProfile(saved.getId(), saved.getEmail(), saved.getName(), saved.isActive(), saved.isEmailVerified(), saved.getLastLoginAt()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(new UserProfile(saved.getId(), saved.getEmail(), saved.getName(), saved.isActive(), saved.isEmailVerified(), saved.getLastLoginAt(), List.of()));
     }
 
     @PutMapping("/admin/users/{userId}/deactivate")
@@ -183,7 +195,7 @@ public class UserController {
         return this.auditLogService.findEvents(new AuditEventSearchCriteria(actorId, action, targetType, targetId, limit));
     }
 
-    public record UserProfile(UUID id, String email, String name, boolean active, boolean emailVerified, OffsetDateTime lastLoginAt) {}
+    public record UserProfile(UUID id, String email, String name, boolean active, boolean emailVerified, OffsetDateTime lastLoginAt, List<String> roles) {}
     public record ChangePasswordRequest(String currentPassword, String newPassword) {}
     public record MyProjectResponse(String projectId, String role, OffsetDateTime assignedAt) {}
     public record CreateUserRequest(String email, String name, String password, UUID tenantId, String tenantRole) {}

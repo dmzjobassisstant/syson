@@ -1,0 +1,67 @@
+{
+  "buttonPropertySection": {
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "checkboxPropertySection": {
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "listPropertySection": {
+    "none": "Aucun",
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "multiSelectPropertySection": {
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "radioPropertySection": {
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "richTextPropertySection": {
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "selectPropertySection": {
+    "none": "Aucun",
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "sliderPropertySection": {
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "splitButtonPropertySection": {
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "treePropertySection": {
+    "none": "Aucun"
+  },
+  "toolbarAction": {
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    }
+  },
+  "formRepresentation": {
+    "formDoesNotExist": "Le formulaire n'existe plus"
+  },
+  "imagePropertySection": {
+    "noImage": "Aucune image"
+  },
+  "helpTooltip": {
+    "errorWhileLoadingHelpText": "Erreur lors du chargement du texte d'aide: {{error}}",
+    "noHelpProvided": "Aucun texte d'aide fourni"
+  }
+}

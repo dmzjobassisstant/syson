@@ -1,0 +1,72 @@
+{
+  "buttonPropertySection": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "checkboxPropertySection": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "listPropertySection": {
+    "none": "None",
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "multiSelectPropertySection": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "radioPropertySection": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "richTextPropertySection": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "selectPropertySection": {
+    "none": "None",
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "sliderPropertySection": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "splitButtonPropertySection": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "treeItem": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "treePropertySection": {
+    "none": "None"
+  },
+  "toolbarAction": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "formRepresentation": {
+    "formDoesNotExist": "The form does not exist anymore"
+  },
+  "imagePropertySection": {
+    "noImage": "No image"
+  },
+  "helpTooltip": {
+    "errorWhileLoadingHelpText": "Error while loading the help text: {{error}}",
+    "noHelpProvided": "No help provided"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "browseModal": {
+    "choices": "Choix",
+    "submit": "Sélectionner",
+    "title": "Sélectionner un objet"
+  },
+  "createModal": {
+    "container": {
+      "label": "Sélectionner le conteneur"
+    },
+    "domain": {
+      "label": "Sélectionner le domaine"
+    },
+    "submit": "Créer",
+    "title": "Créer un objet",
+    "type": {
+      "label": "Sélectionner le type d’objet"
+    }
+  },
+  "filterableSortableList": {
+    "selected": "Sélectionné"
+  },
+  "transferModal": {
+    "choices": "Choix",
+    "close": "Fermer",
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    },
+    "title": "Modifier la référence"
+  },
+  "valuedReferenceAutocomplete": {
+    "clear": "Effacer",
+    "close": "Fermer",
+    "createObject": "Créer un objet",
+    "edit": "Modifier",
+    "errors": {
+      "unexpected": "Une erreur inattendue est survenue, veuillez actualiser la page"
+    },
+    "open": "Ouvrir",
+    "value": "Valeur",
+    "values": "Valeurs"
+  }
+}

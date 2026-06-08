@@ -1,0 +1,43 @@
+{
+  "browseModal": {
+    "choices": "Choices",
+    "submit": "Select",
+    "title": "Select an object"
+  },
+  "createModal": {
+    "container": {
+      "label": "Select the container"
+    },
+    "domain": {
+      "label": "Select the domain"
+    },
+    "submit": "Create",
+    "title": "Create an object",
+    "type": {
+      "label": "Select the object type"
+    }
+  },
+  "filterableSortableList": {
+    "selected": "Selected"
+  },
+  "transferModal": {
+    "choices": "Choices",
+    "close": "Close",
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    },
+    "title": "Edit reference"
+  },
+  "valuedReferenceAutocomplete": {
+    "clear": "Clear",
+    "close": "Close",
+    "createObject": "Create an object",
+    "edit": "Edit",
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    },
+    "open": "Open",
+    "value": "Value",
+    "values": "Values"
+  }
+}

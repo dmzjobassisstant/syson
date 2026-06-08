@@ -1,0 +1,14 @@
+-- Upstream Sirius Web 2025.6.1 JDBC binds representation_metadata.id and
+-- representation_content.id parameters as UUID, but these columns are TEXT
+-- in the live database (they contain composite keys like "uuid1#uuid2").
+-- PostgreSQL rejects "text = uuid" with:
+--   ERROR: operator does not exist: text = uuid
+--
+-- Fix: create an implicit cast UUID→TEXT so PostgreSQL auto-converts UUID
+-- parameters before comparing against TEXT columns.
+-- This is safe because UUID→TEXT is a widening conversion (no data loss).
+--
+-- IMPORTANT: This migration must be run as a superuser (e.g., postgres role)
+-- because CREATE CAST requires ownership of both types.
+-- Run: sudo -u postgres psql -d syson -f V11__uuid_to_text_implicit_cast.sql
+CREATE CAST (uuid AS text) WITH INOUT AS IMPLICIT;

@@ -204,6 +204,8 @@ The enterprise extension commits (after `540ea78c`) add these features that shou
 | i18n translations | — | `i18n/{en,fr}/*.json`, `LocaleController.java` |
 | `document.is_read_only DEFAULT` | V9 | `V9__document_read_only_default.sql` |
 | `representation_metadata_id DEFAULT` | V10 | `V10__representation_metadata_id_default.sql` |
+| UUID→TEXT implicit cast | V11 | `V11__uuid_text_cast.sql` |
+| `semantic_data_id` nullable | V12 | `V12__semantic_data_id_nullable.sql` |
 
 ---
 
@@ -312,7 +314,7 @@ Should return empty (no GraphQL validation errors).
 ## 7. Flyway / Migration rules
 
 1. **Live container uses `SPRING_FLYWAY_ENABLED=false`.** Migrations are applied manually.
-2. **All V2-V9 migrations are applied to the live `syson` database.** New migrations get a V10+ number.
+2. **All V2-V12 migrations are applied to the live `syson` database.** New migrations get a V13+ number.
 3. **New migrations must be idempotent** — use `CREATE TABLE IF NOT EXISTS`, `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object ... END $$`.
 4. **New migrations must only touch `syson_*` tables** except for carefully-audited FK references to upstream `project(id)`.
 5. **New project_id columns must be TEXT**, not UUID. This matches upstream `project(id)`.
@@ -354,4 +356,4 @@ New `@RestController` classes **silently fail** to register request mappings in 
 | Docker image | `syson-rbac:latest` |
 | Maven build | `mvn -pl backend/application/syson-application -DskipTests -Dcheckstyle.skip=true package -o` |
 | Flyway | Disabled in container, manual application |
-| Flyway migrations | V2-V9 applied |
+| Flyway migrations | V2-V12 applied |

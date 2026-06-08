@@ -1,0 +1,405 @@
+{
+  "createProjectArea": {
+    "createNewProject": "Create a new project"
+  },
+  "deleteImageModal": {
+    "content": "This action will delete the image and might break projects which use it. It cannot be reversed.",
+    "submit": "Delete",
+    "title": "Delete the image"
+  },
+  "deleteProjectModal": {
+    "content": "This action will delete everything in the project. All data and all representations will be lost. It cannot be reversed.",
+    "submit": "Delete",
+    "title": "Delete the project \"{{name}}\""
+  },
+  "diagramFilter": {
+    "filter": "Filter elements"
+  },
+  "downloadDocumentTreeItemContextMenuContribution": {
+    "download": "Download"
+  },
+  "duplicateObjectTreeItemContextMenuContribution": {
+    "duplicate": "Duplicate object"
+  },
+  "fileUpload": {
+    "clickToSelectFile": "Click here to select a file"
+  },
+  "imageRow": {
+    "copyId": "Copy ID to clipboard"
+  },
+  "imageTable": {
+    "id": "ID",
+    "label": "Label",
+    "delete": "Delete"
+  },
+  "listProjectsArea": {
+    "existingProjects": "Existing Projects"
+  },
+  "newDocumentArea": {
+    "createModel": "Create a new Model",
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    },
+    "noAccessToCreateModel": "You need edit access to create models",
+    "selectModelToCreate": "Select the model to create"
+  },
+  "newDocumentModal": {
+    "modelType": {
+      "label": "Model type"
+    },
+    "name": {
+      "helperText": "The name cannot be empty",
+      "label": "Name",
+      "placeholder": "Enter the name of the model"
+    },
+    "submit": "Create",
+    "title": "Create a new model"
+  },
+  "newDocumentModalContribution": {
+    "newModel": "New model"
+  },
+  "newObjectModal": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    },
+    "submit": "Create",
+    "title": "Create a new object",
+    "type": {
+      "label": "Object type"
+    }
+  },
+  "newObjectTreeItemContextMenuContribution": {
+    "newObject": "New object"
+  },
+  "newProjectView": {
+    "description": "Enter a name and optionally initialize your project using a template and reference existing libraries",
+    "descriptionNameOnly": "Enter a name",
+    "descriptionNameAndTemplate": "Enter a name and optionally initialize your project using a template",
+    "descriptionNameAndLibraries": "Enter a name and optionally reference existing libraries",
+    "submit": "Create Project",
+    "title": "Create a new project",
+    "projectDetails": "Project Details",
+    "projectDetailsDescription": "Configure your new project with a name, template and libraries",
+    "projectDetailsDescriptionNameOnly": "Configure your new project with a name",
+    "projectDetailsDescriptionNameAndTemplate": "Configure your new project with a name and template",
+    "projectDetailsDescriptionNameAndLibraries": "Configure your new project with a name and libraries",
+    "name": "Project Name",
+    "nameTextfieldPlaceholder": "Enter project name",
+    "nameTextfieldHelperText": "{{charCount}}/1024 characters (min 3)",
+    "projectTemplate": "Project Template",
+    "templatePlaceholder": "Select a template",
+    "templateHelperText": "Choose a template to get a predefined project structure and initial content",
+    "libraries": "Libraries",
+    "librariesDescription": "Search for and select libraries that will be available in your project as references",
+    "optional": "Optional",
+    "cancel": "Cancel"
+  },
+  "newRepresentationArea": {
+    "createRepresentation": "Create a new Representation",
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    },
+    "noAccessToCreateRepresentation": "You need edit access to create representations",
+    "noRepresentations": "There are no representations available for the current selection",
+    "selectRepresentationToCreate": "Select the representation to create"
+  },
+  "newRepresentationModal": {
+    "name": {
+      "helperText": "The name cannot be empty",
+      "label": "Name",
+      "placeholder": "Enter the name of the representation"
+    },
+    "submit": "Create",
+    "title": "Create a new representation",
+    "type": {
+      "label": "Representation type"
+    }
+  },
+  "newRepresentationTreeItemContextMenuContribution": {
+    "newRepresentation": "New representation"
+  },
+  "newRootObjectModal": {
+    "domain": {
+      "label": "Domain"
+    },
+    "submit": "Create",
+    "suggestedType": {
+      "label": "Show only suggested root type"
+    },
+    "title": "Create a new root object",
+    "type": {
+      "label": "Object type"
+    }
+  },
+  "newRootObjectTreeItemContextMenuContribution": {
+    "newObject": "New object"
+  },
+  "projectActionButton": {
+    "more": "More"
+  },
+  "projectImagesSettings": {
+    "empty": "No project images available, start by uploading one",
+    "title": "Project Images",
+    "upload": "Upload"
+  },
+  "projectTemplatesModal": {
+    "messages": {
+      "loading": "Loading..."
+    },
+    "selectProjectTemplate": "Select a project template"
+  },
+  "renameImageModal": {
+    "name": {
+      "helperText": "The name must contain at least 3 characters",
+      "label": "Name",
+      "placeholder": "Enter the new image name"
+    },
+    "submit": "Rename",
+    "title": "Rename the image"
+  },
+  "renameProjectModal": {
+    "name": {
+      "helperText": "The name is required and must contain less than 1024 characters",
+      "label": "Name",
+      "placeholder": "Enter a new project name"
+    },
+    "submit": "Rename",
+    "title": "Rename the project"
+  },
+  "representationsArea": {
+    "openRepresentation": "Open an existing Representation",
+    "selectRepresentationToOpen": "Select the representation to open"
+  },
+  "uploadDocumentModal": {
+    "cancel": "Close",
+    "title": "Upload new model"
+  },
+  "uploadDocumentModalContribution": {
+    "uploadModel": "Upload model"
+  },
+  "uploadImageModal": {
+    "label": {
+      "label": "Label",
+      "placeholder": "Label for the image"
+    },
+    "submit": "Upload",
+    "title": "Upload new image"
+  },
+  "uploadProjectView": {
+    "description": "Start with an existing project",
+    "submit": "Upload",
+    "title": "Upload a project"
+  },
+  "useCreateDocument": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "useCreateProjectFromTemplate": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "useDeleteProject": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "useRenameProject": {
+    "errors": {
+      "unexpected": "An unexpected error has occurred, please refresh the page"
+    }
+  },
+  "navigationBarMenu": {
+    "libraries": "Libraries",
+    "projects": "Projects",
+    "help": "Help"
+  },
+  "uploadProjectCard": {
+    "title": "+ Upload project",
+    "description": "Start with an existing project"
+  },
+  "newProjectCard": {
+    "title": "+ Blank project",
+    "description": "Create a new blank project"
+  },
+  "showAllProjectTemplatesCard": {
+    "title": "Show all templates",
+    "description": "Show all project templates"
+  },
+  "duplicateProjectMenuItem": {
+    "duplicate": "Duplicate"
+  },
+  "downloadProjectMenuItem": {
+    "download": "Download"
+  },
+  "deleteProjectMenuItem": {
+    "delete": "Delete"
+  },
+  "renameProjectMenuItem": {
+    "rename": "Rename"
+  },
+  "shareProjectMenuItem": {
+    "share": "Share"
+  },
+  "projectSettingsMenuItem": {
+    "settings": "Settings"
+  },
+  "shareProjectModal": {
+    "title": "Share project",
+    "copiedIntoClipboard": "(copied into the clipboard)"
+  },
+  "projectsTable": {
+    "actions": "Actions"
+  },
+  "projectsTable.actions": "Actions",
+  "useProjectsTableColumns": {
+    "name": "Name"
+  },
+  "useProjectsTableColumns.name": "Name",
+  "cursorBasedPagination": {
+    "rowsPerPage": "Rows per page:"
+  },
+  "librariesImportTable": {
+    "name": "Name",
+    "version": "Version",
+    "createdOn": "Created On",
+    "namespace": "Namespace",
+    "description": "Description"
+  },
+  "updateLibraryTable": {
+    "name": "Name",
+    "version": "Version",
+    "createdOn": "Created On",
+    "namespace": "Namespace",
+    "description": "Description"
+  },
+  "libraryBrowserView": {
+    "libraries": "Libraries"
+  },
+  "librariesTable": {
+    "name": "Name",
+    "version": "Version",
+    "createdOn": "Created On",
+    "namespace": "Namespace",
+    "description": "Description"
+  },
+  "detailsView": {
+    "noObjectSelected": "No object selected"
+  },
+  "synchronizationButton": {
+    "tooltipPinned": "Pinned. Click to follow the global selection.",
+    "tooltipUnpinned": "Unpinned. Click to pin the view to the current selection."
+  },
+  "searchQueryInput": {
+    "searchInAttributes": "Search in attributes",
+    "searchInLibraries": "Search in libraries",
+    "search": "Search",
+    "clearAll": "Clear All",
+    "matchCase": "Match Case",
+    "matchWholeWord": "Match Whole Word",
+    "useRegularExpression": "Use Regular Expression",
+    "clearText": "Clear Text",
+    "launchSearchPlaceholder": "Hit Ctrl+Enter to launch search"
+  },
+  "searchResults": {
+    "searchInProgress": "Search in progress...",
+    "noSearchLaunchedYet": "No search launched yet.",
+    "resultsFor_one": "{{count}} result for '{{query}}'",
+    "resultsFor_other": "{{count}} results for '{{query}}'"
+  },
+  "matchRow": {
+    "iconOverlayAlt": "Icon of the object"
+  },
+  "ageIndicator": {
+    "lessThanAMinute": "less than a minute",
+    "minutes": "{{minutes}}m",
+    "hours": "{{hours}}h",
+    "days": "{{days}}d",
+    "performedAgo": "Performed {{age}} ago"
+  },
+  "expressionArea": {
+    "expression": "Expression",
+    "executeExpression": "Execute the expression",
+    "executeExpressionTooltip": "Click this button or {{key}} + Enter when the textfield below is focused to execute the expression",
+    "texfieldPlaceholder": "Enter an expression to get started"
+  },
+  "objectExpressionResultViewer": {
+    "oneObjectReturned": "One object has been returned",
+    "iconOverlayAlt": "Object icon"
+  },
+  "objectRow": {
+    "iconOverlayAlt": "Object icon"
+  },
+  "objectsExpressionResultViewer": {
+    "objectsReturned_one": "A collection of {{count}} object has been returned",
+    "objectsReturned_other": "A collection of {{count}} objects has been returned"
+  },
+  "booleanExpressionResultViewer": {
+    "oneBooleanReturned": "A boolean has been returned"
+  },
+  "stringsExpressionResultViewer": {
+    "stringsReturned_one": "A collection of {{count}} string has been returned",
+    "stringsReturned_other": "A collection of {{count}} strings has been returned"
+  },
+  "stringExpressionResultViewer": {
+    "stringReturned": "A string has been returned"
+  },
+  "intExpressionResultViewer": {
+    "intReturned": "An integer has been returned"
+  },
+  "voidExpressionResultViewer": {
+    "voidReturned": "No value has been returned by the evaluation of this expression"
+  },
+  "resultArea": {
+    "unsupportedResult": "The result of the expression is not supported",
+    "evaluationResult": "Evaluation result"
+  },
+  "exportResultButton": {
+    "exportAsCsv": "Export as CSV"
+  },
+  "relatedViewsView": {
+    "noObjectSelected": "No object selected"
+  },
+  "expandAllTreeItemContextMenuContribution": {
+    "expandAll": "Expand all"
+  },
+  "showInSection": {
+    "showInTarget": "Show in {{target}}",
+    "showIn": "Show in",
+    "noAvailableTargets": "No available targets"
+  },
+  "messageProvider": {
+    "unexpectedError": "An unexpected error has occurred, please contact the server administrator for additional information",
+    "notFound": "The content that you are looking for has not been found"
+  },
+  "errorView": {
+    "title": "Error {{code}}",
+    "backToHomepage": "Back to the homepage"
+  },
+  "navigationBarIcon": {
+    "backToHomepage": "Back to the homepage"
+  },
+  "relatedElementsView": {
+    "noObjectSelected": "No object selected"
+  },
+  "siriusWebFooter": {
+    "poweredBy": "Powered by"
+  },
+  "siriusWebManageVisibilityNodeAction": {
+    "manageVisibility": "Manage visibility"
+  },
+  "projectGeneralSettingsView": {
+    "clientSettings": "Client settings for this project",
+    "enableConfirmationDialogs": "Enable confirmation dialogs",
+    "enableConfirmationDialogsDescription": "Show confirmation prompts before deleting items or performing critical actions. This setting is stored in your browser.",
+    "enableConfirmationDialogsTooltip": "When enabled, you will see confirmation prompts before deleting items or performing critical other actions that cannot be undone.",
+    "pageTitle": "Settings",
+    "personalBadge": "Personal",
+    "sectionDescription": "Your personal preferences - these settings are stored in your browser",
+    "title": "General Settings"
+  },
+  "viewsExplorerView": {
+    "noRepresentation": "No representation available"
+  }
+}

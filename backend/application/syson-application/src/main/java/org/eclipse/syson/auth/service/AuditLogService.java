@@ -8,6 +8,7 @@ import org.eclipse.syson.auth.entity.AuditEvent;
 import org.eclipse.syson.auth.model.AuditEventType;
 import org.eclipse.syson.auth.repository.AuditEventRepository;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -61,7 +62,7 @@ public class AuditLogService {
         if (criteria != null && criteria.targetType() != null && criteria.targetId() != null) {
             return this.auditEventRepository.findByTargetTypeAndTargetIdOrderByCreatedAtDesc(criteria.targetType(), criteria.targetId(), PageRequest.of(0, limit));
         }
-        return this.auditEventRepository.findAll(PageRequest.of(0, limit)).getContent();
+        return this.auditEventRepository.findAll(PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
     }
 
     public void record(String action, UUID actorId, String targetType, String targetId, String outcome, String metadata) {

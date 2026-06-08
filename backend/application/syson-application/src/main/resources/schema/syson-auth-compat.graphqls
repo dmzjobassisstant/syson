@@ -5,6 +5,22 @@ extend type Viewer {
   language: String!
   namespaces: [String!]!
   capabilities: ViewerCapabilities!
+  allProjectTemplates: [ProjectTemplate!]!
+}
+
+# ProjectTemplateContext enum is added programmatically via ProjectTemplateContextWiringConfigurer
+# because the upstream schema already defines ProjectTemplate/projectTemplates
+# and GraphQL forbids redefining types.  The wiring configurer also injects the
+# 'context' argument into the existing projectTemplates field so that the
+# bundled frontend's getProjectTemplates query (which passes $context) validates.
+
+# Compatibility for the newer Sirius Web create-project wizard. The bundled
+# frontend sends templateId/libraryIds through createProject(input), while the
+# 2025 backend schema only knows createProjectFromTemplate(input) and the older
+# CreateProjectInput.natures field.
+extend input CreateProjectInput {
+  templateId: ID
+  libraryIds: [String!]
 }
 
 type ViewerCapabilities {
@@ -37,4 +53,39 @@ type ProjectCapabilities {
 
 type ProjectSettingsCapabilities {
   canView: Boolean!
+}
+
+# Compatibility for newer Sirius Web frontend workbench bootstrap queries.
+# The 2026 frontend asks EditingContext.workbenchConfiguration before opening
+# a project.  The 2025.6.1 backend does not expose this field, which makes the
+# project workbench GraphQL query fail validation and leaves the UI blank.
+extend type EditingContext {
+  workbenchConfiguration: WorkbenchConfiguration!
+  representationDescription(representationDescriptionId: ID!): TreeDescription
+}
+
+type WorkbenchConfiguration {
+  mainPanel: WorkbenchMainPanelConfiguration!
+  workbenchPanels: [WorkbenchSidePanelConfiguration!]!
+}
+
+type WorkbenchMainPanelConfiguration {
+  id: String!
+  representationEditors: [WorkbenchRepresentationEditorConfiguration!]!
+}
+
+type WorkbenchRepresentationEditorConfiguration {
+  representationId: String!
+  isActive: Boolean!
+}
+
+type WorkbenchSidePanelConfiguration {
+  id: String!
+  isOpen: Boolean!
+  views: [DefaultViewConfiguration!]!
+}
+
+type DefaultViewConfiguration {
+  id: String!
+  isActive: Boolean!
 }

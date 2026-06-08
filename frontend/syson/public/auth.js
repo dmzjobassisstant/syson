@@ -24,10 +24,15 @@
   // ── State ────────────────────────────────────────────────────────────────
   let state = { token: null, email: null, roles: [], tenantId: null };
 
+  function normalizeRoles(roles) {
+    return (roles || []).map(function(role) { return String(role || '').toLowerCase(); });
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) state = JSON.parse(raw);
+      state.roles = normalizeRoles(state.roles);
     } catch (_) { /* ignore */ }
   }
 
@@ -42,11 +47,30 @@
 
   function parseJWT(token) {
     try {
-      const payload = token.split('.')[1];
+      var payload = token.split('.')[1] || '';
+      payload = payload.replace(/-/g, '+').replace(/_/g, '/');
+      while (payload.length % 4) payload += '=';
       return JSON.parse(atob(payload));
     } catch (_) {
       return {};
     }
+  }
+
+  function normalizeGraphQLRequestBody(body) {
+    try {
+      if (typeof body !== 'string' || body.indexOf('createProject') === -1 || body.indexOf('CreateProjectInput') === -1) {
+        return body;
+      }
+      var payload = JSON.parse(body);
+      var input = payload && payload.variables && payload.variables.input;
+      if (input && Object.prototype.hasOwnProperty.call(input, 'templateId') && !Object.prototype.hasOwnProperty.call(input, 'natures')) {
+        input.natures = [];
+        return JSON.stringify(payload);
+      }
+    } catch (_) {
+      // Preserve the original request body on parse errors.
+    }
+    return body;
   }
 
   // ── HTTP Interceptor ─────────────────────────────────────────────────────
@@ -55,6 +79,7 @@
     if (state.token) {
       const opts = options || {};
       opts.headers = opts.headers || {};
+      opts.body = normalizeGraphQLRequestBody(opts.body);
       if (opts.headers instanceof Headers) {
         opts.headers.set('Authorization', 'Bearer ' + state.token);
       } else {
@@ -99,7 +124,7 @@
     const claims = parseJWT(data.token);
     state.token = data.token;
     state.email = data.email;
-    state.roles = data.roles || [];
+    state.roles = normalizeRoles(data.roles || []);
     state.tenantId = claims.tenantId || null;
     saveState();
     return data;
@@ -114,6 +139,10 @@
     if (!res.ok) throw new Error('Token refresh failed');
     const data = await res.json();
     state.token = data.token;
+    state.email = data.email || state.email;
+    state.roles = normalizeRoles(data.roles || state.roles || []);
+    var claims = parseJWT(data.token);
+    state.tenantId = claims.tenantId || state.tenantId || null;
     saveState();
     return data;
   }
@@ -192,25 +221,38 @@
       margin-top: 0.5rem; min-height: 1.2em;
     }
     #syson-user-bar {
-      display: none; align-items: center; gap: 8px;
-      color: #ccc; font-size: 0.82rem;
-      padding: 4px 12px; border-radius: 6px;
-      background: rgba(255,255,255,0.04);
+      display: none; align-items: center; gap: 10px;
+      color: #f8fafc; font-size: 0.82rem; line-height: 1;
+      padding: 5px 10px; border-radius: 999px;
+      background: rgba(15,23,42,0.82); border: 1px solid rgba(255,255,255,0.18);
+      white-space: nowrap; margin-left: 12px; max-width: 48vw;
     }
+    #syson-user-bar .syson-user-email { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
     #syson-user-bar .role-badge {
-      background: #4a90d9; color: #fff; font-size: 0.7rem;
-      padding: 1px 6px; border-radius: 4px; font-weight: 600;
+      display: inline-flex; align-items: center;
+      background: #4a90d9; color: #fff; font-size: 0.68rem;
+      padding: 3px 7px; border-radius: 999px; font-weight: 700;
       text-transform: uppercase;
     }
     #syson-user-bar .role-badge.superuser { background: #e67e22; }
     #syson-user-bar .role-badge.admin { background: #9b59b6; }
-    #syson-logout-btn {
-      background: none; border: 1px solid #555; color: #ccc;
-      padding: 2px 8px; border-radius: 4px; cursor: pointer;
-      font-size: 0.75rem;
+    #syson-logout-btn, #syson-dashboard-btn, #syson-admin-btn {
+      background: rgba(255,255,255,0.06); border: 1px solid #64748b; color: #e2e8f0;
+      padding: 4px 9px; border-radius: 999px; cursor: pointer;
+      font-size: 0.72rem; line-height: 1; font-weight: 700;
     }
-    #syson-logout-btn:hover { background: rgba(255,255,255,0.08); }
+    #syson-dashboard-btn { border-color: #2563eb; color: #dbeafe; }
+    #syson-admin-btn { border-color: #9b59b6; color: #f3e8ff; font-weight: 700; }
+    #syson-logout-btn:hover, #syson-dashboard-btn:hover, #syson-admin-btn:hover { background: rgba(255,255,255,0.08); }
   `;
+
+  function ensureAuthStyles() {
+    if (document.getElementById('syson-auth-styles')) return;
+    const styleEl = document.createElement('style');
+    styleEl.id = 'syson-auth-styles';
+    styleEl.textContent = STYLES;
+    document.head.appendChild(styleEl);
+  }
 
   function showLogin(errorMsg) {
     // auth.js is loaded in <head>, so body may not exist yet.
@@ -221,9 +263,7 @@
     }
 
     // Inject styles
-    const styleEl = document.createElement('style');
-    styleEl.textContent = STYLES;
-    document.head.appendChild(styleEl);
+    ensureAuthStyles();
 
     // Build overlay
     const overlay = document.createElement('div');
@@ -273,14 +313,40 @@
     });
   }
 
+  function fixVisibleTranslationKeys() {
+    var replacements = {
+      'useProjectsTableColumns.name': 'Name',
+      'projectsTable.actions': 'Actions'
+    };
+    function apply() {
+      var walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+      var node;
+      while ((node = walker.nextNode())) {
+        var text = (node.nodeValue || '').trim();
+        if (replacements[text]) node.nodeValue = node.nodeValue.replace(text, replacements[text]);
+      }
+    }
+    if (!document.body) return;
+    apply();
+    if (!window.__sysonTranslationKeyObserver) {
+      window.__sysonTranslationKeyObserver = new MutationObserver(apply);
+      window.__sysonTranslationKeyObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+  }
+
   function mountUserBar() {
+    ensureAuthStyles();
+    fixVisibleTranslationKeys();
     if (!state.email) return;
-    // Try to insert into Sirius nav bar — find a suitable anchor
+    // Try to insert into Sirius nav bar; fall back to a fixed floating control
+    // so Dashboard/Admin remain discoverable even if Sirius changes nav markup.
+    var attempts = 0;
     const tryMount = () => {
+      attempts += 1;
       const nav = document.querySelector('[class*="navigationBar"]') 
                || document.querySelector('header')
                || document.querySelector('[class*="navbar"]');
-      if (!nav) {
+      if (!nav && attempts < 20) {
         setTimeout(tryMount, 500);
         return;
       }
@@ -288,7 +354,16 @@
       if (!bar) {
         bar = document.createElement('div');
         bar.id = 'syson-user-bar';
-        nav.appendChild(bar);
+        if (nav) {
+          nav.appendChild(bar);
+        } else {
+          bar.style.position = 'fixed';
+          bar.style.top = '10px';
+          bar.style.right = '12px';
+          bar.style.zIndex = '10000';
+          bar.style.boxShadow = '0 8px 24px rgba(0,0,0,.25)';
+          document.body.appendChild(bar);
+        }
       }
       const roleClass = (state.roles[0] || '').toLowerCase();
       const badgeHTML = state.roles.map(r =>
@@ -296,7 +371,7 @@
       ).join('');
       var adminButtonHTML = isAdminUser() ? '<button id="syson-admin-btn" title="Administration">Admin</button>' : '';
       bar.innerHTML = `
-        <span>${state.email}</span>
+        <span class="syson-user-email">${state.email}</span>
         ${badgeHTML}
         <button id="syson-dashboard-btn" title="Dashboard">Dashboard</button>
         ${adminButtonHTML}
@@ -338,6 +413,12 @@
         projHTML = '<p style="color:#666;font-size:0.82rem;">No projects assigned.</p>';
       }
 
+      var adminDashboardHTML = isAdminUser() ? '<div style="margin-bottom:1.5rem;padding-bottom:1.5rem;border-bottom:1px solid #2a2a4a;">'
+        + '<h3 style="color:#aaa;font-size:0.8rem;text-transform:uppercase;margin:0 0 0.75rem;">Role Based Access Control</h3>'
+        + '<p style="color:#888;font-size:0.82rem;margin:0 0 0.75rem;">Manage accounts, project access roles, password resets, and audit history.</p>'
+        + '<button id="syson-access-management-btn" style="width:100%;padding:0.65rem;border-radius:6px;border:none;background:#7c3aed;color:#fff;font-size:0.9rem;font-weight:700;cursor:pointer;">Open Access Management</button>'
+        + '</div>' : '';
+
       overlay.innerHTML = '<div style="background:#16213e;border-radius:12px;padding:2rem;width:100%;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);color:#e0e0e0;">'
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">'
         + '<h2 style="margin:0;font-size:1.2rem;">Dashboard</h2>'
@@ -350,6 +431,7 @@
         + '<div style="margin-bottom:0.3rem;"><strong style="color:#888;">Name:</strong> ' + name.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</div>'
         + '<div><strong style="color:#888;">Roles:</strong> ' + roles.join(', ') + '</div>'
         + '</div></div>'
+        + adminDashboardHTML
         + '<div style="margin-bottom:1.5rem;padding-bottom:1.5rem;border-bottom:1px solid #2a2a4a;">'
         + '<h3 style="color:#aaa;font-size:0.8rem;text-transform:uppercase;margin:0 0 0.75rem;">Change Password</h3>'
         + '<form id="syson-pw-form">'
@@ -364,6 +446,8 @@
       document.body.appendChild(overlay);
 
       document.getElementById('syson-dash-close').addEventListener('click', function() { overlay.remove(); });
+      var accessBtn = document.getElementById('syson-access-management-btn');
+      if (accessBtn) accessBtn.addEventListener('click', function() { overlay.remove(); showAdminConsole(); });
       overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
 
       document.getElementById('syson-pw-form').addEventListener('submit', function(e) {
@@ -436,7 +520,11 @@
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:20px;">'
       + '<section style="background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Users</h3><div id="syson-admin-users" style="font-size:.84rem;color:#94a3b8;">Loading users…</div></section>'
       + '<section style="background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Create User</h3>'
-      + '<form id="syson-admin-create-user"><input id="syson-admin-email" placeholder="email" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-name" placeholder="name" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-password" type="password" placeholder="temporary password" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-admin-role" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option><option value="superuser">Superuser</option></select><button style="width:100%;padding:9px;border:0;border-radius:6px;background:#2563eb;color:white;font-weight:700;cursor:pointer;">Create Account</button><div id="syson-admin-create-msg" style="min-height:18px;margin-top:8px;font-size:.8rem;"></div></form></section>'
+      + '<form id="syson-admin-create-user"><input id="syson-admin-email" placeholder="email" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-name" placeholder="name" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-password" type="password" placeholder="temporary password" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-admin-role" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="user">User</option><option value="admin">Admin</option><option value="superuser">Superuser</option></select><button style="width:100%;padding:9px;border:0;border-radius:6px;background:#2563eb;color:white;font-weight:700;cursor:pointer;">Create Account</button><div id="syson-admin-create-msg" style="min-height:18px;margin-top:8px;font-size:.8rem;"></div></form></section>'
+      + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Project Access Management</h3>'
+      + '<div style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:10px;"><input id="syson-project-id" placeholder="Project ID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><button id="syson-load-project-members" style="padding:9px;border:0;border-radius:6px;background:#475569;color:white;font-weight:700;cursor:pointer;">Load Members</button><span id="syson-project-msg" style="align-self:center;color:#94a3b8;font-size:.8rem;"></span></div>'
+      + '<div style="display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:8px;margin-bottom:10px;"><select id="syson-project-user" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"></select><input id="syson-project-user-id" placeholder="or paste user UUID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-project-role" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="user">User</option><option value="admin">Admin</option></select><button id="syson-grant-project-role" style="padding:9px;border:0;border-radius:6px;background:#7c3aed;color:white;font-weight:700;cursor:pointer;">Grant Role</button></div>'
+      + '<div id="syson-project-members" style="font-size:.84rem;color:#94a3b8;">Enter a project ID to manage members.</div></section>'
       + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Audit History</h3><div id="syson-admin-audit" style="font-size:.82rem;color:#94a3b8;">Loading audit events…</div></section>'
       + '</div></div>';
     document.body.appendChild(overlay);
@@ -448,9 +536,10 @@
       if (!users || !users.length) { box.textContent = 'No users found.'; return; }
       box.innerHTML = users.map(function(u) {
         var active = u.active ? 'Active' : 'Disabled';
-        return '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #1f2a3d;">'
+        return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #1f2a3d;">'
           + '<div><div style="color:#e5e7eb;font-weight:600;">' + escapeHtml(u.email) + '</div><div style="font-size:.76rem;color:#64748b;">' + escapeHtml(u.name || '') + ' · ' + active + '</div></div>'
-          + '<button data-reset-user="' + escapeHtml(u.id) + '" style="padding:5px 8px;border:1px solid #334155;border-radius:5px;background:#111827;color:#cbd5e1;cursor:pointer;">Reset PW</button></div>';
+          + '<button data-reset-user="' + escapeHtml(u.id) + '" style="padding:5px 8px;border:1px solid #334155;border-radius:5px;background:#111827;color:#cbd5e1;cursor:pointer;">Reset PW</button>'
+          + '<button data-toggle-user="' + escapeHtml(u.id) + '" data-active="' + (u.active ? 'true' : 'false') + '" style="padding:5px 8px;border:1px solid #334155;border-radius:5px;background:#111827;color:#cbd5e1;cursor:pointer;">' + (u.active ? 'Deactivate' : 'Reactivate') + '</button></div>';
       }).join('');
       Array.prototype.slice.call(box.querySelectorAll('[data-reset-user]')).forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -458,6 +547,15 @@
           if (!pw) return;
           adminFetch('/api/v1/user/admin/users/' + btn.getAttribute('data-reset-user') + '/password', { method:'PUT', body: JSON.stringify({ password: pw }) })
             .then(function() { btn.textContent = 'Reset'; })['catch'](function(err) { btn.textContent = err.message; });
+        });
+      });
+      Array.prototype.slice.call(box.querySelectorAll('[data-toggle-user]')).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var userId = btn.getAttribute('data-toggle-user');
+          var active = btn.getAttribute('data-active') === 'true';
+          var action = active ? 'deactivate' : 'reactivate';
+          adminFetch('/api/v1/user/admin/users/' + userId + '/' + action, { method:'PUT' })
+            .then(function() { return adminFetch('/api/v1/user/admin/users').then(renderUsers); })['catch'](function(err) { btn.textContent = err.message; });
         });
       });
     };
@@ -471,8 +569,58 @@
       }).join('');
     };
 
-    adminFetch('/api/v1/user/admin/users').then(renderUsers)['catch'](function(err) { document.getElementById('syson-admin-users').textContent = err.message; });
+    var renderProjectMembers = function(members) {
+      var box = document.getElementById('syson-project-members');
+      if (!members || !members.length) { box.textContent = 'No project members found.'; return; }
+      box.innerHTML = members.map(function(m) {
+        return '<div style="display:grid;grid-template-columns:1fr 100px auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #1f2a3d;">'
+          + '<div><div style="color:#e5e7eb;font-weight:600;">' + escapeHtml(m.email || m.userId) + '</div><div style="font-size:.76rem;color:#64748b;">' + escapeHtml(m.userId) + '</div></div>'
+          + '<span style="color:#cbd5e1;text-transform:uppercase;font-size:.76rem;">' + escapeHtml(m.role || '') + '</span>'
+          + '<button data-revoke-project-user="' + escapeHtml(m.userId) + '" style="padding:5px 8px;border:1px solid #334155;border-radius:5px;background:#111827;color:#cbd5e1;cursor:pointer;">Revoke</button></div>';
+      }).join('');
+      Array.prototype.slice.call(box.querySelectorAll('[data-revoke-project-user]')).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var projectId = document.getElementById('syson-project-id').value.trim();
+          if (!projectId) return;
+          adminFetch('/api/v1/user/admin/projects/' + encodeURIComponent(projectId) + '/members/' + btn.getAttribute('data-revoke-project-user'), { method:'DELETE' })
+            .then(loadProjectMembers)['catch'](function(err) { document.getElementById('syson-project-msg').textContent = err.message; });
+        });
+      });
+    };
+
+    var loadProjectMembers = function() {
+      var projectId = document.getElementById('syson-project-id').value.trim();
+      var msg = document.getElementById('syson-project-msg');
+      if (!projectId) { msg.textContent = 'Project ID required'; return Promise.resolve(); }
+      msg.textContent = 'Loading…';
+      return adminFetch('/api/v1/user/admin/projects/' + encodeURIComponent(projectId) + '/members')
+        .then(function(members) { msg.textContent = ''; renderProjectMembers(members); })
+        ['catch'](function(err) { msg.textContent = err.message; });
+    };
+
+    adminFetch('/api/v1/user/admin/users').then(function(users) {
+      renderUsers(users);
+      var select = document.getElementById('syson-project-user');
+      if (select) {
+        select.innerHTML = '<option value="">Select user…</option>' + (users || []).map(function(u) {
+          return '<option value="' + escapeHtml(u.id) + '">' + escapeHtml(u.email) + '</option>';
+        }).join('');
+      }
+    })['catch'](function(err) { document.getElementById('syson-admin-users').textContent = err.message; });
     adminFetch('/api/v1/user/admin/audit/events?limit=50').then(renderAudit)['catch'](function(err) { document.getElementById('syson-admin-audit').textContent = err.message; });
+
+    document.getElementById('syson-load-project-members').addEventListener('click', loadProjectMembers);
+    document.getElementById('syson-grant-project-role').addEventListener('click', function() {
+      var projectId = document.getElementById('syson-project-id').value.trim();
+      var selectedUser = document.getElementById('syson-project-user').value;
+      var pastedUser = document.getElementById('syson-project-user-id').value.trim();
+      var userId = pastedUser || selectedUser;
+      var role = document.getElementById('syson-project-role').value;
+      var msg = document.getElementById('syson-project-msg');
+      if (!projectId || !userId) { msg.textContent = 'Project ID and user required'; return; }
+      adminFetch('/api/v1/user/admin/projects/' + encodeURIComponent(projectId) + '/members', { method:'POST', body: JSON.stringify({ userId: userId, role: role }) })
+        .then(loadProjectMembers)['catch'](function(err) { msg.textContent = err.message; });
+    });
 
     document.getElementById('syson-admin-create-user').addEventListener('submit', function(e) {
       e.preventDefault();
@@ -483,6 +631,13 @@
         msg.style.color = '#4ade80'; msg.textContent = 'Account created'; return adminFetch('/api/v1/user/admin/users').then(renderUsers);
       })['catch'](function(err) { msg.style.color = '#f87171'; msg.textContent = err.message; });
     });
+  }
+
+  function handleAdminDeepLink() {
+    var href = String(window.location.href || '');
+    if (isAdminUser() && (href.indexOf('sysonAdmin=1') !== -1 || href.indexOf('#/admin/access') !== -1 || href.indexOf('#/account/access-management') !== -1)) {
+      setTimeout(showAdminConsole, 800);
+    }
   }
 
   // ── Boot ─────────────────────────────────────────────────────────────────
@@ -499,9 +654,10 @@
     }, 4 * 60 * 60 * 1000);
     // Mount user bar after DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', mountUserBar);
+      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); });
     } else {
       mountUserBar();
+      handleAdminDeepLink();
     }
   } else {
     // Not authenticated — show login and block app load
