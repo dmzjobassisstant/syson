@@ -1075,6 +1075,119 @@
     });
   }
 
+  // ── Read-Only Enforcement for Locked Elements ───────────────────────────
+  // When an element is locked by another user, the properties panel becomes
+  // read-only: input fields disabled, edit controls greyed out, banner shown.
+
+  var _readOnlyStyle = null;
+
+  function enforceReadOnlyForLockedElements() {
+    if (!state.token) return;
+    // Watch for properties panel updates
+    var observer = new MutationObserver(function() {
+      applyReadOnlyState();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function applyReadOnlyState() {
+    var myId = getCurrentUserId();
+    var projectId = getProjectIdFromUrl();
+    if (!projectId || !myId) return;
+
+    // Remove existing read-only banner
+    var existingBanner = document.getElementById('syson-readonly-banner');
+    if (existingBanner) existingBanner.remove();
+
+    // Get the currently selected element ID
+    var elementId = getElementIdFromPanel();
+    if (!elementId) return;
+
+    // Check if this element is locked by another user
+    var lock = _lockCache[elementId];
+    if (!lock || lock.ownerUserId === myId) {
+      // Not locked or locked by us — restore normal state
+      removeReadOnlyMode();
+      return;
+    }
+
+    // Element is locked by another user — enforce read-only
+    var lockOwner = lock.ownerUsername || 'another user';
+    var lockExpiry = lock.expiresAt ? new Date(lock.expiresAt).toLocaleTimeString() : 'N/A';
+
+    // Inject read-only banner into properties panel
+    var propsPanel = document.querySelector('[class*="PropertiesView"], [class*="properties-view"], [data-testid="properties"]');
+    if (!propsPanel) {
+      var panels = document.querySelectorAll('[class*="panel"], [class*="Panel"]');
+      for (var i = 0; i < panels.length; i++) {
+        var text = panels[i].textContent || '';
+        if (text.indexOf('Properties') !== -1 || text.indexOf('Declared Name') !== -1) {
+          propsPanel = panels[i];
+          break;
+        }
+      }
+    }
+
+    if (propsPanel && !document.getElementById('syson-readonly-banner')) {
+      var banner = document.createElement('div');
+      banner.id = 'syson-readonly-banner';
+      banner.style.cssText = 'background:#7c2d12;color:#fed7aa;padding:6px 12px;font-size:11px;font-family:system-ui,sans-serif;border-bottom:1px solid #9a3412;display:flex;align-items:center;gap:6px;';
+      banner.innerHTML = '🔒 <strong>Read-only</strong> — locked by ' + escapeHtml(lockOwner) + ' (expires ' + lockExpiry + ')';
+      // Insert banner at the top of the properties panel
+      if (propsPanel.firstChild) {
+        propsPanel.insertBefore(banner, propsPanel.firstChild);
+      } else {
+        propsPanel.appendChild(banner);
+      }
+    }
+
+    // Disable all input fields and edit controls in the properties panel
+    applyReadOnlyMode();
+  }
+
+  function applyReadOnlyMode() {
+    if (_readOnlyStyle) return; // already applied
+    _readOnlyStyle = document.createElement('style');
+    _readOnlyStyle.id = 'syson-readonly-style';
+    _readOnlyStyle.textContent = ''
+      + '#syson-readonly-banner ~ * input,'
+      + '#syson-readonly-banner ~ * textarea,'
+      + '#syson-readonly-banner ~ * select,'
+      + '#syson-readonly-banner ~ * [contenteditable="true"] {'
+      + '  pointer-events: none !important;'
+      + '  opacity: 0.6 !important;'
+      + '  background: #1e293b !important;'
+      + '  color: #94a3b8 !important;'
+      + '  cursor: not-allowed !important;'
+      + '}'
+      + '#syson-readonly-banner ~ * button:not(#syson-history-btn):not(#syson-readonly-banner button) {'
+      + '  pointer-events: none !important;'
+      + '  opacity: 0.5 !important;'
+      + '  cursor: not-allowed !important;'
+      + '}'
+      // Also disable Monaco editor if present
+      + '#syson-readonly-banner ~ * .monaco-editor {'
+      + '  opacity: 0.6 !important;'
+      + '}'
+      + '#syson-readonly-banner ~ * .monaco-editor .view-lines {'
+      + '  pointer-events: none !important;'
+      + '}';
+    document.head.appendChild(_readOnlyStyle);
+  }
+
+  function removeReadOnlyMode() {
+    if (_readOnlyStyle) {
+      _readOnlyStyle.remove();
+      _readOnlyStyle = null;
+    }
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   function injectElementLockUI() {
     if (!state.token) return;
     var projectId = getProjectIdFromUrl();
@@ -1097,6 +1210,9 @@
 
     // Auto-unlock on save
     setupAutoUnlockOnSave();
+
+    // Read-only enforcement for locked elements
+    enforceReadOnlyForLockedElements();
   }
 
   // ── Boot ─────────────────────────────────────────────────────────────────
