@@ -3,6 +3,7 @@ package org.eclipse.syson.locks.repository;
 import org.eclipse.syson.locks.entity.ElementLock;
 import org.eclipse.syson.locks.entity.ElementLockId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
@@ -20,4 +21,10 @@ public interface ElementLockRepository extends JpaRepository<ElementLock, Elemen
             String projectId, UUID branchId, String stableId, OffsetDateTime now);
 
     List<ElementLock> findByOwnerUserIdAndExpiresAtAfter(UUID ownerUserId, OffsetDateTime now);
+
+    List<ElementLock> findByProjectIdAndExpiresAtAfter(String projectId, OffsetDateTime now);
+
+    @Modifying
+    void deleteByProjectIdAndBranchIdAndStableIdAndLockType(
+            String projectId, UUID branchId, String stableId, String lockType);
 }

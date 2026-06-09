@@ -19,13 +19,17 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.eclipse.syson.auth.TenantContext;
+import org.eclipse.syson.auth.entity.SysonUser;
+import org.eclipse.syson.auth.repository.UserRepository;
 import org.eclipse.syson.history.service.ModelReconstructionService;
 import org.eclipse.syson.history.service.VersionGraphService;
 import org.eclipse.syson.history.service.VersionGraphService.VersionGraphData;
 import org.eclipse.syson.locks.entity.BranchLock;
+import org.eclipse.syson.locks.entity.ElementLock;
 import org.eclipse.syson.locks.entity.IntegrityCheck;
 import org.eclipse.syson.locks.repository.IntegrityCheckRepository;
 import org.eclipse.syson.locks.service.BranchLockService;
+import org.eclipse.syson.locks.service.ElementLockService;
 import org.eclipse.syson.locks.service.IntegrityCheckService;
 import org.eclipse.syson.vc.dto.BaselineDto;
 import org.eclipse.syson.vc.dto.BranchDto;
@@ -62,9 +66,11 @@ public class VersionControlController {
     private final VersionControlService versionControlService;
     private final VersionGraphService versionGraphService;
     private final BranchLockService branchLockService;
+    private final ElementLockService elementLockService;
     private final IntegrityCheckService integrityCheckService;
     private final IntegrityCheckRepository integrityCheckRepository;
     private final ModelReconstructionService modelReconstructionService;
+    private final UserRepository userRepository;
     private final BranchRepository branchRepository;
     private final CommitRepository commitRepository;
     private final ChangeRepository changeRepository;
@@ -73,9 +79,11 @@ public class VersionControlController {
     public VersionControlController(VersionControlService versionControlService,
                                      VersionGraphService versionGraphService,
                                      BranchLockService branchLockService,
+                                     ElementLockService elementLockService,
                                      IntegrityCheckService integrityCheckService,
                                      IntegrityCheckRepository integrityCheckRepository,
                                      ModelReconstructionService modelReconstructionService,
+                                     UserRepository userRepository,
                                      BranchRepository branchRepository,
                                      CommitRepository commitRepository,
                                      ChangeRepository changeRepository,
@@ -83,9 +91,11 @@ public class VersionControlController {
         this.versionControlService = versionControlService;
         this.versionGraphService = versionGraphService;
         this.branchLockService = branchLockService;
+        this.elementLockService = elementLockService;
         this.integrityCheckService = integrityCheckService;
         this.integrityCheckRepository = integrityCheckRepository;
         this.modelReconstructionService = modelReconstructionService;
+        this.userRepository = userRepository;
         this.branchRepository = branchRepository;
         this.commitRepository = commitRepository;
         this.changeRepository = changeRepository;
@@ -319,6 +329,84 @@ public class VersionControlController {
         return ResponseEntity.noContent().build();
     }
 
+    // ─── element locks ───────────────────────────────────────────────────
+
+    /**
+     * Returns all active element locks for a project.
+     */
+    @GetMapping("/projects/{projectId}/element-locks")
+    public ResponseEntity<List<ElementLock>> getProjectElementLocks(
+            @PathVariable UUID projectId) {
+        List<ElementLock> locks = this.elementLockService.getActiveLocks(projectId.toString());
+        return ResponseEntity.ok(locks);
+    }
+
+    /**
+     * Returns the lock status of a specific element, or 404 if unlocked.
+     */
+    @GetMapping("/projects/{projectId}/elements/{stableId}/lock")
+    public ResponseEntity<ElementLock> getElementLock(
+            @PathVariable UUID projectId,
+            @PathVariable String stableId,
+            @RequestParam UUID branchId) {
+        return this.elementLockService.getLock(projectId.toString(), branchId, stableId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Acquires a lock on an element. Returns 409 if already locked by another user.
+     */
+    @PostMapping("/projects/{projectId}/elements/{stableId}/lock")
+    public ResponseEntity<?> acquireElementLock(
+            @PathVariable UUID projectId,
+            @PathVariable String stableId,
+            @RequestBody AcquireElementLockRequest request) {
+        UUID userId = TenantContext.getUserIdAsUuid();
+        String username = this.userRepository.findById(userId)
+                .map(SysonUser::getEmail)
+                .orElse(userId.toString());
+        try {
+            ElementLock lock = this.elementLockService.acquireLock(
+                    projectId.toString(), request.branchId(), stableId, userId,
+                    username, request.sessionId(), request.deviceId(),
+                    request.reason(), request.ttlMinutes());
+            return ResponseEntity.ok(lock);
+        } catch (IllegalStateException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.status(409).body(error);
+        }
+    }
+
+    /**
+     * Releases the lock on an element. Only the lock owner can release.
+     */
+    @DeleteMapping("/projects/{projectId}/elements/{stableId}/lock")
+    public ResponseEntity<Void> releaseElementLock(
+            @PathVariable UUID projectId,
+            @PathVariable String stableId,
+            @RequestParam UUID branchId) {
+        UUID userId = TenantContext.getUserIdAsUuid();
+        this.elementLockService.releaseLock(projectId.toString(), branchId, stableId, userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Releases all element locks held by the current user in a project (called on save).
+     */
+    @PostMapping("/projects/{projectId}/element-locks/release-all")
+    public ResponseEntity<Map<String, Object>> releaseAllElementLocks(
+            @PathVariable UUID projectId,
+            @RequestBody ReleaseAllLocksRequest request) {
+        UUID userId = TenantContext.getUserIdAsUuid();
+        int released = this.elementLockService.releaseLocksForSave(
+                projectId.toString(), request.branchId(), userId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("released", released);
+        return ResponseEntity.ok(result);
+    }
+
     // ─── integrity checks ────────────────────────────────────────────────
 
     /**
@@ -384,5 +472,17 @@ public class VersionControlController {
             List<ChangeDto> targetChanges,
             Map<String, Object> baseReconstruction,
             Map<String, Object> targetReconstruction) {
+    }
+
+    public record AcquireElementLockRequest(
+            UUID branchId,
+            String reason,
+            int ttlMinutes,
+            String sessionId,
+            String deviceId) {
+    }
+
+    public record ReleaseAllLocksRequest(
+            UUID branchId) {
     }
 }

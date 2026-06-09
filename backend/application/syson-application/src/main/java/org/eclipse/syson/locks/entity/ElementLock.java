@@ -32,6 +32,9 @@ public class ElementLock {
     @Column(name = "owner_user_id")
     private UUID ownerUserId;
 
+    @Column(name = "owner_username")
+    private String ownerUsername;
+
     @Column(name = "owner_session_id")
     private String ownerSessionId;
 
@@ -88,6 +91,14 @@ public class ElementLock {
 
     public void setOwnerUserId(UUID ownerUserId) {
         this.ownerUserId = ownerUserId;
+    }
+
+    public String getOwnerUsername() {
+        return ownerUsername;
+    }
+
+    public void setOwnerUsername(String ownerUsername) {
+        this.ownerUsername = ownerUsername;
     }
 
     public String getOwnerSessionId() {

@@ -727,44 +727,21 @@
   }
 
   function getElementIdFromPanel() {
-    // 1. Check URL search params (?objectId=...)
-    var params = new URLSearchParams(window.location.search);
-    var fromParam = params.get('objectId') || params.get('elementId') || params.get('selectedObjectId');
-    if (fromParam) return fromParam;
-
-    // 2. Check URL hash params (#...&objectId=...)
+    // Try to extract the element ID from the properties panel or URL
+    // Sirius Web stores the selected object ID in the URL hash or in React state
     var hash = window.location.hash || '';
-    var hashMatch = hash.match(/objectId=([^&]+)/);
-    if (hashMatch) return hashMatch[1];
-
-    // 3. Check data attributes on details/properties panel
-    var detailsPanel = document.querySelector('[data-testid="details"], [class*="DetailsView"], [class*="details-view"], [class*="PropertiesView"], [class*="properties-view"]');
+    var match = hash.match(/objectId=([^&]+)/);
+    if (match) return match[1];
+    // Try from the URL path
+    var pathMatch = window.location.pathname.match(/\/projects\/([^/]+)/);
+    var projectId = pathMatch ? pathMatch[1] : null;
+    // Try to find element ID from the details panel content
+    var detailsPanel = document.querySelector('[data-testid="details"], [class*="DetailsView"], [class*="details-view"]');
     if (detailsPanel) {
+      // The element ID might be in a hidden data attribute or in the React fiber
       var allAttrs = detailsPanel.querySelectorAll('[data-elementid], [data-objectid]');
       if (allAttrs.length > 0) return allAttrs[0].getAttribute('data-elementid') || allAttrs[0].getAttribute('data-objectid');
     }
-
-    // 4. Check React fiber on the properties/details panel for selected object
-    var panel = detailsPanel || document.querySelector('[class*="PropertiesView"], [class*="properties-view"]');
-    if (panel && typeof getReactFiber === 'function') {
-      var fiber = getReactFiber(panel);
-      if (fiber) {
-        var f = fiber;
-        for (var j = 0; j < 15 && f; j++) {
-          var p = f.memoizedProps || f.pendingProps || {};
-          if (p.selectedObjectId) return p.selectedObjectId;
-          if (p.objectId) return p.objectId;
-          if (p.editingContextId) return p.editingContextId;
-          f = f.return;
-        }
-      }
-    }
-
-    // 5. UUID regex scan of details panel text (last resort)
-    var panelText = (detailsPanel || document.body).textContent || '';
-    var uuidMatch = panelText.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    if (uuidMatch) return uuidMatch[0];
-
     return null;
   }
 

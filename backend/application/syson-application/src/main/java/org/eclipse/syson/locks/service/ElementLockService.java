@@ -1,6 +1,7 @@
 package org.eclipse.syson.locks.service;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,7 +55,7 @@ public class ElementLockService {
      *             if an active lock exists held by another user
      */
     public ElementLock acquireLock(String projectId, UUID branchId, String stableId, UUID userId,
-                                    String sessionId, String deviceId, String reason, int ttlMinutes) {
+                                    String username, String sessionId, String deviceId, String reason, int ttlMinutes) {
         Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(projectId, branchId, stableId, "edit");
 
         if (existingLock.isPresent()) {
@@ -62,15 +63,17 @@ public class ElementLockService {
             if (lock.getOwnerUserId().equals(userId)) {
                 lock.setExpiresAt(OffsetDateTime.now().plusMinutes(ttlMinutes));
                 lock.setOwnerSessionId(sessionId);
+                lock.setOwnerUsername(username);
                 elementLockRepository.save(lock);
                 return lock;
             }
             if (lock.getExpiresAt().isAfter(OffsetDateTime.now())) {
                 throw new IllegalStateException(
-                        String.format("Element %s on branch %s is already locked by user %s (expires: %s)",
-                                stableId, branchId, lock.getOwnerUserId(), lock.getExpiresAt()));
+                        String.format("Element %s on branch %s is already locked by %s (expires: %s)",
+                                stableId, branchId, lock.getOwnerUsername() != null ? lock.getOwnerUsername() : lock.getOwnerUserId(), lock.getExpiresAt()));
             }
             lock.setOwnerUserId(userId);
+            lock.setOwnerUsername(username);
             lock.setOwnerSessionId(sessionId);
             lock.setReason(reason);
             lock.setAcquiredAt(OffsetDateTime.now());
@@ -88,6 +91,7 @@ public class ElementLockService {
         lock.setStableId(stableId);
         lock.setLockType("edit");
         lock.setOwnerUserId(userId);
+        lock.setOwnerUsername(username);
         lock.setOwnerSessionId(sessionId);
         lock.setReason(reason);
         lock.setAcquiredAt(OffsetDateTime.now());
@@ -155,5 +159,33 @@ public class ElementLockService {
                     AuditEventType.LOCK_FORCE_RELEASED,
                     "Admin forced release of element lock on " + stableId + " owned by user " + lock.getOwnerUserId());
         }
+    }
+
+    /**
+     * Returns all active (non-expired) locks for a project.
+     */
+    public List<ElementLock> getActiveLocks(String projectId) {
+        return elementLockRepository.findByProjectIdAndExpiresAtAfter(projectId, OffsetDateTime.now());
+    }
+
+    /**
+     * Releases all locks held by a user on elements in a specific semantic data context.
+     * Called automatically when the user saves to unlock edited elements.
+     */
+    public int releaseLocksForSave(String projectId, UUID branchId, UUID userId) {
+        List<ElementLock> userLocks = elementLockRepository.findByOwnerUserIdAndExpiresAtAfter(userId, OffsetDateTime.now());
+        int released = 0;
+        for (ElementLock lock : userLocks) {
+            if (lock.getProjectId().equals(projectId)
+                    && (branchId == null || lock.getBranchId().equals(branchId))) {
+                elementLockRepository.delete(lock);
+                released++;
+            }
+        }
+        if (released > 0) {
+            auditLogService.log(userId.toString(), projectId, branchId != null ? branchId.toString() : "all",
+                    AuditEventType.LOCK_RELEASED, "Auto-released " + released + " element locks on save");
+        }
+        return released;
     }
 }
