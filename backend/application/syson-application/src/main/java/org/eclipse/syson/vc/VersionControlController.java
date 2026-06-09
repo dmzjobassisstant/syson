@@ -30,7 +30,9 @@ import org.eclipse.syson.locks.entity.IntegrityCheck;
 import org.eclipse.syson.locks.repository.IntegrityCheckRepository;
 import org.eclipse.syson.locks.service.BranchLockService;
 import org.eclipse.syson.locks.service.ElementLockService;
+import org.eclipse.syson.locks.service.ElementLockService.RecursiveLockResult;
 import org.eclipse.syson.locks.service.IntegrityCheckService;
+import org.eclipse.syson.settings.ProjectSettingService;
 import org.eclipse.syson.vc.dto.BaselineDto;
 import org.eclipse.syson.vc.dto.BranchDto;
 import org.eclipse.syson.vc.dto.ChangeDto;
@@ -71,6 +73,7 @@ public class VersionControlController {
     private final IntegrityCheckRepository integrityCheckRepository;
     private final ModelReconstructionService modelReconstructionService;
     private final UserRepository userRepository;
+    private final ProjectSettingService projectSettingService;
     private final BranchRepository branchRepository;
     private final CommitRepository commitRepository;
     private final ChangeRepository changeRepository;
@@ -84,6 +87,7 @@ public class VersionControlController {
                                      IntegrityCheckRepository integrityCheckRepository,
                                      ModelReconstructionService modelReconstructionService,
                                      UserRepository userRepository,
+                                     ProjectSettingService projectSettingService,
                                      BranchRepository branchRepository,
                                      CommitRepository commitRepository,
                                      ChangeRepository changeRepository,
@@ -96,6 +100,7 @@ public class VersionControlController {
         this.integrityCheckRepository = integrityCheckRepository;
         this.modelReconstructionService = modelReconstructionService;
         this.userRepository = userRepository;
+        this.projectSettingService = projectSettingService;
         this.branchRepository = branchRepository;
         this.commitRepository = commitRepository;
         this.changeRepository = changeRepository;
@@ -434,6 +439,82 @@ public class VersionControlController {
         return ResponseEntity.ok(check);
     }
 
+    // ─── project settings ────────────────────────────────────────────────
+
+    /**
+     * Returns whether element locking is enabled for this project.
+     */
+    @GetMapping("/projects/{projectId}/settings/element-locking")
+    public ResponseEntity<Map<String, Object>> getElementLockingSetting(
+            @PathVariable UUID projectId) {
+        boolean enabled = this.projectSettingService.isEnabled(projectId.toString(), "element_locking_enabled");
+        Map<String, Object> result = new HashMap<>();
+        result.put("enabled", enabled);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Enables or disables element locking for this project (admin only).
+     */
+    @PostMapping("/projects/{projectId}/settings/element-locking")
+    public ResponseEntity<Map<String, Object>> setElementLockingSetting(
+            @PathVariable UUID projectId,
+            @RequestBody SetElementLockingRequest request) {
+        UUID userId = TenantContext.getUserIdAsUuid();
+        this.projectSettingService.set(projectId.toString(), "element_locking_enabled",
+                String.valueOf(request.enabled()), "Enable element-level edit locking", userId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("enabled", request.enabled());
+        return ResponseEntity.ok(result);
+    }
+
+    // ─── recursive element locks ─────────────────────────────────────────
+
+    /**
+     * Recursively locks an element and all its children.
+     * Returns 409 with conflict details if any child is locked by another user.
+     */
+    @PostMapping("/projects/{projectId}/elements/{stableId}/lock-recursive")
+    public ResponseEntity<?> acquireRecursiveLock(
+            @PathVariable UUID projectId,
+            @PathVariable String stableId,
+            @RequestBody AcquireElementLockRequest request) {
+        UUID userId = TenantContext.getUserIdAsUuid();
+        String username = this.userRepository.findById(userId)
+                .map(SysonUser::getEmail)
+                .orElse(userId.toString());
+        RecursiveLockResult result = this.elementLockService.acquireLockRecursive(
+                projectId.toString(), request.branchId(), stableId, userId,
+                username, request.sessionId(), request.reason(), request.ttlMinutes());
+        if (result.isSuccess()) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("lockedCount", result.lockedStableIds().size());
+            body.put("lockedIds", result.lockedStableIds());
+            return ResponseEntity.ok(body);
+        } else {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Cannot lock: " + result.conflicts().size() + " element(s) locked by other users");
+            error.put("conflicts", result.conflicts());
+            return ResponseEntity.status(409).body(error);
+        }
+    }
+
+    /**
+     * Recursively unlocks an element and all its children (owned by current user).
+     */
+    @DeleteMapping("/projects/{projectId}/elements/{stableId}/lock-recursive")
+    public ResponseEntity<Map<String, Object>> releaseRecursiveLock(
+            @PathVariable UUID projectId,
+            @PathVariable String stableId,
+            @RequestParam UUID branchId) {
+        UUID userId = TenantContext.getUserIdAsUuid();
+        int released = this.elementLockService.releaseLockRecursive(
+                projectId.toString(), branchId, stableId, userId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("released", released);
+        return ResponseEntity.ok(result);
+    }
+
     // ─── request records ─────────────────────────────────────────────────
 
     public record CreateBranchRequest(
@@ -484,5 +565,9 @@ public class VersionControlController {
 
     public record ReleaseAllLocksRequest(
             UUID branchId) {
+    }
+
+    public record SetElementLockingRequest(
+            boolean enabled) {
     }
 }

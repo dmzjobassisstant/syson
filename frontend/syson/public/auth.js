@@ -555,6 +555,14 @@
       + '<div style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:10px;"><input id="syson-project-id" placeholder="Project ID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><button id="syson-load-project-members" style="padding:9px;border:0;border-radius:6px;background:#475569;color:white;font-weight:700;cursor:pointer;">Load Members</button><span id="syson-project-msg" style="align-self:center;color:#94a3b8;font-size:.8rem;"></span></div>'
       + '<div style="display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:8px;margin-bottom:10px;"><select id="syson-project-user" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"></select><input id="syson-project-user-id" placeholder="or paste user UUID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-project-role" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="user">User</option><option value="admin">Admin</option></select><button id="syson-grant-project-role" style="padding:9px;border:0;border-radius:6px;background:#7c3aed;color:white;font-weight:700;cursor:pointer;">Grant Role</button></div>'
       + '<div id="syson-project-members" style="font-size:.84rem;color:#94a3b8;">Enter a project ID to manage members.</div></section>'
+      + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Project Settings</h3>'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">'
+      + '<input type="checkbox" id="syson-toggle-locking" style="width:18px;height:18px;cursor:pointer;" />'
+      + '<label for="syson-toggle-locking" style="font-size:.85rem;color:#cbd5e1;cursor:pointer;">Enable Element Locking (per-project)</label>'
+      + '</div>'
+      + '<div id="syson-locking-projects" style="font-size:.82rem;color:#94a3b8;">Select a project to toggle locking:</div>'
+      + '<div id="syson-locking-project-list" style="margin-top:8px;"></div>'
+      + '</section>'
       + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Audit History</h3><div id="syson-admin-audit" style="font-size:.82rem;color:#94a3b8;">Loading audit events…</div></section>'
       + '</div></div>';
     document.body.appendChild(overlay);
@@ -654,6 +662,49 @@
       }
     })['catch'](function(err) { document.getElementById('syson-admin-users').textContent = err.message; });
     adminFetch('/api/v1/user/admin/audit-trail?size=50').then(renderAudit)['catch'](function(err) { document.getElementById('syson-admin-audit').textContent = err.message; });
+
+    // Project Settings: element locking toggle
+    adminFetch('/api/v1/user/admin/users').then(function() {
+      // Load projects for the locking toggle
+      _origFetch('/api/v1/user/projects').then(function(r) { return r.ok ? r.json() : []; }).then(function(projects) {
+        var list = document.getElementById('syson-locking-project-list');
+        if (!list) return;
+        if (!projects || !projects.length) { list.textContent = 'No projects found.'; return; }
+        list.innerHTML = projects.map(function(p) {
+          return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #1f2a3d;">'
+            + '<input type="checkbox" class="syson-project-lock-toggle" data-project-id="' + escapeHtml(p.id) + '" style="width:16px;height:16px;cursor:pointer;" />'
+            + '<span style="color:#e5e7eb;font-size:.85rem;">' + escapeHtml(p.name || p.id) + '</span>'
+            + '<span style="color:#64748b;font-size:.75rem;margin-left:auto;">' + escapeHtml(p.id).substring(0, 8) + '…</span>'
+            + '</div>';
+        }).join('');
+        // Load current settings for each project
+        projects.forEach(function(p) {
+          _origFetch('/api/v1/projects/' + p.id + '/settings/element-locking').then(function(r) { return r.ok ? r.json() : { enabled: false }; })
+            .then(function(s) {
+              var cb = list.querySelector('[data-project-id="' + p.id + '"]');
+              if (cb) cb.checked = !!s.enabled;
+            }).catch(function() {});
+        });
+        // Handle toggle changes
+        list.addEventListener('change', function(e) {
+          if (!e.target.classList.contains('syson-project-lock-toggle')) return;
+          var pid = e.target.getAttribute('data-project-id');
+          var enabled = e.target.checked;
+          _origFetch('/api/v1/projects/' + pid + '/settings/element-locking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: enabled })
+          }).then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            e.target.parentElement.style.borderLeft = '3px solid ' + (enabled ? '#4ade80' : '#64748b');
+            setTimeout(function() { e.target.parentElement.style.borderLeft = ''; }, 2000);
+          }).catch(function(err) {
+            e.target.checked = !enabled;
+            alert('Failed to update: ' + err.message);
+          });
+        });
+      }).catch(function() {});
+    }).catch(function() {});
 
     document.getElementById('syson-load-project-members').addEventListener('click', loadProjectMembers);
     document.getElementById('syson-grant-project-role').addEventListener('click', function() {
@@ -851,6 +902,7 @@
   var _lockCache = {};           // stableId -> lock object
   var _lockPollTimer = null;
   var _currentUserId = null;     // set from JWT
+  var _lockingEnabled = false;   // per-project setting
 
   function getCurrentUserId() {
     if (_currentUserId) return _currentUserId;
@@ -862,7 +914,7 @@
   }
 
   function fetchProjectLocks(projectId) {
-    if (!projectId || !state.token) return;
+    if (!projectId || !state.token || !_lockingEnabled) return;
     _origFetch('/api/v1/projects/' + projectId + '/element-locks')
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(locks) {
@@ -876,6 +928,7 @@
   }
 
   function applyLockStyles() {
+    if (!_lockingEnabled) return; // locking disabled — leave default styles
     var myId = getCurrentUserId();
     // Find all tree items in the explorer
     var treeItems = document.querySelectorAll('[class*="tree-item"], [class*="TreeItem"], [class*="treeNode"], [role="treeitem"]');
@@ -978,10 +1031,17 @@
       menu.style.cssText = 'position:fixed;z-index:10002;background:#1e293b;border:1px solid #475569;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.5);min-width:180px;font-family:system-ui,sans-serif;font-size:13px;';
 
       var items = [];
-      if (!lock) {
+      if (!_lockingEnabled) {
+        // Locking disabled — show grayed-out options
+        items.push({ label: '🔒 Lock Element', action: null, disabled: true });
+        items.push({ label: '🔒 Lock Element Tree', action: null, disabled: true });
+        items.push({ label: '(Element locking disabled in project settings)', action: null, disabled: true });
+      } else if (!lock) {
         items.push({ label: '🔒 Lock Element', action: function() { lockElement(projectId, stableId); } });
+        items.push({ label: '🔒 Lock Element Tree', action: function() { lockElementRecursive(projectId, stableId); } });
       } else if (isMine) {
         items.push({ label: '🔓 Unlock Element', action: function() { unlockElement(projectId, stableId); } });
+        items.push({ label: '🔓 Unlock Element Tree', action: function() { unlockElementRecursive(projectId, stableId); } });
         items.push({ label: '🔒 Lock Status: Locked by you', action: null, disabled: true });
       } else {
         items.push({ label: '🔒 Locked by ' + (lock.ownerUsername || 'other'), action: null, disabled: true });
@@ -1042,6 +1102,43 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       fetchProjectLocks(projectId);
     }).catch(function(err) { alert('Unlock failed: ' + err.message); });
+  }
+
+  function lockElementRecursive(projectId, stableId) {
+    var branchId = getBranchIdFromUrl() || '00000000-0000-0000-0000-000000000000';
+    _origFetch('/api/v1/projects/' + projectId + '/elements/' + stableId + '/lock-recursive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branchId: branchId, reason: 'Recursive lock', ttlMinutes: 120, sessionId: 'web', deviceId: 'browser' })
+    }).then(function(r) {
+      if (r.status === 409) return r.json().then(function(d) {
+        var msg = 'Cannot lock tree:\n';
+        var conflicts = d.conflicts || [];
+        for (var i = 0; i < conflicts.length; i++) {
+          msg += '• ' + (conflicts[i].stableId || '').substring(0, 20) + '... locked by ' + (conflicts[i].lockedBy || 'unknown') + '\n';
+        }
+        alert(msg);
+        throw new Error('conflict');
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      fetchProjectLocks(projectId);
+      alert('Locked ' + (data.lockedCount || 0) + ' element(s) in tree.');
+    }).catch(function(err) { if (err.message !== 'conflict') alert('Recursive lock failed: ' + err.message); });
+  }
+
+  function unlockElementRecursive(projectId, stableId) {
+    var branchId = getBranchIdFromUrl() || '00000000-0000-0000-0000-000000000000';
+    _origFetch('/api/v1/projects/' + projectId + '/elements/' + stableId + '/lock-recursive?branchId=' + branchId, {
+      method: 'DELETE'
+    }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      fetchProjectLocks(projectId);
+      alert('Unlocked ' + (data.released || 0) + ' element(s) in tree.');
+    }).catch(function(err) { alert('Recursive unlock failed: ' + err.message); });
   }
 
   function showElementHistoryById(projectId, stableId) {
@@ -1193,26 +1290,32 @@
     var projectId = getProjectIdFromUrl();
     if (!projectId) return;
 
-    // Initial fetch
-    fetchProjectLocks(projectId);
-
-    // Poll locks every 30 seconds
-    _lockPollTimer = setInterval(function() { fetchProjectLocks(projectId); }, 30000);
-
-    // Apply styles when tree changes
-    var treeObserver = new MutationObserver(function() {
-      setTimeout(applyLockStyles, 200);
-    });
-    treeObserver.observe(document.body, { childList: true, subtree: true });
-
-    // Context menu
-    injectLockContextMenu();
-
-    // Auto-unlock on save
-    setupAutoUnlockOnSave();
-
-    // Read-only enforcement for locked elements
-    enforceReadOnlyForLockedElements();
+    // Check if element locking is enabled for this project
+    _origFetch('/api/v1/projects/' + projectId + '/settings/element-locking')
+      .then(function(r) { return r.ok ? r.json() : { enabled: false }; })
+      .then(function(setting) {
+        _lockingEnabled = !!setting.enabled;
+        if (!_lockingEnabled) {
+          // Locking disabled — only set up context menu (for grayed-out items)
+          injectLockContextMenu();
+          return;
+        }
+        // Locking enabled — full setup
+        fetchProjectLocks(projectId);
+        _lockPollTimer = setInterval(function() { fetchProjectLocks(projectId); }, 30000);
+        var treeObserver = new MutationObserver(function() {
+          setTimeout(applyLockStyles, 200);
+        });
+        treeObserver.observe(document.body, { childList: true, subtree: true });
+        injectLockContextMenu();
+        setupAutoUnlockOnSave();
+        enforceReadOnlyForLockedElements();
+      })
+      .catch(function() {
+        // On error, assume disabled
+        _lockingEnabled = false;
+        injectLockContextMenu();
+      });
   }
 
   // ── Boot ─────────────────────────────────────────────────────────────────

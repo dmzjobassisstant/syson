@@ -1,12 +1,14 @@
 package org.eclipse.syson.locks.service;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.eclipse.syson.auth.model.AuditEventType;
 import org.eclipse.syson.auth.service.AuditLogService;
+import org.eclipse.syson.history.repository.HeadElementRepository;
 import org.eclipse.syson.locks.entity.ElementLock;
 import org.eclipse.syson.locks.repository.ElementLockRepository;
 import org.springframework.stereotype.Service;
@@ -24,10 +26,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class ElementLockService {
 
     private final ElementLockRepository elementLockRepository;
+    private final HeadElementRepository headElementRepository;
     private final AuditLogService auditLogService;
 
-    public ElementLockService(ElementLockRepository elementLockRepository, AuditLogService auditLogService) {
+    public ElementLockService(ElementLockRepository elementLockRepository,
+                               HeadElementRepository headElementRepository,
+                               AuditLogService auditLogService) {
         this.elementLockRepository = elementLockRepository;
+        this.headElementRepository = headElementRepository;
         this.auditLogService = auditLogService;
     }
 
@@ -187,5 +193,112 @@ public class ElementLockService {
                     AuditEventType.LOCK_RELEASED, "Auto-released " + released + " element locks on save");
         }
         return released;
+    }
+
+    /**
+     * Recursively locks an element and all its descendants.
+     * Returns a result with locked IDs and any conflicts (children locked by others).
+     *
+     * @return RecursiveLockResult with lockedStableIds and conflicts
+     */
+    public RecursiveLockResult acquireLockRecursive(String projectId, UUID branchId, String stableId,
+                                                     UUID userId, String username, String sessionId,
+                                                     String reason, int ttlMinutes) {
+        List<String> lockedIds = new ArrayList<>();
+        List<LockConflict> conflicts = new ArrayList<>();
+
+        // First, check the root element
+        Optional<ElementLock> rootLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(
+                projectId, branchId, stableId, "edit");
+        if (rootLock.isPresent() && rootLock.get().getExpiresAt().isAfter(OffsetDateTime.now())
+                && !rootLock.get().getOwnerUserId().equals(userId)) {
+            conflicts.add(new LockConflict(stableId, rootLock.get().getOwnerUsername(), "Root element"));
+            return new RecursiveLockResult(lockedIds, conflicts);
+        }
+
+        // Lock the root element
+        acquireLock(projectId, branchId, stableId, userId, username, sessionId, null, reason, ttlMinutes);
+        lockedIds.add(stableId);
+
+        // Find all descendants
+        List<String> descendants = headElementRepository.findDescendantStableIds(projectId, branchId.toString(), stableId);
+
+        // Check each descendant for conflicts before locking
+        for (String childId : descendants) {
+            Optional<ElementLock> childLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(
+                    projectId, branchId, childId, "edit");
+            if (childLock.isPresent() && childLock.get().getExpiresAt().isAfter(OffsetDateTime.now())
+                    && !childLock.get().getOwnerUserId().equals(userId)) {
+                conflicts.add(new LockConflict(childId, childLock.get().getOwnerUsername(), "Descendant"));
+            }
+        }
+
+        // If any conflicts, abort — don't lock any children
+        if (!conflicts.isEmpty()) {
+            // Release the root lock we just acquired
+            releaseLock(projectId, branchId, stableId, userId);
+            lockedIds.clear();
+            return new RecursiveLockResult(lockedIds, conflicts);
+        }
+
+        // No conflicts — lock all descendants
+        for (String childId : descendants) {
+            try {
+                acquireLock(projectId, branchId, childId, userId, username, sessionId, null, "Recursive lock from " + stableId, ttlMinutes);
+                lockedIds.add(childId);
+            } catch (IllegalStateException e) {
+                // Race condition: someone locked it between our check and now
+                conflicts.add(new LockConflict(childId, null, "Race condition: " + e.getMessage()));
+                // Rollback: release all locked so far
+                for (String locked : lockedIds) {
+                    releaseLock(projectId, branchId, locked, userId);
+                }
+                lockedIds.clear();
+                return new RecursiveLockResult(lockedIds, conflicts);
+            }
+        }
+
+        auditLogService.log(userId.toString(), projectId, branchId.toString(),
+                AuditEventType.LOCK_ACQUIRED, "Recursive lock on " + stableId + " + " + (lockedIds.size() - 1) + " descendants");
+        return new RecursiveLockResult(lockedIds, conflicts);
+    }
+
+    /**
+     * Recursively unlocks an element and all its descendants (owned by the user).
+     */
+    public int releaseLockRecursive(String projectId, UUID branchId, String stableId, UUID userId) {
+        int released = 0;
+
+        // Release root
+        Optional<ElementLock> rootLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(
+                projectId, branchId, stableId, "edit");
+        if (rootLock.isPresent() && rootLock.get().getOwnerUserId().equals(userId)) {
+            elementLockRepository.delete(rootLock.get());
+            released++;
+        }
+
+        // Find and release all descendants owned by this user
+        List<String> descendants = headElementRepository.findDescendantStableIds(projectId, branchId.toString(), stableId);
+        for (String childId : descendants) {
+            Optional<ElementLock> childLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(
+                    projectId, branchId, childId, "edit");
+            if (childLock.isPresent() && childLock.get().getOwnerUserId().equals(userId)) {
+                elementLockRepository.delete(childLock.get());
+                released++;
+            }
+        }
+
+        if (released > 0) {
+            auditLogService.log(userId.toString(), projectId, branchId.toString(),
+                    AuditEventType.LOCK_RELEASED, "Recursive unlock on " + stableId + " + " + (released - 1) + " descendants");
+        }
+        return released;
+    }
+
+    public record RecursiveLockResult(List<String> lockedStableIds, List<LockConflict> conflicts) {
+        public boolean isSuccess() { return conflicts.isEmpty(); }
+    }
+
+    public record LockConflict(String stableId, String lockedBy, String reason) {
     }
 }
