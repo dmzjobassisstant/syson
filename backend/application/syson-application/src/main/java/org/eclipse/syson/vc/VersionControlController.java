@@ -32,6 +32,9 @@ import org.eclipse.syson.locks.service.BranchLockService;
 import org.eclipse.syson.locks.service.ElementLockService;
 import org.eclipse.syson.locks.service.ElementLockService.RecursiveLockResult;
 import org.eclipse.syson.locks.service.IntegrityCheckService;
+import org.eclipse.syson.locks.entity.MergeRequest;
+import org.eclipse.syson.locks.repository.MergeRequestRepository;
+import org.eclipse.syson.locks.repository.TagRepository;
 import org.eclipse.syson.settings.ProjectSettingService;
 import org.eclipse.syson.vc.dto.BaselineDto;
 import org.eclipse.syson.vc.dto.BranchDto;
@@ -78,6 +81,8 @@ public class VersionControlController {
     private final CommitRepository commitRepository;
     private final ChangeRepository changeRepository;
     private final BaselineRepository baselineRepository;
+    private final MergeRequestRepository mergeRequestRepository;
+    private final TagRepository tagRepository;
 
     public VersionControlController(VersionControlService versionControlService,
                                      VersionGraphService versionGraphService,
@@ -91,7 +96,9 @@ public class VersionControlController {
                                      BranchRepository branchRepository,
                                      CommitRepository commitRepository,
                                      ChangeRepository changeRepository,
-                                     BaselineRepository baselineRepository) {
+                                     BaselineRepository baselineRepository,
+                                     MergeRequestRepository mergeRequestRepository,
+                                     TagRepository tagRepository) {
         this.versionControlService = versionControlService;
         this.versionGraphService = versionGraphService;
         this.branchLockService = branchLockService;
@@ -105,6 +112,8 @@ public class VersionControlController {
         this.commitRepository = commitRepository;
         this.changeRepository = changeRepository;
         this.baselineRepository = baselineRepository;
+        this.mergeRequestRepository = mergeRequestRepository;
+        this.tagRepository = tagRepository;
     }
 
     // ─── branches ────────────────────────────────────────────────────────
@@ -235,6 +244,7 @@ public class VersionControlController {
         long changeCount = this.changeRepository.countByProjectId(projectId);
         long baselineCount = this.baselineRepository.countByProjectId(projectId);
         long tagCount = this.versionGraphService.getVersionGraph(projectId).tags().size();
+        long openMRCount = this.mergeRequestRepository.countByProjectIdAndStatus(projectId.toString(), "open");
 
         Map<String, Object> overview = new HashMap<>();
         overview.put("branchCount", branchCount);
@@ -242,6 +252,7 @@ public class VersionControlController {
         overview.put("changeCount", changeCount);
         overview.put("baselineCount", baselineCount);
         overview.put("tagCount", tagCount);
+        overview.put("openMRCount", openMRCount);
         return ResponseEntity.ok(overview);
     }
 
@@ -515,6 +526,63 @@ public class VersionControlController {
         return ResponseEntity.ok(result);
     }
 
+    // ─── tags ────────────────────────────────────────────────────────────
+
+    /**
+     * Lists all tags for a project.
+     */
+    @GetMapping("/projects/{projectId}/tags")
+    public ResponseEntity<List<org.eclipse.syson.locks.entity.Tag>> getTags(
+            @PathVariable UUID projectId) {
+        return ResponseEntity.ok(this.tagRepository.findByProjectIdOrderByName(projectId.toString()));
+    }
+
+    // ─── merge requests ──────────────────────────────────────────────────
+
+    /**
+     * Lists all merge requests for a project.
+     */
+    @GetMapping("/projects/{projectId}/merge-requests")
+    public ResponseEntity<List<MergeRequest>> getMergeRequests(
+            @PathVariable UUID projectId) {
+        return ResponseEntity.ok(this.mergeRequestRepository.findByProjectIdOrderByCreatedAtDesc(projectId.toString()));
+    }
+
+    // ─── default branch settings ─────────────────────────────────────────
+
+    /**
+     * Returns the default branch ID for this project, or null if not set.
+     */
+    @GetMapping("/projects/{projectId}/settings/default-branch")
+    public ResponseEntity<Map<String, Object>> getDefaultBranch(
+            @PathVariable UUID projectId) {
+        String branchId = this.projectSettingService.get(projectId.toString(), "default_branch_id", "");
+        // Strip JSONB quotes if present (stored as "\"value\"")
+        if (branchId.startsWith("\"") && branchId.endsWith("\"")) {
+            branchId = branchId.substring(1, branchId.length() - 1);
+        }
+        Map<String, Object> result = new HashMap<>();
+        result.put("branchId", branchId.isEmpty() ? null : branchId);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Sets the default branch ID for this project (admin only).
+     */
+    @PostMapping("/projects/{projectId}/settings/default-branch")
+    public ResponseEntity<Map<String, Object>> setDefaultBranch(
+            @PathVariable UUID projectId,
+            @RequestBody SetDefaultBranchRequest request) {
+        UUID userId = TenantContext.getUserIdAsUuid();
+        // Wrap as JSON string for JSONB column
+        String jsonValue = "\"" + request.branchId() + "\"";
+        this.projectSettingService.set(projectId.toString(), "default_branch_id",
+                jsonValue, "Default branch for model loading", userId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("branchId", request.branchId());
+        return ResponseEntity.ok(result);
+    }
+
     // ─── request records ─────────────────────────────────────────────────
 
     public record CreateBranchRequest(
@@ -569,5 +637,9 @@ public class VersionControlController {
 
     public record SetElementLockingRequest(
             boolean enabled) {
+    }
+
+    public record SetDefaultBranchRequest(
+            String branchId) {
     }
 }

@@ -427,10 +427,13 @@
       var projHTML = '';
       if (projectsData && projectsData.length) {
         projHTML = projectsData.map(function(p) {
+          var pid = p.projectId || '';
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:6px;background:rgba(255,255,255,0.03);margin-bottom:4px;">'
-            + '<span style="color:#e0e0e0;font-size:0.82rem;font-family:monospace;">' + (p.projectId || '').substring(0,16) + '…</span>'
+            + '<span style="color:#e0e0e0;font-size:0.82rem;font-family:monospace;">' + pid.substring(0,16) + '…</span>'
+            + '<div style="display:flex;gap:6px;align-items:center;">'
+            + '<button class="syson-vc-btn" data-project-id="' + escapeHtml(pid) + '" style="padding:3px 8px;border:1px solid #3b82f6;border-radius:4px;background:transparent;color:#3b82f6;font-size:.68rem;cursor:pointer;font-weight:600;">🔀 VC</button>'
             + '<span style="background:#4a90d9;color:#fff;font-size:0.68rem;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;">' + (p.role || '') + '</span>'
-            + '</div>';
+            + '</div></div>';
         }).join('');
       } else {
         projHTML = '<p style="color:#666;font-size:0.82rem;">No projects assigned.</p>';
@@ -472,6 +475,14 @@
       var accessBtn = document.getElementById('syson-access-management-btn');
       if (accessBtn) accessBtn.addEventListener('click', function() { overlay.remove(); showAdminConsole(); });
       overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+      // VC buttons in project list
+      Array.prototype.slice.call(overlay.querySelectorAll('.syson-vc-btn')).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var pid = btn.getAttribute('data-project-id');
+          if (pid) { overlay.remove(); showProjectVC(pid); }
+        });
+      });
 
       document.getElementById('syson-pw-form').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -564,6 +575,11 @@
       + '<div id="syson-locking-project-list" style="margin-top:8px;"></div>'
       + '</section>'
       + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Audit History</h3><div id="syson-admin-audit" style="font-size:.82rem;color:#94a3b8;">Loading audit events…</div></section>'
+      + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Version Control</h3>'
+      + '<p style="color:#64748b;font-size:.82rem;margin:0 0 10px;">View branches, commits, baselines, tags, and manage default branch per project.</p>'
+      + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;"><input id="syson-vc-project-id" placeholder="Project ID" style="flex:1;padding:8px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;font-size:.82rem;" /><button id="syson-vc-open" style="padding:8px 16px;border:0;border-radius:6px;background:#3b82f6;color:white;font-weight:700;font-size:.82rem;cursor:pointer;">Open VC</button></div>'
+      + '<div id="syson-vc-project-list" style="font-size:.82rem;color:#94a3b8;">Enter a project ID or click "Open VC" from the Dashboard.</div>'
+      + '</section>'
       + '</div></div>';
     document.body.appendChild(overlay);
     document.getElementById('syson-admin-close').addEventListener('click', function() { overlay.remove(); });
@@ -707,6 +723,17 @@
     }).catch(function() {});
 
     document.getElementById('syson-load-project-members').addEventListener('click', loadProjectMembers);
+
+    // Version Control button in admin console
+    var vcOpenBtn = document.getElementById('syson-vc-open');
+    if (vcOpenBtn) {
+      vcOpenBtn.addEventListener('click', function() {
+        var pid = document.getElementById('syson-vc-project-id').value.trim();
+        if (!pid) { alert('Enter a Project ID'); return; }
+        showProjectVC(pid);
+      });
+    }
+
     document.getElementById('syson-grant-project-role').addEventListener('click', function() {
       var projectId = document.getElementById('syson-project-id').value.trim();
       var selectedUser = document.getElementById('syson-project-user').value;
@@ -735,6 +762,245 @@
     if (isSuperUser() && (href.indexOf('sysonAdmin=1') !== -1 || href.indexOf('#/admin/access') !== -1 || href.indexOf('#/account/access-management') !== -1)) {
       setTimeout(showAdminConsole, 800);
     }
+  }
+
+  // ── Project Version Control ─────────────────────────────────────────────
+  // GitGraph-style version control visualization inspired by BowTie Pilot.
+
+  function showProjectVC(projectId) {
+    if (!projectId) { alert('No project selected'); return; }
+    var existing = document.getElementById('syson-vc-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-vc-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100002;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);font-family:Lato,Roboto,Arial,sans-serif;';
+    overlay.innerHTML = '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:14px;width:min(1200px,96vw);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);color:#e2e8f0;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;">'
+      + '<div><h2 style="margin:0;font-size:1.1rem;">🔀 Version Control</h2>'
+      + '<p style="margin:4px 0 0;color:#64748b;font-size:.78rem;">Project: ' + escapeHtml(projectId.substring(0,16)) + '…</p></div>'
+      + '<button id="syson-vc-close" style="background:none;border:none;color:#64748b;font-size:1.6rem;cursor:pointer;">×</button></div>'
+      + '<div id="syson-vc-content" style="padding:16px 20px;"><p style="color:#64748b;">Loading version control data…</p></div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    document.getElementById('syson-vc-close').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    // Fetch VC data
+    var headers = { 'Authorization': 'Bearer ' + state.token };
+    Promise.all([
+      _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/overview', { headers: headers }),
+      _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/tree', { headers: headers }),
+      _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/settings/default-branch', { headers: headers }),
+    ]).then(function(results) {
+      return Promise.all(results.map(function(r) { return r.ok ? r.json() : null; }));
+    }).then(function(data) {
+      var overview = data[0] || {};
+      var tree = data[1] || {};
+      var defaultBranch = data[2] || {};
+      renderVCContent(projectId, overview, tree, defaultBranch);
+    })['catch'](function(err) {
+      document.getElementById('syson-vc-content').innerHTML = '<p style="color:#f87171;">Error: ' + escapeHtml(err.message) + '</p>';
+    });
+  }
+
+  function renderVCContent(projectId, overview, tree, defaultBranch) {
+    var box = document.getElementById('syson-vc-content');
+    if (!box) return;
+    var branches = tree.branches || [];
+    var commits = tree.commits || [];
+    var baselines = tree.baselines || [];
+    var tags = tree.tags || [];
+    var currentDefault = defaultBranch.branchId || '';
+
+    // Stats cards
+    var statsHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
+      + vcStatCard('🌿', overview.branchCount || 0, 'Branches', '#3b82f6')
+      + vcStatCard('📦', overview.commitCount || 0, 'Commits', '#7c3aed')
+      + vcStatCard('📋', overview.baselineCount || 0, 'Baselines', '#dc2626')
+      + vcStatCard('🏷️', overview.tagCount || 0, 'Tags', '#059669')
+      + vcStatCard('🔄', overview.openMRCount || 0, 'Open MRs', '#d97706')
+      + '</div>';
+
+    // GitGraph SVG
+    var graphHTML = '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:16px;overflow-x:auto;">'
+      + '<h3 style="margin:0 0 10px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">Revision Graph</h3>'
+      + renderGitGraph(branches, commits, baselines)
+      + '</div>';
+
+    // Branch selector
+    var branchOptions = branches.map(function(b) {
+      var selected = b.branchId === currentDefault ? ' selected' : '';
+      return '<option value="' + escapeHtml(b.branchId) + '"' + selected + '>' + escapeHtml(b.name || b.branchId) + ' (' + escapeHtml(b.branchType || 'unknown') + ')</option>';
+    }).join('');
+    var branchSelectorHTML = '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:16px;">'
+      + '<h3 style="margin:0 0 10px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">Default Branch (Model Loading Context)</h3>'
+      + '<div style="display:flex;gap:8px;align-items:center;">'
+      + '<select id="syson-vc-branch-select" style="flex:1;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.85rem;">'
+      + '<option value="">— No default branch —</option>' + branchOptions + '</select>'
+      + '<button id="syson-vc-set-branch" style="padding:8px 16px;border:0;border-radius:6px;background:#3b82f6;color:white;font-weight:700;font-size:.82rem;cursor:pointer;">Set Default</button>'
+      + '</div>'
+      + '<p style="margin:6px 0 0;color:#64748b;font-size:.75rem;">The selected branch determines which model context loads when opening this project. Element locking also uses this branch.</p>'
+      + '<div id="syson-vc-branch-msg" style="margin-top:6px;font-size:.78rem;"></div>'
+      + '</div>';
+
+    // Branches list
+    var branchesHTML = vcListSection('Branches', branches.map(function(b) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
+        + '<div><span style="color:#3b82f6;font-weight:600;">' + escapeHtml(b.name || 'unnamed') + '</span>'
+        + '<span style="color:#64748b;font-size:.75rem;margin-left:8px;">' + escapeHtml(b.branchType || '') + '</span></div>'
+        + '<span style="color:#475569;font-size:.75rem;font-family:monospace;">' + (b.headCommitId ? b.headCommitId.substring(0,7) : '—') + '</span>'
+        + '</div>';
+    }));
+
+    // Baselines list
+    var baselinesHTML = vcListSection('Baselines', baselines.map(function(b) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
+        + '<div><span style="color:#dc2626;font-weight:600;">📋 ' + escapeHtml(b.name || b.baselineCode || 'unnamed') + '</span></div>'
+        + '<span style="color:#475569;font-size:.75rem;">' + escapeHtml(b.status || '') + '</span>'
+        + '</div>';
+    }));
+
+    // Tags list
+    var tagsHTML = vcListSection('Tags', tags.map(function(t) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
+        + '<span style="color:#059669;font-weight:600;">🏷️ ' + escapeHtml(t.name || 'unnamed') + '</span>'
+        + '<span style="color:#475569;font-size:.75rem;">' + escapeHtml(t.description || '') + '</span>'
+        + '</div>';
+    }));
+
+    // Open in Editor button
+    var editorBtn = '<div style="margin-top:12px;">'
+      + '<button onclick="window.location.href=\'/projects/' + escapeHtml(projectId) + '/edit\'" '
+      + 'style="padding:10px 20px;border:0;border-radius:8px;background:#10b981;color:white;font-weight:700;font-size:.9rem;cursor:pointer;">'
+      + '📂 Open in Editor</button>'
+      + (currentDefault ? ' <span style="color:#64748b;font-size:.8rem;">Branch context: ' + escapeHtml(currentDefault.substring(0,8)) + '…</span>' : '')
+      + '</div>';
+
+    box.innerHTML = statsHTML + graphHTML + branchSelectorHTML + branchesHTML + baselinesHTML + tagsHTML + editorBtn;
+
+    // Branch selector event
+    var setBtn = document.getElementById('syson-vc-set-branch');
+    if (setBtn) {
+      setBtn.addEventListener('click', function() {
+        var select = document.getElementById('syson-vc-branch-select');
+        var branchId = select ? select.value : '';
+        var msg = document.getElementById('syson-vc-branch-msg');
+        if (!branchId) { msg.style.color = '#f87171'; msg.textContent = 'Select a branch first'; return; }
+        setBtn.textContent = 'Saving…';
+        _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/settings/default-branch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+          body: JSON.stringify({ branchId: branchId }),
+        }).then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }).then(function() {
+          msg.style.color = '#4ade80'; msg.textContent = 'Default branch updated!';
+          setBtn.textContent = 'Set Default';
+          // Store in localStorage for editor use
+          try { localStorage.setItem('syson-vc-branch-' + projectId, branchId); } catch(e) {}
+        })['catch'](function(err) {
+          msg.style.color = '#f87171'; msg.textContent = 'Error: ' + err.message;
+          setBtn.textContent = 'Set Default';
+        });
+      });
+    }
+  }
+
+  function vcStatCard(icon, value, label, color) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;background:' + color + '11;border:1px solid ' + color + '22;min-width:120px;">'
+      + '<span style="font-size:18px;">' + icon + '</span>'
+      + '<div><div style="font-size:18px;font-weight:700;color:' + color + ';">' + value + '</div>'
+      + '<div style="font-size:.72rem;color:#64748b;">' + label + '</div></div></div>';
+  }
+
+  function vcListSection(title, items) {
+    if (!items.length) return '';
+    return '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:12px;">'
+      + '<h3 style="margin:0 0 8px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">' + title + ' (' + items.length + ')</h3>'
+      + items.join('') + '</div>';
+  }
+
+  function renderGitGraph(branches, commits, baselines) {
+    if (!commits.length) {
+      return '<p style="color:#475569;font-size:.82rem;text-align:center;padding:20px;">No commits yet. Create a branch and save a model to see the revision graph.</p>';
+    }
+    // Sort commits by time (newest first)
+    var sorted = commits.slice().sort(function(a, b) {
+      return new Date(b.committedAt || 0).getTime() - new Date(a.committedAt || 0).getTime();
+    });
+    // Limit display
+    var display = sorted.slice(0, 50);
+    var branchMap = {};
+    branches.forEach(function(b) { branchMap[b.branchId] = b; });
+    var baselineMap = {};
+    baselines.forEach(function(b) { baselineMap[b.commitId] = b; });
+    // Assign lanes to branches
+    var laneMap = {};
+    var laneCount = 0;
+    branches.forEach(function(b, i) {
+      laneMap[b.branchId] = i;
+      laneCount = i + 1;
+    });
+    var laneW = 28;
+    var rowH = 32;
+    var leftPad = 20;
+    var topPad = 16;
+    var graphW = leftPad + Math.max(laneCount, 1) * laneW + 500;
+    var graphH = topPad + display.length * rowH + 20;
+    var colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#84cc16'];
+
+    var svg = '<svg width="' + graphW + '" height="' + graphH + '" xmlns="http://www.w3.org/2000/svg" style="font-family:monospace;font-size:11px;">';
+    svg += '<rect width="100%" height="100%" fill="#020617" rx="8"/>';
+
+    display.forEach(function(c, row) {
+      var lane = laneMap[c.branchId] != null ? laneMap[c.branchId] : 0;
+      var x = leftPad + lane * laneW + laneW / 2;
+      var y = topPad + row * rowH + rowH / 2;
+      var color = colors[lane % colors.length];
+      var isBaseline = baselineMap[c.commitId];
+      // Draw lane line
+      if (row < display.length - 1) {
+        var nextLane = laneMap[display[row + 1].branchId] != null ? laneMap[display[row + 1].branchId] : 0;
+        var nx = leftPad + nextLane * laneW + laneW / 2;
+        var ny = topPad + (row + 1) * rowH + rowH / 2;
+        if (nextLane === lane) {
+          svg += '<line x1="' + x + '" y1="' + y + '" x2="' + nx + '" y2="' + ny + '" stroke="' + color + '" stroke-width="2" opacity="0.4"/>';
+        } else {
+          var midY = (y + ny) / 2;
+          svg += '<path d="M ' + x + ' ' + y + ' C ' + x + ' ' + midY + ', ' + nx + ' ' + midY + ', ' + nx + ' ' + ny + '" stroke="' + color + '" stroke-width="2" fill="none" opacity="0.4"/>';
+        }
+      }
+      // Draw commit node
+      var r = isBaseline ? 7 : 5;
+      svg += '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + color + '" stroke="#020617" stroke-width="2"/>';
+      if (isBaseline) {
+        svg += '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="none" stroke="#dc2626" stroke-width="1.5"/>';
+      }
+      // Commit message
+      var msgX = leftPad + Math.max(laneCount, 1) * laneW + 16;
+      var msg = (c.message || 'No message');
+      if (msg.length > 60) msg = msg.substring(0, 59) + '…';
+      svg += '<text x="' + msgX + '" y="' + (y + 4) + '" fill="#e2e8f0">' + escapeHtml(msg) + '</text>';
+      // Hash
+      var hashX = msgX + 400;
+      svg += '<text x="' + hashX + '" y="' + (y + 4) + '" fill="#475569" font-size="10">' + (c.commitId ? c.commitId.substring(0,7) : '—') + '</text>';
+      // Date
+      var dateX = hashX + 60;
+      var dateStr = c.committedAt ? new Date(c.committedAt).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
+      svg += '<text x="' + dateX + '" y="' + (y + 4) + '" fill="#334155" font-size="10">' + dateStr + '</text>';
+    });
+
+    // Branch labels at top
+    branches.forEach(function(b, i) {
+      var x = leftPad + i * laneW + laneW / 2;
+      var color = colors[i % colors.length];
+      svg += '<text x="' + x + '" y="12" fill="' + color + '" font-size="9" text-anchor="middle" font-weight="bold">' + escapeHtml((b.name || '').substring(0, 8)) + '</text>';
+    });
+
+    svg += '</svg>';
+    return svg;
   }
 
   // ── Element History Button ────────────────────────────────────────────────

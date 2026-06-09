@@ -427,10 +427,13 @@
       var projHTML = '';
       if (projectsData && projectsData.length) {
         projHTML = projectsData.map(function(p) {
+          var pid = p.projectId || '';
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:6px;background:rgba(255,255,255,0.03);margin-bottom:4px;">'
-            + '<span style="color:#e0e0e0;font-size:0.82rem;font-family:monospace;">' + (p.projectId || '').substring(0,16) + '…</span>'
+            + '<span style="color:#e0e0e0;font-size:0.82rem;font-family:monospace;">' + pid.substring(0,16) + '…</span>'
+            + '<div style="display:flex;gap:6px;align-items:center;">'
+            + '<button class="syson-vc-btn" data-project-id="' + escapeHtml(pid) + '" style="padding:3px 8px;border:1px solid #3b82f6;border-radius:4px;background:transparent;color:#3b82f6;font-size:.68rem;cursor:pointer;font-weight:600;">🔀 VC</button>'
             + '<span style="background:#4a90d9;color:#fff;font-size:0.68rem;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;">' + (p.role || '') + '</span>'
-            + '</div>';
+            + '</div></div>';
         }).join('');
       } else {
         projHTML = '<p style="color:#666;font-size:0.82rem;">No projects assigned.</p>';
@@ -472,6 +475,14 @@
       var accessBtn = document.getElementById('syson-access-management-btn');
       if (accessBtn) accessBtn.addEventListener('click', function() { overlay.remove(); showAdminConsole(); });
       overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+      // VC buttons in project list
+      Array.prototype.slice.call(overlay.querySelectorAll('.syson-vc-btn')).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var pid = btn.getAttribute('data-project-id');
+          if (pid) { overlay.remove(); showProjectVC(pid); }
+        });
+      });
 
       document.getElementById('syson-pw-form').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -555,7 +566,20 @@
       + '<div style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:10px;"><input id="syson-project-id" placeholder="Project ID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><button id="syson-load-project-members" style="padding:9px;border:0;border-radius:6px;background:#475569;color:white;font-weight:700;cursor:pointer;">Load Members</button><span id="syson-project-msg" style="align-self:center;color:#94a3b8;font-size:.8rem;"></span></div>'
       + '<div style="display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:8px;margin-bottom:10px;"><select id="syson-project-user" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"></select><input id="syson-project-user-id" placeholder="or paste user UUID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-project-role" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="user">User</option><option value="admin">Admin</option></select><button id="syson-grant-project-role" style="padding:9px;border:0;border-radius:6px;background:#7c3aed;color:white;font-weight:700;cursor:pointer;">Grant Role</button></div>'
       + '<div id="syson-project-members" style="font-size:.84rem;color:#94a3b8;">Enter a project ID to manage members.</div></section>'
+      + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Project Settings</h3>'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">'
+      + '<input type="checkbox" id="syson-toggle-locking" style="width:18px;height:18px;cursor:pointer;" />'
+      + '<label for="syson-toggle-locking" style="font-size:.85rem;color:#cbd5e1;cursor:pointer;">Enable Element Locking (per-project)</label>'
+      + '</div>'
+      + '<div id="syson-locking-projects" style="font-size:.82rem;color:#94a3b8;">Select a project to toggle locking:</div>'
+      + '<div id="syson-locking-project-list" style="margin-top:8px;"></div>'
+      + '</section>'
       + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Audit History</h3><div id="syson-admin-audit" style="font-size:.82rem;color:#94a3b8;">Loading audit events…</div></section>'
+      + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Version Control</h3>'
+      + '<p style="color:#64748b;font-size:.82rem;margin:0 0 10px;">View branches, commits, baselines, tags, and manage default branch per project.</p>'
+      + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;"><input id="syson-vc-project-id" placeholder="Project ID" style="flex:1;padding:8px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;font-size:.82rem;" /><button id="syson-vc-open" style="padding:8px 16px;border:0;border-radius:6px;background:#3b82f6;color:white;font-weight:700;font-size:.82rem;cursor:pointer;">Open VC</button></div>'
+      + '<div id="syson-vc-project-list" style="font-size:.82rem;color:#94a3b8;">Enter a project ID or click "Open VC" from the Dashboard.</div>'
+      + '</section>'
       + '</div></div>';
     document.body.appendChild(overlay);
     document.getElementById('syson-admin-close').addEventListener('click', function() { overlay.remove(); });
@@ -655,7 +679,61 @@
     })['catch'](function(err) { document.getElementById('syson-admin-users').textContent = err.message; });
     adminFetch('/api/v1/user/admin/audit-trail?size=50').then(renderAudit)['catch'](function(err) { document.getElementById('syson-admin-audit').textContent = err.message; });
 
+    // Project Settings: element locking toggle
+    adminFetch('/api/v1/user/admin/users').then(function() {
+      // Load projects for the locking toggle
+      _origFetch('/api/v1/user/projects').then(function(r) { return r.ok ? r.json() : []; }).then(function(projects) {
+        var list = document.getElementById('syson-locking-project-list');
+        if (!list) return;
+        if (!projects || !projects.length) { list.textContent = 'No projects found.'; return; }
+        list.innerHTML = projects.map(function(p) {
+          return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #1f2a3d;">'
+            + '<input type="checkbox" class="syson-project-lock-toggle" data-project-id="' + escapeHtml(p.id) + '" style="width:16px;height:16px;cursor:pointer;" />'
+            + '<span style="color:#e5e7eb;font-size:.85rem;">' + escapeHtml(p.name || p.id) + '</span>'
+            + '<span style="color:#64748b;font-size:.75rem;margin-left:auto;">' + escapeHtml(p.id).substring(0, 8) + '…</span>'
+            + '</div>';
+        }).join('');
+        // Load current settings for each project
+        projects.forEach(function(p) {
+          _origFetch('/api/v1/projects/' + p.id + '/settings/element-locking').then(function(r) { return r.ok ? r.json() : { enabled: false }; })
+            .then(function(s) {
+              var cb = list.querySelector('[data-project-id="' + p.id + '"]');
+              if (cb) cb.checked = !!s.enabled;
+            }).catch(function() {});
+        });
+        // Handle toggle changes
+        list.addEventListener('change', function(e) {
+          if (!e.target.classList.contains('syson-project-lock-toggle')) return;
+          var pid = e.target.getAttribute('data-project-id');
+          var enabled = e.target.checked;
+          _origFetch('/api/v1/projects/' + pid + '/settings/element-locking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: enabled })
+          }).then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            e.target.parentElement.style.borderLeft = '3px solid ' + (enabled ? '#4ade80' : '#64748b');
+            setTimeout(function() { e.target.parentElement.style.borderLeft = ''; }, 2000);
+          }).catch(function(err) {
+            e.target.checked = !enabled;
+            alert('Failed to update: ' + err.message);
+          });
+        });
+      }).catch(function() {});
+    }).catch(function() {});
+
     document.getElementById('syson-load-project-members').addEventListener('click', loadProjectMembers);
+
+    // Version Control button in admin console
+    var vcOpenBtn = document.getElementById('syson-vc-open');
+    if (vcOpenBtn) {
+      vcOpenBtn.addEventListener('click', function() {
+        var pid = document.getElementById('syson-vc-project-id').value.trim();
+        if (!pid) { alert('Enter a Project ID'); return; }
+        showProjectVC(pid);
+      });
+    }
+
     document.getElementById('syson-grant-project-role').addEventListener('click', function() {
       var projectId = document.getElementById('syson-project-id').value.trim();
       var selectedUser = document.getElementById('syson-project-user').value;
@@ -684,6 +762,245 @@
     if (isSuperUser() && (href.indexOf('sysonAdmin=1') !== -1 || href.indexOf('#/admin/access') !== -1 || href.indexOf('#/account/access-management') !== -1)) {
       setTimeout(showAdminConsole, 800);
     }
+  }
+
+  // ── Project Version Control ─────────────────────────────────────────────
+  // GitGraph-style version control visualization inspired by BowTie Pilot.
+
+  function showProjectVC(projectId) {
+    if (!projectId) { alert('No project selected'); return; }
+    var existing = document.getElementById('syson-vc-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-vc-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100002;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);font-family:Lato,Roboto,Arial,sans-serif;';
+    overlay.innerHTML = '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:14px;width:min(1200px,96vw);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);color:#e2e8f0;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;">'
+      + '<div><h2 style="margin:0;font-size:1.1rem;">🔀 Version Control</h2>'
+      + '<p style="margin:4px 0 0;color:#64748b;font-size:.78rem;">Project: ' + escapeHtml(projectId.substring(0,16)) + '…</p></div>'
+      + '<button id="syson-vc-close" style="background:none;border:none;color:#64748b;font-size:1.6rem;cursor:pointer;">×</button></div>'
+      + '<div id="syson-vc-content" style="padding:16px 20px;"><p style="color:#64748b;">Loading version control data…</p></div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    document.getElementById('syson-vc-close').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    // Fetch VC data
+    var headers = { 'Authorization': 'Bearer ' + state.token };
+    Promise.all([
+      _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/overview', { headers: headers }),
+      _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/tree', { headers: headers }),
+      _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/settings/default-branch', { headers: headers }),
+    ]).then(function(results) {
+      return Promise.all(results.map(function(r) { return r.ok ? r.json() : null; }));
+    }).then(function(data) {
+      var overview = data[0] || {};
+      var tree = data[1] || {};
+      var defaultBranch = data[2] || {};
+      renderVCContent(projectId, overview, tree, defaultBranch);
+    })['catch'](function(err) {
+      document.getElementById('syson-vc-content').innerHTML = '<p style="color:#f87171;">Error: ' + escapeHtml(err.message) + '</p>';
+    });
+  }
+
+  function renderVCContent(projectId, overview, tree, defaultBranch) {
+    var box = document.getElementById('syson-vc-content');
+    if (!box) return;
+    var branches = tree.branches || [];
+    var commits = tree.commits || [];
+    var baselines = tree.baselines || [];
+    var tags = tree.tags || [];
+    var currentDefault = defaultBranch.branchId || '';
+
+    // Stats cards
+    var statsHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
+      + vcStatCard('🌿', overview.branchCount || 0, 'Branches', '#3b82f6')
+      + vcStatCard('📦', overview.commitCount || 0, 'Commits', '#7c3aed')
+      + vcStatCard('📋', overview.baselineCount || 0, 'Baselines', '#dc2626')
+      + vcStatCard('🏷️', overview.tagCount || 0, 'Tags', '#059669')
+      + vcStatCard('🔄', overview.openMRCount || 0, 'Open MRs', '#d97706')
+      + '</div>';
+
+    // GitGraph SVG
+    var graphHTML = '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:16px;overflow-x:auto;">'
+      + '<h3 style="margin:0 0 10px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">Revision Graph</h3>'
+      + renderGitGraph(branches, commits, baselines)
+      + '</div>';
+
+    // Branch selector
+    var branchOptions = branches.map(function(b) {
+      var selected = b.branchId === currentDefault ? ' selected' : '';
+      return '<option value="' + escapeHtml(b.branchId) + '"' + selected + '>' + escapeHtml(b.name || b.branchId) + ' (' + escapeHtml(b.branchType || 'unknown') + ')</option>';
+    }).join('');
+    var branchSelectorHTML = '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:16px;">'
+      + '<h3 style="margin:0 0 10px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">Default Branch (Model Loading Context)</h3>'
+      + '<div style="display:flex;gap:8px;align-items:center;">'
+      + '<select id="syson-vc-branch-select" style="flex:1;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.85rem;">'
+      + '<option value="">— No default branch —</option>' + branchOptions + '</select>'
+      + '<button id="syson-vc-set-branch" style="padding:8px 16px;border:0;border-radius:6px;background:#3b82f6;color:white;font-weight:700;font-size:.82rem;cursor:pointer;">Set Default</button>'
+      + '</div>'
+      + '<p style="margin:6px 0 0;color:#64748b;font-size:.75rem;">The selected branch determines which model context loads when opening this project. Element locking also uses this branch.</p>'
+      + '<div id="syson-vc-branch-msg" style="margin-top:6px;font-size:.78rem;"></div>'
+      + '</div>';
+
+    // Branches list
+    var branchesHTML = vcListSection('Branches', branches.map(function(b) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
+        + '<div><span style="color:#3b82f6;font-weight:600;">' + escapeHtml(b.name || 'unnamed') + '</span>'
+        + '<span style="color:#64748b;font-size:.75rem;margin-left:8px;">' + escapeHtml(b.branchType || '') + '</span></div>'
+        + '<span style="color:#475569;font-size:.75rem;font-family:monospace;">' + (b.headCommitId ? b.headCommitId.substring(0,7) : '—') + '</span>'
+        + '</div>';
+    }));
+
+    // Baselines list
+    var baselinesHTML = vcListSection('Baselines', baselines.map(function(b) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
+        + '<div><span style="color:#dc2626;font-weight:600;">📋 ' + escapeHtml(b.name || b.baselineCode || 'unnamed') + '</span></div>'
+        + '<span style="color:#475569;font-size:.75rem;">' + escapeHtml(b.status || '') + '</span>'
+        + '</div>';
+    }));
+
+    // Tags list
+    var tagsHTML = vcListSection('Tags', tags.map(function(t) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
+        + '<span style="color:#059669;font-weight:600;">🏷️ ' + escapeHtml(t.name || 'unnamed') + '</span>'
+        + '<span style="color:#475569;font-size:.75rem;">' + escapeHtml(t.description || '') + '</span>'
+        + '</div>';
+    }));
+
+    // Open in Editor button
+    var editorBtn = '<div style="margin-top:12px;">'
+      + '<button onclick="window.location.href=\'/projects/' + escapeHtml(projectId) + '/edit\'" '
+      + 'style="padding:10px 20px;border:0;border-radius:8px;background:#10b981;color:white;font-weight:700;font-size:.9rem;cursor:pointer;">'
+      + '📂 Open in Editor</button>'
+      + (currentDefault ? ' <span style="color:#64748b;font-size:.8rem;">Branch context: ' + escapeHtml(currentDefault.substring(0,8)) + '…</span>' : '')
+      + '</div>';
+
+    box.innerHTML = statsHTML + graphHTML + branchSelectorHTML + branchesHTML + baselinesHTML + tagsHTML + editorBtn;
+
+    // Branch selector event
+    var setBtn = document.getElementById('syson-vc-set-branch');
+    if (setBtn) {
+      setBtn.addEventListener('click', function() {
+        var select = document.getElementById('syson-vc-branch-select');
+        var branchId = select ? select.value : '';
+        var msg = document.getElementById('syson-vc-branch-msg');
+        if (!branchId) { msg.style.color = '#f87171'; msg.textContent = 'Select a branch first'; return; }
+        setBtn.textContent = 'Saving…';
+        _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/settings/default-branch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+          body: JSON.stringify({ branchId: branchId }),
+        }).then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }).then(function() {
+          msg.style.color = '#4ade80'; msg.textContent = 'Default branch updated!';
+          setBtn.textContent = 'Set Default';
+          // Store in localStorage for editor use
+          try { localStorage.setItem('syson-vc-branch-' + projectId, branchId); } catch(e) {}
+        })['catch'](function(err) {
+          msg.style.color = '#f87171'; msg.textContent = 'Error: ' + err.message;
+          setBtn.textContent = 'Set Default';
+        });
+      });
+    }
+  }
+
+  function vcStatCard(icon, value, label, color) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;background:' + color + '11;border:1px solid ' + color + '22;min-width:120px;">'
+      + '<span style="font-size:18px;">' + icon + '</span>'
+      + '<div><div style="font-size:18px;font-weight:700;color:' + color + ';">' + value + '</div>'
+      + '<div style="font-size:.72rem;color:#64748b;">' + label + '</div></div></div>';
+  }
+
+  function vcListSection(title, items) {
+    if (!items.length) return '';
+    return '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:12px;">'
+      + '<h3 style="margin:0 0 8px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">' + title + ' (' + items.length + ')</h3>'
+      + items.join('') + '</div>';
+  }
+
+  function renderGitGraph(branches, commits, baselines) {
+    if (!commits.length) {
+      return '<p style="color:#475569;font-size:.82rem;text-align:center;padding:20px;">No commits yet. Create a branch and save a model to see the revision graph.</p>';
+    }
+    // Sort commits by time (newest first)
+    var sorted = commits.slice().sort(function(a, b) {
+      return new Date(b.committedAt || 0).getTime() - new Date(a.committedAt || 0).getTime();
+    });
+    // Limit display
+    var display = sorted.slice(0, 50);
+    var branchMap = {};
+    branches.forEach(function(b) { branchMap[b.branchId] = b; });
+    var baselineMap = {};
+    baselines.forEach(function(b) { baselineMap[b.commitId] = b; });
+    // Assign lanes to branches
+    var laneMap = {};
+    var laneCount = 0;
+    branches.forEach(function(b, i) {
+      laneMap[b.branchId] = i;
+      laneCount = i + 1;
+    });
+    var laneW = 28;
+    var rowH = 32;
+    var leftPad = 20;
+    var topPad = 16;
+    var graphW = leftPad + Math.max(laneCount, 1) * laneW + 500;
+    var graphH = topPad + display.length * rowH + 20;
+    var colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#84cc16'];
+
+    var svg = '<svg width="' + graphW + '" height="' + graphH + '" xmlns="http://www.w3.org/2000/svg" style="font-family:monospace;font-size:11px;">';
+    svg += '<rect width="100%" height="100%" fill="#020617" rx="8"/>';
+
+    display.forEach(function(c, row) {
+      var lane = laneMap[c.branchId] != null ? laneMap[c.branchId] : 0;
+      var x = leftPad + lane * laneW + laneW / 2;
+      var y = topPad + row * rowH + rowH / 2;
+      var color = colors[lane % colors.length];
+      var isBaseline = baselineMap[c.commitId];
+      // Draw lane line
+      if (row < display.length - 1) {
+        var nextLane = laneMap[display[row + 1].branchId] != null ? laneMap[display[row + 1].branchId] : 0;
+        var nx = leftPad + nextLane * laneW + laneW / 2;
+        var ny = topPad + (row + 1) * rowH + rowH / 2;
+        if (nextLane === lane) {
+          svg += '<line x1="' + x + '" y1="' + y + '" x2="' + nx + '" y2="' + ny + '" stroke="' + color + '" stroke-width="2" opacity="0.4"/>';
+        } else {
+          var midY = (y + ny) / 2;
+          svg += '<path d="M ' + x + ' ' + y + ' C ' + x + ' ' + midY + ', ' + nx + ' ' + midY + ', ' + nx + ' ' + ny + '" stroke="' + color + '" stroke-width="2" fill="none" opacity="0.4"/>';
+        }
+      }
+      // Draw commit node
+      var r = isBaseline ? 7 : 5;
+      svg += '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + color + '" stroke="#020617" stroke-width="2"/>';
+      if (isBaseline) {
+        svg += '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="none" stroke="#dc2626" stroke-width="1.5"/>';
+      }
+      // Commit message
+      var msgX = leftPad + Math.max(laneCount, 1) * laneW + 16;
+      var msg = (c.message || 'No message');
+      if (msg.length > 60) msg = msg.substring(0, 59) + '…';
+      svg += '<text x="' + msgX + '" y="' + (y + 4) + '" fill="#e2e8f0">' + escapeHtml(msg) + '</text>';
+      // Hash
+      var hashX = msgX + 400;
+      svg += '<text x="' + hashX + '" y="' + (y + 4) + '" fill="#475569" font-size="10">' + (c.commitId ? c.commitId.substring(0,7) : '—') + '</text>';
+      // Date
+      var dateX = hashX + 60;
+      var dateStr = c.committedAt ? new Date(c.committedAt).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
+      svg += '<text x="' + dateX + '" y="' + (y + 4) + '" fill="#334155" font-size="10">' + dateStr + '</text>';
+    });
+
+    // Branch labels at top
+    branches.forEach(function(b, i) {
+      var x = leftPad + i * laneW + laneW / 2;
+      var color = colors[i % colors.length];
+      svg += '<text x="' + x + '" y="12" fill="' + color + '" font-size="9" text-anchor="middle" font-weight="bold">' + escapeHtml((b.name || '').substring(0, 8)) + '</text>';
+    });
+
+    svg += '</svg>';
+    return svg;
   }
 
   // ── Element History Button ────────────────────────────────────────────────
@@ -727,21 +1044,44 @@
   }
 
   function getElementIdFromPanel() {
-    // Try to extract the element ID from the properties panel or URL
-    // Sirius Web stores the selected object ID in the URL hash or in React state
+    // 1. Check URL search params (?objectId=...)
+    var params = new URLSearchParams(window.location.search);
+    var fromParam = params.get('objectId') || params.get('elementId') || params.get('selectedObjectId');
+    if (fromParam) return fromParam;
+
+    // 2. Check URL hash params (#...&objectId=...)
     var hash = window.location.hash || '';
-    var match = hash.match(/objectId=([^&]+)/);
-    if (match) return match[1];
-    // Try from the URL path
-    var pathMatch = window.location.pathname.match(/\/projects\/([^/]+)/);
-    var projectId = pathMatch ? pathMatch[1] : null;
-    // Try to find element ID from the details panel content
-    var detailsPanel = document.querySelector('[data-testid="details"], [class*="DetailsView"], [class*="details-view"]');
+    var hashMatch = hash.match(/objectId=([^&]+)/);
+    if (hashMatch) return hashMatch[1];
+
+    // 3. Check data attributes on details/properties panel
+    var detailsPanel = document.querySelector('[data-testid="details"], [class*="DetailsView"], [class*="details-view"], [class*="PropertiesView"], [class*="properties-view"]');
     if (detailsPanel) {
-      // The element ID might be in a hidden data attribute or in the React fiber
       var allAttrs = detailsPanel.querySelectorAll('[data-elementid], [data-objectid]');
       if (allAttrs.length > 0) return allAttrs[0].getAttribute('data-elementid') || allAttrs[0].getAttribute('data-objectid');
     }
+
+    // 4. Check React fiber on the properties/details panel for selected object
+    var panel = detailsPanel || document.querySelector('[class*="PropertiesView"], [class*="properties-view"]');
+    if (panel && typeof getReactFiber === 'function') {
+      var fiber = getReactFiber(panel);
+      if (fiber) {
+        var f = fiber;
+        for (var j = 0; j < 15 && f; j++) {
+          var p = f.memoizedProps || f.pendingProps || {};
+          if (p.selectedObjectId) return p.selectedObjectId;
+          if (p.objectId) return p.objectId;
+          if (p.editingContextId) return p.editingContextId;
+          f = f.return;
+        }
+      }
+    }
+
+    // 5. UUID regex scan of details panel text (last resort)
+    var panelText = (detailsPanel || document.body).textContent || '';
+    var uuidMatch = panelText.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (uuidMatch) return uuidMatch[0];
+
     return null;
   }
 
@@ -828,6 +1168,7 @@
   var _lockCache = {};           // stableId -> lock object
   var _lockPollTimer = null;
   var _currentUserId = null;     // set from JWT
+  var _lockingEnabled = false;   // per-project setting
 
   function getCurrentUserId() {
     if (_currentUserId) return _currentUserId;
@@ -839,7 +1180,7 @@
   }
 
   function fetchProjectLocks(projectId) {
-    if (!projectId || !state.token) return;
+    if (!projectId || !state.token || !_lockingEnabled) return;
     _origFetch('/api/v1/projects/' + projectId + '/element-locks')
       .then(function(r) { return r.ok ? r.json() : []; })
       .then(function(locks) {
@@ -853,6 +1194,7 @@
   }
 
   function applyLockStyles() {
+    if (!_lockingEnabled) return; // locking disabled — leave default styles
     var myId = getCurrentUserId();
     // Find all tree items in the explorer
     var treeItems = document.querySelectorAll('[class*="tree-item"], [class*="TreeItem"], [class*="treeNode"], [role="treeitem"]');
@@ -955,10 +1297,17 @@
       menu.style.cssText = 'position:fixed;z-index:10002;background:#1e293b;border:1px solid #475569;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.5);min-width:180px;font-family:system-ui,sans-serif;font-size:13px;';
 
       var items = [];
-      if (!lock) {
+      if (!_lockingEnabled) {
+        // Locking disabled — show grayed-out options
+        items.push({ label: '🔒 Lock Element', action: null, disabled: true });
+        items.push({ label: '🔒 Lock Element Tree', action: null, disabled: true });
+        items.push({ label: '(Element locking disabled in project settings)', action: null, disabled: true });
+      } else if (!lock) {
         items.push({ label: '🔒 Lock Element', action: function() { lockElement(projectId, stableId); } });
+        items.push({ label: '🔒 Lock Element Tree', action: function() { lockElementRecursive(projectId, stableId); } });
       } else if (isMine) {
         items.push({ label: '🔓 Unlock Element', action: function() { unlockElement(projectId, stableId); } });
+        items.push({ label: '🔓 Unlock Element Tree', action: function() { unlockElementRecursive(projectId, stableId); } });
         items.push({ label: '🔒 Lock Status: Locked by you', action: null, disabled: true });
       } else {
         items.push({ label: '🔒 Locked by ' + (lock.ownerUsername || 'other'), action: null, disabled: true });
@@ -1021,6 +1370,43 @@
     }).catch(function(err) { alert('Unlock failed: ' + err.message); });
   }
 
+  function lockElementRecursive(projectId, stableId) {
+    var branchId = getBranchIdFromUrl() || '00000000-0000-0000-0000-000000000000';
+    _origFetch('/api/v1/projects/' + projectId + '/elements/' + stableId + '/lock-recursive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branchId: branchId, reason: 'Recursive lock', ttlMinutes: 120, sessionId: 'web', deviceId: 'browser' })
+    }).then(function(r) {
+      if (r.status === 409) return r.json().then(function(d) {
+        var msg = 'Cannot lock tree:\n';
+        var conflicts = d.conflicts || [];
+        for (var i = 0; i < conflicts.length; i++) {
+          msg += '• ' + (conflicts[i].stableId || '').substring(0, 20) + '... locked by ' + (conflicts[i].lockedBy || 'unknown') + '\n';
+        }
+        alert(msg);
+        throw new Error('conflict');
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      fetchProjectLocks(projectId);
+      alert('Locked ' + (data.lockedCount || 0) + ' element(s) in tree.');
+    }).catch(function(err) { if (err.message !== 'conflict') alert('Recursive lock failed: ' + err.message); });
+  }
+
+  function unlockElementRecursive(projectId, stableId) {
+    var branchId = getBranchIdFromUrl() || '00000000-0000-0000-0000-000000000000';
+    _origFetch('/api/v1/projects/' + projectId + '/elements/' + stableId + '/lock-recursive?branchId=' + branchId, {
+      method: 'DELETE'
+    }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      fetchProjectLocks(projectId);
+      alert('Unlocked ' + (data.released || 0) + ' element(s) in tree.');
+    }).catch(function(err) { alert('Recursive unlock failed: ' + err.message); });
+  }
+
   function showElementHistoryById(projectId, stableId) {
     _origFetch('/api/v1/user/projects/' + projectId + '/elements/' + stableId + '/history')
       .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -1052,28 +1438,150 @@
     });
   }
 
+  // ── Read-Only Enforcement for Locked Elements ───────────────────────────
+  // When an element is locked by another user, the properties panel becomes
+  // read-only: input fields disabled, edit controls greyed out, banner shown.
+
+  var _readOnlyStyle = null;
+
+  function enforceReadOnlyForLockedElements() {
+    if (!state.token) return;
+    // Watch for properties panel updates
+    var observer = new MutationObserver(function() {
+      applyReadOnlyState();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function applyReadOnlyState() {
+    var myId = getCurrentUserId();
+    var projectId = getProjectIdFromUrl();
+    if (!projectId || !myId) return;
+
+    // Remove existing read-only banner
+    var existingBanner = document.getElementById('syson-readonly-banner');
+    if (existingBanner) existingBanner.remove();
+
+    // Get the currently selected element ID
+    var elementId = getElementIdFromPanel();
+    if (!elementId) return;
+
+    // Check if this element is locked by another user
+    var lock = _lockCache[elementId];
+    if (!lock || lock.ownerUserId === myId) {
+      // Not locked or locked by us — restore normal state
+      removeReadOnlyMode();
+      return;
+    }
+
+    // Element is locked by another user — enforce read-only
+    var lockOwner = lock.ownerUsername || 'another user';
+    var lockExpiry = lock.expiresAt ? new Date(lock.expiresAt).toLocaleTimeString() : 'N/A';
+
+    // Inject read-only banner into properties panel
+    var propsPanel = document.querySelector('[class*="PropertiesView"], [class*="properties-view"], [data-testid="properties"]');
+    if (!propsPanel) {
+      var panels = document.querySelectorAll('[class*="panel"], [class*="Panel"]');
+      for (var i = 0; i < panels.length; i++) {
+        var text = panels[i].textContent || '';
+        if (text.indexOf('Properties') !== -1 || text.indexOf('Declared Name') !== -1) {
+          propsPanel = panels[i];
+          break;
+        }
+      }
+    }
+
+    if (propsPanel && !document.getElementById('syson-readonly-banner')) {
+      var banner = document.createElement('div');
+      banner.id = 'syson-readonly-banner';
+      banner.style.cssText = 'background:#7c2d12;color:#fed7aa;padding:6px 12px;font-size:11px;font-family:system-ui,sans-serif;border-bottom:1px solid #9a3412;display:flex;align-items:center;gap:6px;';
+      banner.innerHTML = '🔒 <strong>Read-only</strong> — locked by ' + escapeHtml(lockOwner) + ' (expires ' + lockExpiry + ')';
+      // Insert banner at the top of the properties panel
+      if (propsPanel.firstChild) {
+        propsPanel.insertBefore(banner, propsPanel.firstChild);
+      } else {
+        propsPanel.appendChild(banner);
+      }
+    }
+
+    // Disable all input fields and edit controls in the properties panel
+    applyReadOnlyMode();
+  }
+
+  function applyReadOnlyMode() {
+    if (_readOnlyStyle) return; // already applied
+    _readOnlyStyle = document.createElement('style');
+    _readOnlyStyle.id = 'syson-readonly-style';
+    _readOnlyStyle.textContent = ''
+      + '#syson-readonly-banner ~ * input,'
+      + '#syson-readonly-banner ~ * textarea,'
+      + '#syson-readonly-banner ~ * select,'
+      + '#syson-readonly-banner ~ * [contenteditable="true"] {'
+      + '  pointer-events: none !important;'
+      + '  opacity: 0.6 !important;'
+      + '  background: #1e293b !important;'
+      + '  color: #94a3b8 !important;'
+      + '  cursor: not-allowed !important;'
+      + '}'
+      + '#syson-readonly-banner ~ * button:not(#syson-history-btn):not(#syson-readonly-banner button) {'
+      + '  pointer-events: none !important;'
+      + '  opacity: 0.5 !important;'
+      + '  cursor: not-allowed !important;'
+      + '}'
+      // Also disable Monaco editor if present
+      + '#syson-readonly-banner ~ * .monaco-editor {'
+      + '  opacity: 0.6 !important;'
+      + '}'
+      + '#syson-readonly-banner ~ * .monaco-editor .view-lines {'
+      + '  pointer-events: none !important;'
+      + '}';
+    document.head.appendChild(_readOnlyStyle);
+  }
+
+  function removeReadOnlyMode() {
+    if (_readOnlyStyle) {
+      _readOnlyStyle.remove();
+      _readOnlyStyle = null;
+    }
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   function injectElementLockUI() {
     if (!state.token) return;
     var projectId = getProjectIdFromUrl();
     if (!projectId) return;
 
-    // Initial fetch
-    fetchProjectLocks(projectId);
-
-    // Poll locks every 30 seconds
-    _lockPollTimer = setInterval(function() { fetchProjectLocks(projectId); }, 30000);
-
-    // Apply styles when tree changes
-    var treeObserver = new MutationObserver(function() {
-      setTimeout(applyLockStyles, 200);
-    });
-    treeObserver.observe(document.body, { childList: true, subtree: true });
-
-    // Context menu
-    injectLockContextMenu();
-
-    // Auto-unlock on save
-    setupAutoUnlockOnSave();
+    // Check if element locking is enabled for this project
+    _origFetch('/api/v1/projects/' + projectId + '/settings/element-locking')
+      .then(function(r) { return r.ok ? r.json() : { enabled: false }; })
+      .then(function(setting) {
+        _lockingEnabled = !!setting.enabled;
+        if (!_lockingEnabled) {
+          // Locking disabled — only set up context menu (for grayed-out items)
+          injectLockContextMenu();
+          return;
+        }
+        // Locking enabled — full setup
+        fetchProjectLocks(projectId);
+        _lockPollTimer = setInterval(function() { fetchProjectLocks(projectId); }, 30000);
+        var treeObserver = new MutationObserver(function() {
+          setTimeout(applyLockStyles, 200);
+        });
+        treeObserver.observe(document.body, { childList: true, subtree: true });
+        injectLockContextMenu();
+        setupAutoUnlockOnSave();
+        enforceReadOnlyForLockedElements();
+      })
+      .catch(function() {
+        // On error, assume disabled
+        _lockingEnabled = false;
+        injectLockContextMenu();
+      });
   }
 
   // ── Boot ─────────────────────────────────────────────────────────────────
