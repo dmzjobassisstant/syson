@@ -51,8 +51,8 @@ public interface BranchHeadRepository extends JpaRepository<BranchHead, BranchHe
 
     @Modifying
     @Query(value = "INSERT INTO syson_branches (project_id, tenant_id, name, branch_type, is_protected, is_deleted, created_by, created_at, updated_at) "
-            + "SELECT :projectId::uuid, :tenantId, 'main', 'main', false, false, :createdBy, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP "
-            + "WHERE NOT EXISTS (SELECT 1 FROM syson_branches WHERE project_id = :projectId::uuid AND name = 'main' AND is_deleted = false)",
+            + "SELECT CAST(:projectId AS uuid), :tenantId, 'main', 'main', false, false, :createdBy, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP "
+            + "WHERE NOT EXISTS (SELECT 1 FROM syson_branches WHERE project_id = CAST(:projectId AS uuid) AND name = 'main' AND is_deleted = false)",
             nativeQuery = true)
     void ensureDefaultBranch(@Param("projectId") String projectId, @Param("tenantId") UUID tenantId, @Param("createdBy") UUID createdBy);
 }
