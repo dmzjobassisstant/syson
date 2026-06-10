@@ -135,13 +135,17 @@ public class VersionControlController {
     public ResponseEntity<BranchDto> createBranch(
             @PathVariable UUID projectId,
             @RequestBody CreateBranchRequest request) {
+        UUID tenantId = request.tenantId() != null ? request.tenantId()
+                : UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID userId = request.userId() != null ? request.userId()
+                : TenantContext.getUserIdAsUuid();
         BranchDto branch = this.versionControlService.createBranch(
                 projectId,
-                request.tenantId(),
+                tenantId,
                 request.name(),
                 request.branchType(),
                 request.parentBranchId(),
-                request.userId());
+                userId);
         return ResponseEntity.ok(branch);
     }
 

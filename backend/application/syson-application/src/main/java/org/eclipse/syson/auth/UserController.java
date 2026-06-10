@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -53,6 +54,7 @@ public class UserController {
     private final AdminService adminService;
     private final org.eclipse.syson.auth.audit.RbacAuditTrailService rbacAuditTrailService;
     private final org.eclipse.syson.history.service.ElementHistoryService elementHistoryService;
+    private final EntityManager entityManager;
 
     public UserController(UserRepository userRepository,
                           ProjectMembershipRepository projectMembershipRepository,
@@ -65,7 +67,8 @@ public class UserController {
                           AuditLogService auditLogService,
                           AdminService adminService,
                           org.eclipse.syson.auth.audit.RbacAuditTrailService rbacAuditTrailService,
-                          org.eclipse.syson.history.service.ElementHistoryService elementHistoryService) {
+                          org.eclipse.syson.history.service.ElementHistoryService elementHistoryService,
+                          EntityManager entityManager) {
         this.userRepository = userRepository;
         this.projectMembershipRepository = projectMembershipRepository;
         this.projectAccessService = projectAccessService;
@@ -78,6 +81,7 @@ public class UserController {
         this.adminService = adminService;
         this.rbacAuditTrailService = rbacAuditTrailService;
         this.elementHistoryService = elementHistoryService;
+        this.entityManager = entityManager;
     }
 
     private SysonUser currentUser() {
@@ -117,8 +121,19 @@ public class UserController {
 
     @GetMapping("/me/projects")
     public List<MyProjectResponse> myProjects() {
+        // Pre-load all project names in one query
+        Map<String, String> projectNames = (Map<String, String>) this.entityManager.createNativeQuery(
+                "SELECT id, name FROM project", Object[].class)
+                .getResultList().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> ((Object[]) row)[0].toString(),
+                        row -> ((Object[]) row)[1].toString()));
         return this.projectAccessService.getMyProjects().stream()
-                .map(m -> new MyProjectResponse(m.getId().getProjectId(), m.getRole(), m.getCreatedAt()))
+                .map(m -> new MyProjectResponse(
+                        m.getId().getProjectId(),
+                        projectNames.getOrDefault(m.getId().getProjectId(), m.getId().getProjectId()),
+                        m.getRole(),
+                        m.getCreatedAt()))
                 .toList();
     }
 
@@ -234,7 +249,7 @@ public class UserController {
 
     public record UserProfile(UUID id, String email, String name, boolean active, boolean emailVerified, OffsetDateTime lastLoginAt, List<String> roles) {}
     public record ChangePasswordRequest(String currentPassword, String newPassword) {}
-    public record MyProjectResponse(String projectId, String role, OffsetDateTime assignedAt) {}
+    public record MyProjectResponse(String projectId, String projectName, String role, OffsetDateTime assignedAt) {}
     public record CreateUserRequest(String email, String name, String password, UUID tenantId, String tenantRole) {}
     public record ResetPasswordRequest(String password) {}
     public record AssignTenantRoleRequest(String role) {}

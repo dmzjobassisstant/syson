@@ -439,8 +439,12 @@
       if (projectsData && projectsData.length) {
         projHTML = projectsData.map(function(p) {
           var pid = p.projectId || '';
+          var pname = p.projectName || pid;
+          // Truncate long names
+          var displayName = pname.length > 35 ? pname.substring(0,32) + '…' : pname;
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:6px;background:rgba(255,255,255,0.03);margin-bottom:4px;">'
-            + '<span style="color:#e0e0e0;font-size:0.82rem;font-family:monospace;">' + pid.substring(0,16) + '…</span>'
+            + '<div><span style="color:#e0e0e0;font-size:0.85rem;font-weight:500;">' + escapeHtml(displayName) + '</span>'
+            + '<br><span style="color:#555;font-size:0.68rem;font-family:monospace;">' + pid.substring(0,16) + '…</span></div>'
             + '<div style="display:flex;gap:6px;align-items:center;">'
             + '<button class="syson-vc-btn" data-project-id="' + escapeHtml(pid) + '" style="padding:3px 8px;border:1px solid #3b82f6;border-radius:4px;background:transparent;color:#3b82f6;font-size:.68rem;cursor:pointer;font-weight:600;">🔀 VC</button>'
             + '<span style="background:#261e58;color:#fff;font-size:0.68rem;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;">' + (p.role || '') + '</span>'
@@ -860,6 +864,18 @@
         + '</div>';
     }));
 
+    // Create branch form
+    var createBranchHTML = '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:16px;">'
+      + '<h3 style="margin:0 0 10px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">Create Branch</h3>'
+      + '<div style="display:flex;gap:8px;align-items:center;">'
+      + '<input id="syson-vc-new-branch-name" placeholder="branch name" style="flex:1;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.85rem;" />'
+      + '<select id="syson-vc-new-branch-type" style="width:120px;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.85rem;">'
+      + '<option value="feature">feature</option><option value="release">release</option><option value="hotfix">hotfix</option></select>'
+      + '<button id="syson-vc-create-branch" style="padding:8px 16px;border:0;border-radius:6px;background:#261e58;color:white;font-weight:700;font-size:.82rem;cursor:pointer;">Create</button>'
+      + '</div>'
+      + '<div id="syson-vc-create-branch-msg" style="margin-top:6px;font-size:.78rem;min-height:1.2em;"></div>'
+      + '</div>';
+
     // Baselines list
     var baselinesHTML = vcListSection('Baselines', baselines.map(function(b) {
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
@@ -884,7 +900,7 @@
       + (currentDefault ? ' <span style="color:#64748b;font-size:.8rem;">Branch context: ' + escapeHtml(currentDefault.substring(0,8)) + '…</span>' : '')
       + '</div>';
 
-    box.innerHTML = statsHTML + graphHTML + branchSelectorHTML + branchesHTML + baselinesHTML + tagsHTML + editorBtn;
+    box.innerHTML = statsHTML + graphHTML + branchSelectorHTML + branchesHTML + createBranchHTML + baselinesHTML + tagsHTML + editorBtn;
 
     // Branch selector event
     var setBtn = document.getElementById('syson-vc-set-branch');
@@ -910,6 +926,40 @@
         })['catch'](function(err) {
           msg.style.color = '#f87171'; msg.textContent = 'Error: ' + err.message;
           setBtn.textContent = 'Set Default';
+        });
+      });
+    }
+
+    // Create branch event
+    var createBtn = document.getElementById('syson-vc-create-branch');
+    if (createBtn) {
+      createBtn.addEventListener('click', function() {
+        var nameInput = document.getElementById('syson-vc-new-branch-name');
+        var typeSelect = document.getElementById('syson-vc-new-branch-type');
+        var msg = document.getElementById('syson-vc-create-branch-msg');
+        var branchName = (nameInput && nameInput.value.trim()) || '';
+        var branchType = (typeSelect && typeSelect.value) || 'feature';
+        if (!branchName) { msg.style.color = '#f87171'; msg.textContent = 'Enter a branch name'; return; }
+        createBtn.textContent = 'Creating…';
+        createBtn.disabled = true;
+        _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+          body: JSON.stringify({ tenantId: state.tenantId, name: branchName, branchType: branchType, parentBranchId: null }),
+        }).then(function(r) {
+          if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || e.message || 'HTTP ' + r.status); });
+          return r.json();
+        }).then(function(branch) {
+          msg.style.color = '#4ade80'; msg.textContent = 'Branch "' + branchName + '" created!';
+          createBtn.textContent = 'Create';
+          createBtn.disabled = false;
+          nameInput.value = '';
+          // Reload VC data to show the new branch
+          setTimeout(function() { showProjectVC(projectId); }, 800);
+        })['catch'](function(err) {
+          msg.style.color = '#f87171'; msg.textContent = 'Error: ' + err.message;
+          createBtn.textContent = 'Create';
+          createBtn.disabled = false;
         });
       });
     }
