@@ -124,6 +124,29 @@ assert_json_status "$code" "200" "created user /me"
 code=$(http_json GET '/api/v1/user/admin/users' "$USER_TOKEN")
 assert_json_status "$code" "403" "viewer admin access"
 
+# Test user creation with all valid roles (viewer already tested above).
+stamp2=$(date +%s%N)
+EDITOR_EMAIL="regression-editor+$stamp2@example.test"
+EDITOR_BODY="{\"email\":\"$EDITOR_EMAIL\",\"name\":\"Editor Test\",\"password\":\"EditorPass${stamp2}!\",\"tenantRole\":\"editor\"}"
+code=$(http_json POST '/api/v1/user/admin/users' "$ADMIN_TOKEN" "$EDITOR_BODY")
+assert_json_status "$code" "201" "create editor-role user"
+
+ADMIN2_EMAIL="regression-admin2+$stamp2@example.test"
+ADMIN2_BODY="{\"email\":\"$ADMIN2_EMAIL\",\"name\":\"Admin Test\",\"password\":\"Admin2Pass${stamp2}!\",\"tenantRole\":\"admin\"}"
+code=$(http_json POST '/api/v1/user/admin/users' "$ADMIN_TOKEN" "$ADMIN2_BODY")
+assert_json_status "$code" "201" "create admin-role user"
+
+SU_EMAIL="regression-su+$stamp2@example.test"
+SU_BODY="{\"email\":\"$SU_EMAIL\",\"name\":\"SU Test\",\"password\":\"SuPass${stamp2}!\",\"tenantRole\":\"superuser\"}"
+code=$(http_json POST '/api/v1/user/admin/users' "$ADMIN_TOKEN" "$SU_BODY")
+assert_json_status "$code" "201" "create superuser-role user"
+
+# Test that invalid tenantRole returns 400 (not 405).
+BAD_ROLE_EMAIL="regression-badrole+$stamp2@example.test"
+BAD_BODY="{\"email\":\"$BAD_ROLE_EMAIL\",\"name\":\"Bad Role\",\"password\":\"BadPass${stamp2}!\",\"tenantRole\":\"user\"}"
+code=$(http_json POST '/api/v1/user/admin/users' "$ADMIN_TOKEN" "$BAD_BODY")
+assert_json_status "$code" "400" "invalid tenantRole returns 400"
+
 # Admin password reset must work and the reset password must authenticate.
 RESET_PASSWORD="ResetPass${stamp}!"
 code=$(http_json PUT "/api/v1/user/admin/users/$NEW_ID/password" "$ADMIN_TOKEN" "{\"password\":\"$RESET_PASSWORD\"}")

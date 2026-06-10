@@ -57,11 +57,21 @@ public class SemanticDataSaveListener {
                 return;
             }
 
-            // Resolve the main branch for this project
+            // Resolve the main branch for this project, creating one if needed
             UUID branchId = this.modelSaveHistoryService.resolveMainBranchId(projectId);
 
             if (branchId == null) {
-                logger.debug("No main branch found for project {}; skipping history extraction", projectId);
+                // Auto-create a default 'main' branch for this project
+                UUID tenantId = SYSTEM_USER_ID; // default tenant
+                this.modelSaveHistoryService.ensureDefaultBranch(projectId, tenantId, SYSTEM_USER_ID);
+                branchId = this.modelSaveHistoryService.resolveMainBranchId(projectId);
+                if (branchId != null) {
+                    logger.info("Auto-created default 'main' branch for project {}", projectId);
+                }
+            }
+
+            if (branchId == null) {
+                logger.warn("Could not create main branch for project {}; skipping history extraction", projectId);
                 return;
             }
 

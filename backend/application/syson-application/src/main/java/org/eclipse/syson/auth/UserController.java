@@ -147,9 +147,16 @@ public class UserController {
     }
 
     @PostMapping("/admin/users")
-    public ResponseEntity<UserProfile> adminCreateUser(@RequestBody CreateUserRequest req, HttpServletRequest request) {
+    public ResponseEntity<?> adminCreateUser(@RequestBody CreateUserRequest req, HttpServletRequest request) {
+        TenantRole role;
+        try {
+            role = TenantRole.from(req.tenantRole());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "Invalid tenantRole: '" + req.tenantRole() + "'. Valid values: viewer, editor, admin, superuser"));
+        }
         SysonUser saved = this.accountAdministrationService.createUser(new CreateUserCommand(
-                req.email(), req.name(), req.password(), req.tenantId(), TenantRole.from(req.tenantRole())));
+                req.email(), req.name(), req.password(), req.tenantId(), role));
         this.adminService.logEvent("user_created", "user", saved.getId().toString(), saved.getEmail(), null, null, null, null, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(new UserProfile(saved.getId(), saved.getEmail(), saved.getName(), saved.isActive(), saved.isEmailVerified(), saved.getLastLoginAt(), List.of()));
     }
