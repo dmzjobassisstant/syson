@@ -121,13 +121,32 @@ public class UserController {
 
     @GetMapping("/me/projects")
     public List<MyProjectResponse> myProjects() {
-        // Pre-load all project names in one query
+        List<String> roles = currentRoles();
+        boolean canSeeAllProjects = roles.stream()
+                .anyMatch(role -> "superuser".equalsIgnoreCase(role) || "admin".equalsIgnoreCase(role));
+
+        if (canSeeAllProjects) {
+            @SuppressWarnings("unchecked")
+            List<Object[]> rows = this.entityManager.createNativeQuery(
+                    "SELECT id, name, created_on FROM project ORDER BY created_on DESC", Object[].class)
+                    .getResultList();
+            return rows.stream()
+                    .map(row -> new MyProjectResponse(
+                            row[0].toString(),
+                            row[1] != null ? row[1].toString() : row[0].toString(),
+                            "admin",
+                            row[2] instanceof OffsetDateTime odt ? odt : null))
+                    .toList();
+        }
+
+        // Pre-load all project names in one query for project-scoped users.
+        @SuppressWarnings("unchecked")
         Map<String, String> projectNames = (Map<String, String>) this.entityManager.createNativeQuery(
                 "SELECT id, name FROM project", Object[].class)
                 .getResultList().stream()
                 .collect(java.util.stream.Collectors.toMap(
                         row -> ((Object[]) row)[0].toString(),
-                        row -> ((Object[]) row)[1].toString()));
+                        row -> ((Object[]) row)[1] != null ? ((Object[]) row)[1].toString() : ((Object[]) row)[0].toString()));
         return this.projectAccessService.getMyProjects().stream()
                 .map(m -> new MyProjectResponse(
                         m.getId().getProjectId(),

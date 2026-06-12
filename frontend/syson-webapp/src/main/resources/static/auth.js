@@ -1,5 +1,5 @@
 /**
- * SysON Auth — RBAC login overlay + JWT interceptor.
+ * SysMLv2 Architect — RBAC login overlay + JWT interceptor.
  * Injected into index.html before the Sirius Web app loads.
  * Zero dependencies. Self-contained.
  *
@@ -182,36 +182,36 @@
     #syson-auth-overlay {
       position: fixed; inset: 0; z-index: 99999;
       display: flex; align-items: center; justify-content: center;
-      background: #1a1a2e;
-      font-family: 'Lato', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+      background: #261e58;
+      font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
     }
     #syson-auth-card {
-      background: #16213e; border-radius: 12px; padding: 2.5rem 2rem;
-      width: 100%; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      background: #fff; border-radius: 4px; padding: 2.5rem 2rem;
+      width: 100%; max-width: 400px; box-shadow: 0 2px 4px rgba(0,0,0,0.2), 0 8px 16px rgba(0,0,0,0.15);
     }
     #syson-auth-card h1 {
-      color: #e0e0e0; font-size: 1.5rem; font-weight: 600;
+      color: #292253; font-size: 1.5rem; font-weight: 600;
       margin: 0 0 0.25rem; text-align: center;
     }
     #syson-auth-card .subtitle {
-      color: #888; font-size: 0.85rem; text-align: center; margin-bottom: 1.5rem;
+      color: #6b6b8d; font-size: 0.85rem; text-align: center; margin-bottom: 1.5rem;
     }
     #syson-auth-card label {
-      display: block; color: #aaa; font-size: 0.8rem;
+      display: block; color: #292253; font-size: 0.8rem;
       margin-bottom: 0.3rem; font-weight: 500;
     }
     #syson-auth-card input {
       width: 100%; padding: 0.7rem 0.8rem; border-radius: 6px;
-      border: 1px solid #2a2a4a; background: #0f0f23; color: #e0e0e0;
+      border: 1px solid #c9c4eb; background: #f1f0fa; color: #292253;
       font-size: 0.95rem; margin-bottom: 1rem; box-sizing: border-box;
       transition: border-color 0.2s;
     }
     #syson-auth-card input:focus {
-      outline: none; border-color: #4a90d9;
+      outline: none; border-color: #261e58;
     }
     #syson-auth-card button {
       width: 100%; padding: 0.75rem; border-radius: 6px; border: none;
-      background: #4a90d9; color: #fff; font-size: 1rem; font-weight: 600;
+      background: #261e58; color: #fff; font-size: 1rem; font-weight: 600;
       cursor: pointer; transition: background 0.2s; margin-top: 0.5rem;
     }
     #syson-auth-card button:hover { background: #3a7bc8; }
@@ -230,7 +230,7 @@
     #syson-user-bar .syson-user-email { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
     #syson-user-bar .role-badge {
       display: inline-flex; align-items: center;
-      background: #4a90d9; color: #fff; font-size: 0.68rem;
+      background: #261e58; color: #fff; font-size: 0.68rem;
       padding: 3px 7px; border-radius: 999px; font-weight: 700;
       text-transform: uppercase;
     }
@@ -270,7 +270,7 @@
     overlay.id = 'syson-auth-overlay';
     overlay.innerHTML = `
       <div id="syson-auth-card">
-        <h1>SysON</h1>
+        <h1>SysMLv2 Architect</h1>
         <p class="subtitle">Sign in to continue</p>
         <form id="syson-login-form">
           <label for="syson-email">Username</label>
@@ -340,6 +340,19 @@
     if (!state.email) return;
 
     function doMount() {
+      // Change document title from "SysON" to "SysMLv2 Architect"
+      if (document.title !== 'SysMLv2 Architect') {
+        document.title = 'SysMLv2 Architect';
+      }
+
+      // Replace native "SysMLv2" branding in the header with "SysMLv2 Architect"
+      var nativeTitle = document.querySelector('[class*="navigationBar"] [class*="title"]')
+                     || document.querySelector('[class*="navigationBar"] h1')
+                     || document.querySelector('[class*="navigationBar"] span');
+      if (nativeTitle && /sysmlv2/i.test(nativeTitle.textContent) && !/architect/i.test(nativeTitle.textContent)) {
+        nativeTitle.textContent = 'SysMLv2 Architect';
+      }
+
       // Find the best anchor for the user bar.
       // In the project browser: header / [class*="navigationBar"]
       // In the editor workbench: [class*="css-"] toolbar or the right-side
@@ -356,16 +369,14 @@
         bar.id = 'syson-user-bar';
       }
 
-      // Always prefer attaching to a nav element.  If none found, use a
-      // fixed floating position so the bar is never lost.
-      if (nav && !nav.contains(bar)) {
-        nav.appendChild(bar);
-      } else if (!nav && !document.body.contains(bar)) {
+      // Always use fixed positioning on the left side to avoid overlapping
+      // native SysON controls on the right side of the nav bar.
+      if (!document.body.contains(bar)) {
         bar.style.position = 'fixed';
-        bar.style.top = '10px';
-        bar.style.right = '12px';
+        bar.style.top = '4px';
+        bar.style.left = '280px';
         bar.style.zIndex = '10000';
-        bar.style.boxShadow = '0 8px 24px rgba(0,0,0,.25)';
+        bar.style.boxShadow = '0 2px 8px rgba(0,0,0,.15)';
         document.body.appendChild(bar);
       }
 
@@ -416,7 +427,7 @@
 
     var overlay = document.createElement('div');
     overlay.id = 'syson-dashboard-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);font-family:Lato,Roboto,Arial,sans-serif;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(38,30,88,0.65);font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
 
     var headers = { 'Authorization': 'Bearer ' + state.token };
 
@@ -428,11 +439,15 @@
       if (projectsData && projectsData.length) {
         projHTML = projectsData.map(function(p) {
           var pid = p.projectId || '';
+          var pname = p.projectName || pid;
+          // Truncate long names
+          var displayName = pname.length > 35 ? pname.substring(0,32) + '…' : pname;
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:6px;background:rgba(255,255,255,0.03);margin-bottom:4px;">'
-            + '<span style="color:#e0e0e0;font-size:0.82rem;font-family:monospace;">' + pid.substring(0,16) + '…</span>'
+            + '<div><span style="color:#e0e0e0;font-size:0.85rem;font-weight:500;">' + escapeHtml(displayName) + '</span>'
+            + '<br><span style="color:#555;font-size:0.68rem;font-family:monospace;">' + pid.substring(0,16) + '…</span></div>'
             + '<div style="display:flex;gap:6px;align-items:center;">'
             + '<button class="syson-vc-btn" data-project-id="' + escapeHtml(pid) + '" style="padding:3px 8px;border:1px solid #3b82f6;border-radius:4px;background:transparent;color:#3b82f6;font-size:.68rem;cursor:pointer;font-weight:600;">🔀 VC</button>'
-            + '<span style="background:#4a90d9;color:#fff;font-size:0.68rem;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;">' + (p.role || '') + '</span>'
+            + '<span style="background:#261e58;color:#fff;font-size:0.68rem;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;">' + (p.role || '') + '</span>'
             + '</div></div>';
         }).join('');
       } else {
@@ -442,7 +457,7 @@
       var adminDashboardHTML = isSuperUser() ? '<div style="margin-bottom:1.5rem;padding-bottom:1.5rem;border-bottom:1px solid #2a2a4a;">'
         + '<h3 style="color:#aaa;font-size:0.8rem;text-transform:uppercase;margin:0 0 0.75rem;">Role Based Access Control</h3>'
         + '<p style="color:#888;font-size:0.82rem;margin:0 0 0.75rem;">Manage accounts, project access roles, password resets, and audit history.</p>'
-        + '<button id="syson-access-management-btn" style="width:100%;padding:0.65rem;border-radius:6px;border:none;background:#7c3aed;color:#fff;font-size:0.9rem;font-weight:700;cursor:pointer;">Open Access Management</button>'
+        + '<button id="syson-access-management-btn" style="width:100%;padding:0.65rem;border-radius:6px;border:none;background:#be1a78;color:#fff;font-size:0.9rem;font-weight:700;cursor:pointer;">Open Access Management</button>'
         + '</div>' : '';
 
       overlay.innerHTML = '<div style="background:#16213e;border-radius:12px;padding:2rem;width:100%;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);color:#e0e0e0;">'
@@ -463,7 +478,7 @@
         + '<form id="syson-pw-form">'
         + '<input id="syson-cur-pw" type="password" placeholder="Current password" style="width:100%;padding:0.6rem;border-radius:6px;border:1px solid #2a2a4a;background:#0f0f23;color:#e0e0e0;font-size:0.88rem;margin-bottom:0.5rem;box-sizing:border-box;" />'
         + '<input id="syson-new-pw" type="password" placeholder="New password" style="width:100%;padding:0.6rem;border-radius:6px;border:1px solid #2a2a4a;background:#0f0f23;color:#e0e0e0;font-size:0.88rem;margin-bottom:0.5rem;box-sizing:border-box;" />'
-        + '<button type="submit" style="width:100%;padding:0.6rem;border-radius:6px;border:none;background:#4a90d9;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;">Update Password</button>'
+        + '<button type="submit" style="width:100%;padding:0.6rem;border-radius:6px;border:none;background:#261e58;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;">Update Password</button>'
         + '<div id="syson-pw-msg" style="color:#4caf50;font-size:0.8rem;text-align:center;margin-top:0.5rem;min-height:1.2em;"></div>'
         + '</form></div>'
         + '<div><h3 style="color:#aaa;font-size:0.8rem;text-transform:uppercase;margin:0 0 0.75rem;">My Projects</h3>' + projHTML + '</div>'
@@ -531,10 +546,6 @@
     });
   }
 
-  function escapeHtml(value) {
-    return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
   function adminFetch(path, options) {
     var opts = options || {};
     opts.headers = opts.headers || {};
@@ -553,7 +564,7 @@
 
     var overlay = document.createElement('div');
     overlay.id = 'syson-admin-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.72);font-family:Lato,Roboto,Arial,sans-serif;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100001;display:flex;align-items:center;justify-content:center;background:rgba(38,30,88,0.65);font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
     overlay.innerHTML = '<div style="background:#111827;border:1px solid #24324a;border-radius:14px;width:min(1100px,94vw);max-height:86vh;overflow:auto;box-shadow:0 18px 60px rgba(0,0,0,.55);color:#e5e7eb;">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid #24324a;">'
       + '<div><h2 style="margin:0;font-size:1.15rem;">Access Administration</h2><p style="margin:4px 0 0;color:#8b98aa;font-size:.82rem;">Accounts, password resets, project roles, and audit history</p></div>'
@@ -561,10 +572,10 @@
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:20px;">'
       + '<section style="background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Users</h3><div id="syson-admin-users" style="font-size:.84rem;color:#94a3b8;">Loading users…</div></section>'
       + '<section style="background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Create User</h3>'
-      + '<form id="syson-admin-create-user"><input id="syson-admin-email" placeholder="email" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-name" placeholder="name" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-password" type="password" placeholder="temporary password" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-admin-role" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="user">User</option><option value="admin">Admin</option><option value="superuser">Superuser</option></select><button style="width:100%;padding:9px;border:0;border-radius:6px;background:#2563eb;color:white;font-weight:700;cursor:pointer;">Create Account</button><div id="syson-admin-create-msg" style="min-height:18px;margin-top:8px;font-size:.8rem;"></div></form></section>'
+      + '<form id="syson-admin-create-user"><input id="syson-admin-email" placeholder="email" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-name" placeholder="name" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><input id="syson-admin-password" type="password" placeholder="temporary password" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-admin-role" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option><option value="superuser">Superuser</option></select><button style="width:100%;padding:9px;border:0;border-radius:6px;background:#261e58;color:white;font-weight:700;cursor:pointer;">Create Account</button><div id="syson-admin-create-msg" style="min-height:18px;margin-top:8px;font-size:.8rem;"></div></form></section>'
       + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Project Access Management</h3>'
       + '<div style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:10px;"><input id="syson-project-id" placeholder="Project ID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><button id="syson-load-project-members" style="padding:9px;border:0;border-radius:6px;background:#475569;color:white;font-weight:700;cursor:pointer;">Load Members</button><span id="syson-project-msg" style="align-self:center;color:#94a3b8;font-size:.8rem;"></span></div>'
-      + '<div style="display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:8px;margin-bottom:10px;"><select id="syson-project-user" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"></select><input id="syson-project-user-id" placeholder="or paste user UUID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-project-role" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="user">User</option><option value="admin">Admin</option></select><button id="syson-grant-project-role" style="padding:9px;border:0;border-radius:6px;background:#7c3aed;color:white;font-weight:700;cursor:pointer;">Grant Role</button></div>'
+      + '<div style="display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:8px;margin-bottom:10px;"><select id="syson-project-user" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"></select><input id="syson-project-user-id" placeholder="or paste user UUID" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><select id="syson-project-role" style="padding:9px;border-radius:6px;border:1px solid #334155;background:#020617;color:#e5e7eb;"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option></select><button id="syson-grant-project-role" style="padding:9px;border:0;border-radius:6px;background:#be1a78;color:white;font-weight:700;cursor:pointer;">Grant Role</button></div>'
       + '<div id="syson-project-members" style="font-size:.84rem;color:#94a3b8;">Enter a project ID to manage members.</div></section>'
       + '<section style="grid-column:1/-1;background:#0b1220;border:1px solid #1f2a3d;border-radius:10px;padding:14px;"><h3 style="margin:0 0 12px;font-size:.9rem;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;">Project Settings</h3>'
       + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">'
@@ -682,22 +693,25 @@
     // Project Settings: element locking toggle
     adminFetch('/api/v1/user/admin/users').then(function() {
       // Load projects for the locking toggle
-      _origFetch('/api/v1/user/projects').then(function(r) { return r.ok ? r.json() : []; }).then(function(projects) {
+      _origFetch(API_BASE + '/api/v1/user/me/projects', { headers: { 'Authorization': 'Bearer ' + state.token } }).then(function(r) { return r.ok ? r.json() : []; }).then(function(projects) {
         var list = document.getElementById('syson-locking-project-list');
         if (!list) return;
         if (!projects || !projects.length) { list.textContent = 'No projects found.'; return; }
         list.innerHTML = projects.map(function(p) {
+          var pid = p.projectId || p.id || '';
+          var pname = p.projectName || p.name || pid;
           return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #1f2a3d;">'
-            + '<input type="checkbox" class="syson-project-lock-toggle" data-project-id="' + escapeHtml(p.id) + '" style="width:16px;height:16px;cursor:pointer;" />'
-            + '<span style="color:#e5e7eb;font-size:.85rem;">' + escapeHtml(p.name || p.id) + '</span>'
-            + '<span style="color:#64748b;font-size:.75rem;margin-left:auto;">' + escapeHtml(p.id).substring(0, 8) + '…</span>'
+            + '<input type="checkbox" class="syson-project-lock-toggle" data-project-id="' + escapeHtml(pid) + '" style="width:16px;height:16px;cursor:pointer;" />'
+            + '<span style="color:#e5e7eb;font-size:.85rem;">' + escapeHtml(pname) + '</span>'
+            + '<span style="color:#64748b;font-size:.75rem;margin-left:auto;">' + escapeHtml(pid).substring(0, 8) + '…</span>'
             + '</div>';
         }).join('');
         // Load current settings for each project
         projects.forEach(function(p) {
-          _origFetch('/api/v1/projects/' + p.id + '/settings/element-locking').then(function(r) { return r.ok ? r.json() : { enabled: false }; })
+          var pid = p.projectId || p.id || '';
+          _origFetch(API_BASE + '/api/v1/projects/' + pid + '/settings/element-locking', { headers: { 'Authorization': 'Bearer ' + state.token } }).then(function(r) { return r.ok ? r.json() : { enabled: false }; })
             .then(function(s) {
-              var cb = list.querySelector('[data-project-id="' + p.id + '"]');
+              var cb = list.querySelector('[data-project-id="' + pid + '"]');
               if (cb) cb.checked = !!s.enabled;
             }).catch(function() {});
         });
@@ -706,9 +720,9 @@
           if (!e.target.classList.contains('syson-project-lock-toggle')) return;
           var pid = e.target.getAttribute('data-project-id');
           var enabled = e.target.checked;
-          _origFetch('/api/v1/projects/' + pid + '/settings/element-locking', {
+          _origFetch(API_BASE + '/api/v1/projects/' + pid + '/settings/element-locking', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
             body: JSON.stringify({ enabled: enabled })
           }).then(function(r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -774,7 +788,7 @@
 
     var overlay = document.createElement('div');
     overlay.id = 'syson-vc-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100002;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);font-family:Lato,Roboto,Arial,sans-serif;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100002;display:flex;align-items:center;justify-content:center;background:rgba(38,30,88,0.65);font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
     overlay.innerHTML = '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:14px;width:min(1200px,96vw);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);color:#e2e8f0;">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;">'
       + '<div><h2 style="margin:0;font-size:1.1rem;">🔀 Version Control</h2>'
@@ -816,7 +830,7 @@
     // Stats cards
     var statsHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
       + vcStatCard('🌿', overview.branchCount || 0, 'Branches', '#3b82f6')
-      + vcStatCard('📦', overview.commitCount || 0, 'Commits', '#7c3aed')
+      + vcStatCard('📦', overview.commitCount || 0, 'Commits', '#be1a78')
       + vcStatCard('📋', overview.baselineCount || 0, 'Baselines', '#dc2626')
       + vcStatCard('🏷️', overview.tagCount || 0, 'Tags', '#059669')
       + vcStatCard('🔄', overview.openMRCount || 0, 'Open MRs', '#d97706')
@@ -853,6 +867,18 @@
         + '</div>';
     }));
 
+    // Create branch form
+    var createBranchHTML = '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:16px;">'
+      + '<h3 style="margin:0 0 10px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">Create Branch</h3>'
+      + '<div style="display:flex;gap:8px;align-items:center;">'
+      + '<input id="syson-vc-new-branch-name" placeholder="branch name" style="flex:1;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.85rem;" />'
+      + '<select id="syson-vc-new-branch-type" style="width:120px;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.85rem;">'
+      + '<option value="feature">feature</option><option value="release">release</option><option value="hotfix">hotfix</option></select>'
+      + '<button id="syson-vc-create-branch" style="padding:8px 16px;border:0;border-radius:6px;background:#261e58;color:white;font-weight:700;font-size:.82rem;cursor:pointer;">Create</button>'
+      + '</div>'
+      + '<div id="syson-vc-create-branch-msg" style="margin-top:6px;font-size:.78rem;min-height:1.2em;"></div>'
+      + '</div>';
+
     // Baselines list
     var baselinesHTML = vcListSection('Baselines', baselines.map(function(b) {
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
@@ -872,12 +898,12 @@
     // Open in Editor button
     var editorBtn = '<div style="margin-top:12px;">'
       + '<button onclick="window.location.href=\'/projects/' + escapeHtml(projectId) + '/edit\'" '
-      + 'style="padding:10px 20px;border:0;border-radius:8px;background:#10b981;color:white;font-weight:700;font-size:.9rem;cursor:pointer;">'
+      + 'style="padding:10px 20px;border:0;border-radius:8px;background:#261e58;color:white;font-weight:700;font-size:.9rem;cursor:pointer;">'
       + '📂 Open in Editor</button>'
       + (currentDefault ? ' <span style="color:#64748b;font-size:.8rem;">Branch context: ' + escapeHtml(currentDefault.substring(0,8)) + '…</span>' : '')
       + '</div>';
 
-    box.innerHTML = statsHTML + graphHTML + branchSelectorHTML + branchesHTML + baselinesHTML + tagsHTML + editorBtn;
+    box.innerHTML = statsHTML + graphHTML + branchSelectorHTML + branchesHTML + createBranchHTML + baselinesHTML + tagsHTML + editorBtn;
 
     // Branch selector event
     var setBtn = document.getElementById('syson-vc-set-branch');
@@ -903,6 +929,40 @@
         })['catch'](function(err) {
           msg.style.color = '#f87171'; msg.textContent = 'Error: ' + err.message;
           setBtn.textContent = 'Set Default';
+        });
+      });
+    }
+
+    // Create branch event
+    var createBtn = document.getElementById('syson-vc-create-branch');
+    if (createBtn) {
+      createBtn.addEventListener('click', function() {
+        var nameInput = document.getElementById('syson-vc-new-branch-name');
+        var typeSelect = document.getElementById('syson-vc-new-branch-type');
+        var msg = document.getElementById('syson-vc-create-branch-msg');
+        var branchName = (nameInput && nameInput.value.trim()) || '';
+        var branchType = (typeSelect && typeSelect.value) || 'feature';
+        if (!branchName) { msg.style.color = '#f87171'; msg.textContent = 'Enter a branch name'; return; }
+        createBtn.textContent = 'Creating…';
+        createBtn.disabled = true;
+        _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/branches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+          body: JSON.stringify({ tenantId: state.tenantId, name: branchName, branchType: branchType, parentBranchId: null }),
+        }).then(function(r) {
+          if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || e.message || 'HTTP ' + r.status); });
+          return r.json();
+        }).then(function(branch) {
+          msg.style.color = '#4ade80'; msg.textContent = 'Branch "' + branchName + '" created!';
+          createBtn.textContent = 'Create';
+          createBtn.disabled = false;
+          nameInput.value = '';
+          // Reload VC data to show the new branch
+          setTimeout(function() { showProjectVC(projectId); }, 800);
+        })['catch'](function(err) {
+          msg.style.color = '#f87171'; msg.textContent = 'Error: ' + err.message;
+          createBtn.textContent = 'Create';
+          createBtn.disabled = false;
         });
       });
     }
@@ -1007,6 +1067,179 @@
   // Injects a "📋 History" button into the Sirius properties panel header.
   // When clicked, fetches element change history and shows an overlay.
 
+  // ── Save Button ──────────────────────────────────────────────────────────
+  // Injects a save button into the top navbar, next to the branch indicator.
+
+  function injectSaveButton() {
+    if (!state.token) return;
+    var injected = false;
+    function tryInject() {
+      if (injected) return;
+      var navBar = document.querySelector('header');
+      if (!navBar || navBar.querySelector('#syson-save-btn')) return;
+      injected = true;
+
+      var saveBtn = document.createElement('button');
+      saveBtn.id = 'syson-save-btn';
+      saveBtn.innerHTML = '💾 Save';
+      saveBtn.title = 'Save model — records history to version control';
+      saveBtn.style.cssText = 'position:absolute;right:400px;top:50%;transform:translateY(-50%);padding:4px 12px;font-size:12px;font-weight:600;background:#261e58;color:#e2e8f0;border:1px solid #3b82f6;border-radius:6px;cursor:pointer;white-space:nowrap;z-index:10;display:inline-flex;align-items:center;gap:4px;';
+      saveBtn.addEventListener('mouseenter', function() { this.style.background = '#3b82f6'; this.style.color = '#fff'; });
+      saveBtn.addEventListener('mouseleave', function() { this.style.background = '#261e58'; this.style.color = '#e2e8f0'; });
+      saveBtn.addEventListener('click', function() { triggerSave(); });
+      navBar.style.position = 'relative';
+      navBar.appendChild(saveBtn);
+    }
+    // Schedule retries FIRST (before observer, which throws if body is null in <head>)
+    setTimeout(tryInject, 300);
+    setTimeout(tryInject, 1000);
+    setTimeout(tryInject, 3000);
+    setTimeout(tryInject, 6000);
+    // Observer for dynamic DOM changes — only if body exists when this runs
+    if (document.body) {
+      try {
+        var observer = new MutationObserver(tryInject);
+        observer.observe(document.body, { childList: true, subtree: true });
+        setTimeout(function() { observer.disconnect(); }, 10000);
+      } catch(e) {}
+    }
+  }
+
+  function triggerSave() {
+    var projectId = getProjectIdFromUrl();
+    if (!projectId) { alert('Open a project first to save.'); return; }
+    var saveBtn = document.getElementById('syson-save-btn');
+    if (saveBtn) { saveBtn.style.opacity = '0.5'; saveBtn.innerHTML = '⏳'; }
+    // Resolve branch
+    var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || '';
+    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/settings/default-branch', { headers: { 'Authorization': 'Bearer ' + state.token } })
+      .then(function(r) { return r.ok ? r.json() : {}; })
+      .then(function(d) { return d.branchId || ''; })
+      .catch(function() { return ''; })
+      .then(function(bId) {
+        branchId = branchId || bId;
+        return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+          body: branchId ? JSON.stringify({ branchId: branchId }) : '{}'
+        });
+      })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(r.statusText); })
+      .then(function(result) {
+        if (saveBtn) { saveBtn.innerHTML = '✅'; saveBtn.style.opacity = '1'; saveBtn.style.color = '#4ade80'; saveBtn.style.borderColor = '#4ade80'; }
+        console.log('Save complete:', result.message);
+        setTimeout(function() { if (saveBtn) { saveBtn.innerHTML = '💾 Save'; saveBtn.style.opacity = '1'; saveBtn.style.background = '#261e58'; saveBtn.style.color = '#e2e8f0'; saveBtn.style.borderColor = '#3b82f6'; }}, 2000);
+      })
+      .catch(function(err) {
+        if (saveBtn) { saveBtn.innerHTML = '❌'; saveBtn.style.opacity = '1'; saveBtn.style.color = '#f87171'; saveBtn.style.borderColor = '#f87171'; }
+        console.error('Save failed:', err);
+        setTimeout(function() { if (saveBtn) { saveBtn.innerHTML = '💾 Save'; saveBtn.style.opacity = '1'; saveBtn.style.background = '#261e58'; saveBtn.style.color = '#e2e8f0'; saveBtn.style.borderColor = '#3b82f6'; }}, 2000);
+      });
+  }
+
+  // ── Branch Indicator ─────────────────────────────────────────────────────
+  // Injects a branch indicator into the top navigation bar.
+
+  function injectBranchIndicator() {
+    if (!state.token) return;
+    var lastProjectId = null;
+    var refreshTimer = null;
+
+    function tryInject() {
+      var projectId = getProjectIdFromUrl();
+      var ind = document.getElementById('syson-branch-ind');
+
+      // Hide the branch badge outside an editor/project route instead of
+      // marking injection complete forever on the dashboard. React replaces
+      // headers during route transitions, so this must be idempotent.
+      if (!projectId) {
+        if (ind) ind.style.display = 'none';
+        return;
+      }
+
+      var navBar = document.querySelector('header');
+      if (!navBar) return;
+      if (!ind || !document.body.contains(ind)) {
+        ind = document.createElement('span');
+        ind.id = 'syson-branch-ind';
+        ind.innerHTML = '🌿 loading…';
+        ind.style.cssText = 'position:absolute;right:290px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:4px;padding:3px 10px;font-size:11px;font-weight:600;color:#93c5fd;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:4px;white-space:nowrap;z-index:10;';
+        navBar.style.position = 'relative';
+        navBar.appendChild(ind);
+      } else if (!navBar.contains(ind)) {
+        navBar.appendChild(ind);
+      }
+
+      ind.style.display = 'inline-flex';
+      if (lastProjectId !== projectId || ind.getAttribute('data-loaded') !== 'true') {
+        lastProjectId = projectId;
+        refreshBranchName();
+      }
+      if (!refreshTimer) {
+        refreshTimer = setInterval(refreshBranchName, 30000);
+      }
+    }
+
+    setTimeout(tryInject, 300);
+    setTimeout(tryInject, 1000);
+    setTimeout(tryInject, 3000);
+    setTimeout(tryInject, 6000);
+    if (document.body) {
+      try {
+        var observer = new MutationObserver(tryInject);
+        observer.observe(document.body, { childList: true, subtree: true });
+      } catch(e) {}
+    }
+    window.addEventListener('popstate', function() { setTimeout(tryInject, 50); });
+    var origPushState = history.pushState;
+    if (!history.__sysonBranchIndicatorPatched) {
+      history.pushState = function() {
+        var ret = origPushState.apply(this, arguments);
+        setTimeout(tryInject, 50);
+        return ret;
+      };
+      history.__sysonBranchIndicatorPatched = true;
+    }
+  }
+
+  function refreshBranchName() {
+    var projectId = getProjectIdFromUrl();
+    var ind = document.getElementById('syson-branch-ind');
+    if (!projectId || !ind) return;
+    ind.setAttribute('data-loaded', 'false');
+    var headers = { 'Authorization': 'Bearer ' + state.token };
+    var branchId = '';
+    try { branchId = localStorage.getItem('syson-vc-branch-' + projectId) || ''; } catch(e) {}
+
+    var defaultBranchPromise = branchId
+      ? Promise.resolve({ branchId: branchId })
+      : _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/settings/default-branch', { headers: headers })
+          .then(function(r) { return r.ok ? r.json() : {}; })
+          .catch(function() { return {}; });
+
+    Promise.all([
+      defaultBranchPromise,
+      _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/tree', { headers: headers })
+        .then(function(r) { return r.ok ? r.json() : {}; })
+        .catch(function() { return {}; })
+    ]).then(function(data) {
+      branchId = (data[0] && data[0].branchId) || branchId || '';
+      var branches = (data[1] && data[1].branches) || [];
+      if (!branchId && branches.length === 1) branchId = branches[0].branchId;
+      var branch = null;
+      for (var i = 0; i < branches.length; i++) {
+        if (branches[i].branchId === branchId) { branch = branches[i]; break; }
+      }
+      var name = branch ? branch.name : (branchId ? branchId.substring(0,8) : 'main');
+      ind.innerHTML = '🌿 Branch: ' + escapeHtml(name);
+      ind.title = branchId ? ('Branch ID: ' + branchId) : 'No branch selected; using main/default context';
+      ind.setAttribute('data-loaded', 'true');
+    }).catch(function() {
+      ind.innerHTML = '🌿 Branch: main';
+      ind.setAttribute('data-loaded', 'true');
+    });
+  }
+
   function injectHistoryButton() {
     if (!state.token) return;
     // Watch for the properties panel to appear
@@ -1036,7 +1269,7 @@
       btn.id = 'syson-history-btn';
       btn.textContent = '📋 History';
       btn.title = 'View element change history';
-      btn.style.cssText = 'margin-left:8px;padding:2px 8px;font-size:11px;background:#1a73e8;color:#fff;border:none;border-radius:3px;cursor:pointer;vertical-align:middle;';
+      btn.style.cssText = 'margin-left:8px;padding:2px 8px;font-size:11px;background:#261e58;color:#fff;border:none;border-radius:3px;cursor:pointer;vertical-align:middle;';
       btn.addEventListener('click', function() { showElementHistory(); });
       header.appendChild(btn);
     });
@@ -1116,7 +1349,7 @@
 
     var overlay = document.createElement('div');
     overlay.id = 'syson-history-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;right:0;width:480px;height:100vh;background:#1a1a2e;color:#e0e0e0;z-index:10001;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;';
+    overlay.style.cssText = 'position:fixed;top:0;right:0;width:480px;height:100vh;background:#1a1a2e;color:#e0e0e0;z-index:10001;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,0.5);font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
 
     var header = document.createElement('div');
     header.style.cssText = 'padding:16px;background:#16213e;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;';
@@ -1294,7 +1527,7 @@
 
       var menu = document.createElement('div');
       menu.id = 'syson-lock-menu';
-      menu.style.cssText = 'position:fixed;z-index:10002;background:#1e293b;border:1px solid #475569;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.5);min-width:180px;font-family:system-ui,sans-serif;font-size:13px;';
+      menu.style.cssText = 'position:fixed;z-index:10002;background:#1e293b;border:1px solid #475569;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.3);min-width:180px;font-family:Roboto,Helvetica Neue,Arial,sans-serif;font-size:13px;';
 
       var items = [];
       if (!_lockingEnabled) {
@@ -1494,7 +1727,7 @@
     if (propsPanel && !document.getElementById('syson-readonly-banner')) {
       var banner = document.createElement('div');
       banner.id = 'syson-readonly-banner';
-      banner.style.cssText = 'background:#7c2d12;color:#fed7aa;padding:6px 12px;font-size:11px;font-family:system-ui,sans-serif;border-bottom:1px solid #9a3412;display:flex;align-items:center;gap:6px;';
+      banner.style.cssText = 'background:#7c2d12;color:#fed7aa;padding:6px 12px;font-size:11px;font-family:Roboto,Helvetica Neue,Arial,sans-serif;border-bottom:1px solid #9a3412;display:flex;align-items:center;gap:6px;';
       banner.innerHTML = '🔒 <strong>Read-only</strong> — locked by ' + escapeHtml(lockOwner) + ' (expires ' + lockExpiry + ')';
       // Insert banner at the top of the properties panel
       if (propsPanel.firstChild) {
@@ -1598,12 +1831,14 @@
     }, 4 * 60 * 60 * 1000);
     // Mount user bar after DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); injectHistoryButton(); injectElementLockUI(); });
+      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); injectHistoryButton(); injectElementLockUI(); injectSaveButton(); injectBranchIndicator(); });
     } else {
       mountUserBar();
       handleAdminDeepLink();
       injectHistoryButton();
       injectElementLockUI();
+      injectSaveButton();
+      injectBranchIndicator();
     }
   } else {
     // Not authenticated — show login and block app load

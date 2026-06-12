@@ -61,9 +61,9 @@ public class ProjectAccessService {
     }
 
     private static int roleRank(String role) {
-        return switch (role) {
-            case "admin" -> 3;
-            case "user" -> 2;
+        return switch (role == null ? "" : role.toLowerCase()) {
+            case "superuser", "admin" -> 3;
+            case "editor", "user" -> 2;
             case "viewer" -> 1;
             default -> 0;
         };
