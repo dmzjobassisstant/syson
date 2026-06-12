@@ -40,6 +40,7 @@ import org.eclipse.syson.vc.dto.BaselineDto;
 import org.eclipse.syson.vc.dto.BranchDto;
 import org.eclipse.syson.vc.dto.ChangeDto;
 import org.eclipse.syson.vc.dto.CommitDto;
+import org.eclipse.syson.vc.entity.BranchEntity;
 import org.eclipse.syson.vc.repository.BaselineRepository;
 import org.eclipse.syson.vc.repository.BranchRepository;
 import org.eclipse.syson.vc.repository.ChangeRepository;
@@ -83,6 +84,7 @@ public class VersionControlController {
     private final BaselineRepository baselineRepository;
     private final MergeRequestRepository mergeRequestRepository;
     private final TagRepository tagRepository;
+    private final BranchProjectionService branchProjectionService;
 
     public VersionControlController(VersionControlService versionControlService,
                                      VersionGraphService versionGraphService,
@@ -98,7 +100,8 @@ public class VersionControlController {
                                      ChangeRepository changeRepository,
                                      BaselineRepository baselineRepository,
                                      MergeRequestRepository mergeRequestRepository,
-                                     TagRepository tagRepository) {
+                                     TagRepository tagRepository,
+                                     BranchProjectionService branchProjectionService) {
         this.versionControlService = versionControlService;
         this.versionGraphService = versionGraphService;
         this.branchLockService = branchLockService;
@@ -114,6 +117,7 @@ public class VersionControlController {
         this.baselineRepository = baselineRepository;
         this.mergeRequestRepository = mergeRequestRepository;
         this.tagRepository = tagRepository;
+        this.branchProjectionService = branchProjectionService;
     }
 
     // ─── branches ────────────────────────────────────────────────────────
@@ -146,6 +150,12 @@ public class VersionControlController {
                 request.branchType(),
                 request.parentBranchId(),
                 userId);
+        try {
+            this.branchProjectionService.seedBranchHeadFromCurrentSirius(projectId.toString(), branch.branchId());
+        } catch (Exception ignored) {
+            // Branches can be created before the Sirius document exists. The
+            // first apply/save will seed the branch projection if needed.
+        }
         return ResponseEntity.ok(branch);
     }
 
@@ -258,6 +268,64 @@ public class VersionControlController {
         overview.put("tagCount", tagCount);
         overview.put("openMRCount", openMRCount);
         return ResponseEntity.ok(overview);
+    }
+
+    // ─── save (explicit history extraction) ───────────────────────────────
+
+    /**
+     * Triggers an explicit save + history extraction for the current project state.
+     * Used by the save button in the editor toolbar.
+     * Finds the project's semantic data documents and runs the history pipeline.
+     */
+    @PostMapping("/projects/{projectId}/save")
+    public ResponseEntity<Map<String, Object>> saveProject(
+            @PathVariable UUID projectId,
+            @RequestBody(required = false) SaveRequest request) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            // Find semantic data for this project via native query
+            List<?> sdRows = this.versionControlService.findSemanticDataIds(projectId);
+            if (sdRows.isEmpty()) {
+                result.put("saved", false);
+                result.put("message", "No semantic data found for this project");
+                return ResponseEntity.ok(result);
+            }
+
+            UUID semanticDataId = (UUID) sdRows.get(0);
+            UUID branchId = request != null && request.branchId() != null
+                    ? request.branchId()
+                    : resolveBranchForSave(projectId);
+
+            // Call the save pipeline via the history service
+            boolean success = this.versionControlService.triggerSaveFromSemanticData(
+                    projectId, semanticDataId, branchId, TenantContext.getUserIdAsUuid());
+            result.put("saved", success);
+            result.put("branchId", branchId.toString());
+            result.put("message", success ? "Save complete — history recorded" : "Save completed (no new changes)");
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            result.put("saved", false);
+            result.put("message", "Save failed: " + e.getMessage());
+            return ResponseEntity.status(500).body(result);
+        }
+    }
+
+    private UUID resolveBranchForSave(UUID projectId) {
+        // Try default branch from settings
+        String branchIdStr = this.projectSettingService.get(projectId.toString(), "default_branch_id", "");
+        if (branchIdStr.startsWith("\"") && branchIdStr.endsWith("\"")) {
+            branchIdStr = branchIdStr.substring(1, branchIdStr.length() - 1);
+        }
+        if (!branchIdStr.isEmpty()) {
+            try { return UUID.fromString(branchIdStr); } catch (Exception e) { /* fall through */ }
+        }
+        // Fallback: first non-deleted branch
+        var branches = this.branchRepository.findByProjectIdAndIsDeletedFalse(projectId);
+        return branches.stream()
+                .filter(b -> "main".equals(b.getName()))
+                .findFirst()
+                .map(b -> b.getBranchId())
+                .orElse(branches.isEmpty() ? null : branches.get(0).getBranchId());
     }
 
     // ─── version graph (tree) ────────────────────────────────────────────
@@ -571,6 +639,26 @@ public class VersionControlController {
     }
 
     /**
+     * Applies a branch as the active editor context. This writes the selected
+     * branch HEAD projection back into Sirius document.content rows so the
+     * stock Sirius Web workbench can load the branch after a browser reload.
+     */
+    @PostMapping("/projects/{projectId}/version-control/apply-branch")
+    public ResponseEntity<Map<String, Object>> applyBranch(
+            @PathVariable UUID projectId,
+            @RequestBody SetDefaultBranchRequest request) {
+        UUID userId = TenantContext.getUserIdAsUuid();
+        UUID branchId = UUID.fromString(request.branchId());
+        BranchProjectionService.ApplyBranchResult applied = this.branchProjectionService.applyBranch(projectId, branchId, userId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("branchId", applied.branchId());
+        result.put("name", applied.name());
+        result.put("appliedDocuments", applied.appliedDocuments());
+        result.put("seededFromCurrentSirius", applied.seededFromCurrentSirius());
+        return ResponseEntity.ok(result);
+    }
+
+    /**
      * Sets the default branch ID for this project (admin only).
      */
     @PostMapping("/projects/{projectId}/settings/default-branch")
@@ -645,5 +733,9 @@ public class VersionControlController {
 
     public record SetDefaultBranchRequest(
             String branchId) {
+    }
+
+    public record SaveRequest(
+            UUID branchId) {
     }
 }

@@ -19,6 +19,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -57,6 +60,7 @@ public class CommitEntity {
     @Column(name = "commit_hash", length = 64)
     private String commitHash;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "parent_commit_ids", columnDefinition = "JSONB")
     private String parentCommitIds;
 

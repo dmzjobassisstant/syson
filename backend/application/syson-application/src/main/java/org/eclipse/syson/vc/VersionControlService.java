@@ -59,14 +59,22 @@ public class VersionControlService {
 
     private final BaselineRepository baselineRepository;
 
+    private final jakarta.persistence.EntityManager entityManager;
+
+    private final BranchProjectionService branchProjectionService;
+
     public VersionControlService(BranchRepository branchRepository,
                                  CommitRepository commitRepository,
                                  ChangeRepository changeRepository,
-                                 BaselineRepository baselineRepository) {
+                                 BaselineRepository baselineRepository,
+                                 jakarta.persistence.EntityManager entityManager,
+                                 BranchProjectionService branchProjectionService) {
         this.branchRepository = branchRepository;
         this.commitRepository = commitRepository;
         this.changeRepository = changeRepository;
         this.baselineRepository = baselineRepository;
+        this.entityManager = entityManager;
+        this.branchProjectionService = branchProjectionService;
     }
 
     // ─── branch operations ────────────────────────────────────────────────
@@ -266,6 +274,68 @@ public class VersionControlService {
                 .stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    // ─── save pipeline (explicit save button) ───────────────────────────────
+
+    /**
+     * Finds semantic data IDs for a given project.
+     */
+    public List<?> findSemanticDataIds(UUID projectId) {
+        return this.entityManager.createNativeQuery(
+                "SELECT semantic_data_id FROM project_semantic_data WHERE project_id = ?1 LIMIT 1")
+                .setParameter(1, projectId)
+                .getResultList();
+    }
+
+    /**
+     * Triggers save by recording a lightweight commit in the version-control tables.
+     * The full history extraction pipeline (canonical extraction + diff + head materialization)
+     * runs via SemanticDataSaveListener on Sirius Web's auto-save events.
+     * This method provides an explicit user-triggered commit marker.
+     */
+    @Transactional
+    public boolean triggerSaveFromSemanticData(UUID projectId, UUID semanticDataId,
+                                                UUID branchId, UUID userId) {
+        if (branchId == null) return false;
+
+        // Create a lightweight commit to mark this explicit save
+        OffsetDateTime now = OffsetDateTime.now();
+        CommitEntity commitEntity = new CommitEntity();
+        commitEntity.setProjectId(projectId);
+        commitEntity.setBranchId(branchId);
+        commitEntity.setMessage("Explicit save via editor");
+        commitEntity.setAuthorUserId(userId);
+        commitEntity.setChangeCount(0);
+        commitEntity.setCommitNumber(getNextCommitNumber(projectId, branchId));
+        commitEntity.setCommitHash(sha256("save-" + projectId + "-" + System.currentTimeMillis()));
+        commitEntity.setParentCommitIds("[]");
+        commitEntity.setCommittedAt(now);
+        commitEntity.setSource("editor");
+        commitEntity.setStatus("committed");
+        this.commitRepository.save(commitEntity);
+
+        // Update branch head
+        var branch = this.branchRepository.findByBranchIdAndIsDeletedFalse(branchId);
+        branch.ifPresent(b -> {
+            b.setHeadCommitId(commitEntity.getCommitId());
+            b.setUpdatedAt(now);
+            this.branchRepository.save(b);
+        });
+
+        // Capture the current Sirius document projection into the selected
+        // branch head. This is the BowTie-style materialized HEAD cache: one
+        // current projection per branch, not a full blob per commit.
+        this.branchProjectionService.seedBranchHeadFromCurrentSirius(projectId.toString(), branchId, commitEntity.getCommitId());
+
+        return true;
+    }
+
+    private long getNextCommitNumber(UUID projectId, UUID branchId) {
+        return this.commitRepository
+                .findTopByProjectIdAndBranchIdOrderByCommitNumberDesc(projectId, branchId)
+                .map(c -> c.getCommitNumber() + 1)
+                .orElse(1L);
     }
 
     // ─── SHA-256 utility ───────────────────────────────────────────────────

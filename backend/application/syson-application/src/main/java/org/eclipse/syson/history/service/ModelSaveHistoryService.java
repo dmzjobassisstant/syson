@@ -1,5 +1,6 @@
 package org.eclipse.syson.history.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -114,14 +115,65 @@ public class ModelSaveHistoryService {
      */
     private SysmlCanonicalExtractor.CanonicalModelSnapshot loadPreviousSnapshot(String projectId, UUID branchId) {
         String previousCanonicalJson = branchHeadRepository.getCanonicalJson(projectId, branchId);
-        if (previousCanonicalJson == null) {
+        if (previousCanonicalJson == null || previousCanonicalJson.isBlank()) {
             return null;
         }
         String previousHash = branchHeadRepository.getCanonicalHash(projectId, branchId);
-        return new SysmlCanonicalExtractor.CanonicalModelSnapshot(
-                projectId, branchId,
-                List.of(), List.of(),
-                previousCanonicalJson, previousHash);
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            Map<String, Object> root = mapper.readValue(previousCanonicalJson, Map.class);
+            List<SysmlCanonicalExtractor.CanonicalElement> elements = new ArrayList<>();
+            Object rawElements = root.get("elements");
+            if (rawElements instanceof Map<?, ?> elementMap) {
+                for (Map.Entry<?, ?> entry : elementMap.entrySet()) {
+                    if (entry.getValue() instanceof Map<?, ?> e) {
+                        Map<String, Object> attributes = e.get("attributes") instanceof Map<?, ?> attrs
+                                ? (Map<String, Object>) attrs : Map.of();
+                        elements.add(new SysmlCanonicalExtractor.CanonicalElement(
+                                String.valueOf(entry.getKey()),
+                                valueAsString(e.get("id")),
+                                valueAsString(e.get("type")),
+                                valueAsString(e.get("name")),
+                                valueAsString(e.get("owner")),
+                                null,
+                                attributes,
+                                valueAsString(e.get("rawJson")),
+                                valueAsString(e.get("hash"))));
+                    }
+                }
+            }
+            List<SysmlCanonicalExtractor.CanonicalRelationship> relationships = new ArrayList<>();
+            Object rawRelationships = root.get("relationships");
+            if (rawRelationships instanceof Map<?, ?> relationshipMap) {
+                for (Map.Entry<?, ?> entry : relationshipMap.entrySet()) {
+                    if (entry.getValue() instanceof Map<?, ?> r) {
+                        Map<String, Object> attributes = r.get("attributes") instanceof Map<?, ?> attrs
+                                ? (Map<String, Object>) attrs : Map.of();
+                        relationships.add(new SysmlCanonicalExtractor.CanonicalRelationship(
+                                String.valueOf(entry.getKey()),
+                                valueAsString(r.get("id")),
+                                valueAsString(r.get("type")),
+                                valueAsString(r.get("sourceId")),
+                                valueAsString(r.get("targetId")),
+                                valueAsString(r.get("sourceRole")),
+                                valueAsString(r.get("targetRole")),
+                                valueAsString(r.get("owner")),
+                                attributes,
+                                valueAsString(r.get("rawJson")),
+                                valueAsString(r.get("hash"))));
+                    }
+                }
+            }
+            return new SysmlCanonicalExtractor.CanonicalModelSnapshot(
+                    projectId, branchId, elements, relationships, previousCanonicalJson, previousHash);
+        } catch (Exception e) {
+            return new SysmlCanonicalExtractor.CanonicalModelSnapshot(
+                    projectId, branchId, List.of(), List.of(), previousCanonicalJson, previousHash);
+        }
+    }
+
+    private static String valueAsString(Object value) {
+        return value != null ? value.toString() : null;
     }
 
     /**

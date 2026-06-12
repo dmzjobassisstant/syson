@@ -374,8 +374,11 @@ public class SysmlCanonicalExtractor {
             }
         }
 
-        // Build canonical JSON from elements and relationships
-        String canonicalJson = buildCanonicalJson(elements, relationships);
+        // Build canonical JSON from elements, relationships, and the current
+        // Sirius document projection. The projection is stored only as the
+        // materialized branch HEAD (not as every commit/change) so Sirius can
+        // reload a selected branch without reintroducing full-blob history bloat.
+        String canonicalJson = buildCanonicalJson(elements, relationships, documents);
         String canonicalHash = this.sysmlObjectHasher.hashObject(canonicalJson);
 
         return new CanonicalModelSnapshot(projectId, branchId, elements, relationships, canonicalJson, canonicalHash);
@@ -451,7 +454,8 @@ public class SysmlCanonicalExtractor {
         return eClassUrl;
     }
 
-    private String buildCanonicalJson(List<CanonicalElement> elements, List<CanonicalRelationship> relationships) {
+    private String buildCanonicalJson(List<CanonicalElement> elements, List<CanonicalRelationship> relationships,
+                                      Map<UUID, String> documents) {
         Map<String, Object> result = new TreeMap<>();
         Map<String, Map<String, Object>> elementMap = new TreeMap<>();
         for (CanonicalElement e : elements) {
@@ -460,12 +464,36 @@ public class SysmlCanonicalExtractor {
             em.put("type", e.sysmlType());
             em.put("name", e.name());
             if (e.ownerId() != null) em.put("owner", e.ownerId());
+            em.put("attributes", e.attributes());
+            em.put("rawJson", e.rawJson());
             em.put("hash", e.objectHash());
             elementMap.put(e.stableId(), em);
         }
+        Map<String, Map<String, Object>> relationshipMap = new TreeMap<>();
+        for (CanonicalRelationship r : relationships) {
+            Map<String, Object> rm = new TreeMap<>();
+            rm.put("id", r.relationshipId());
+            rm.put("type", r.relType());
+            rm.put("sourceId", r.sourceId());
+            rm.put("targetId", r.targetId());
+            rm.put("sourceRole", r.sourceRole());
+            rm.put("targetRole", r.targetRole());
+            if (r.ownerId() != null) rm.put("owner", r.ownerId());
+            rm.put("attributes", r.attributes());
+            rm.put("rawJson", r.rawJson());
+            rm.put("hash", r.objectHash());
+            relationshipMap.put(r.stableId(), rm);
+        }
+        Map<String, Object> docMap = new TreeMap<>();
+        for (Map.Entry<UUID, String> doc : documents.entrySet()) {
+            docMap.put(doc.getKey().toString(), doc.getValue());
+        }
         result.put("elements", elementMap);
+        result.put("relationships", relationshipMap);
+        result.put("siriusDocuments", docMap);
         result.put("elementCount", elements.size());
         result.put("relationshipCount", relationships.size());
+        result.put("projectionVersion", "sirius-documents-v1");
         return this.sysmlObjectHasher.canonicalizeJson(result);
     }
 }

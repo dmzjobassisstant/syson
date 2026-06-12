@@ -40,14 +40,17 @@ public interface BranchHeadRepository extends JpaRepository<BranchHead, BranchHe
     String getCanonicalHash(@Param("projectId") String projectId, @Param("branchId") UUID branchId);
 
     @Modifying
-    @Query(value = "INSERT INTO syson_branch_heads (project_id, branch_id, head_commit_id, canonical_hash, object_count, relationship_count, diagram_count, last_extracted_at) "
-            + "VALUES (:projectId, :branchId, :commitId, :canonicalHash, :created, :updated, :deleted, CURRENT_TIMESTAMP) "
+    @Query(value = "INSERT INTO syson_branch_heads (project_id, branch_id, head_commit_id, canonical_hash, canonical_json, object_count, relationship_count, diagram_count, last_extracted_at) "
+            + "VALUES (:projectId, :branchId, :commitId, :canonicalHash, CAST(:canonicalJson AS jsonb), :objectCount, :relationshipCount, :diagramCount, CURRENT_TIMESTAMP) "
             + "ON CONFLICT (project_id, branch_id) DO UPDATE SET head_commit_id = EXCLUDED.head_commit_id, canonical_hash = EXCLUDED.canonical_hash, "
-            + "object_count = EXCLUDED.object_count, relationship_count = EXCLUDED.relationship_count, diagram_count = EXCLUDED.diagram_count, last_extracted_at = EXCLUDED.last_extracted_at",
+            + "canonical_json = EXCLUDED.canonical_json, object_count = EXCLUDED.object_count, relationship_count = EXCLUDED.relationship_count, "
+            + "diagram_count = EXCLUDED.diagram_count, last_extracted_at = EXCLUDED.last_extracted_at",
             nativeQuery = true)
     void upsertBranchHead(@Param("projectId") String projectId, @Param("branchId") UUID branchId,
                           @Param("commitId") UUID commitId, @Param("canonicalHash") String canonicalHash,
-                          @Param("created") int created, @Param("updated") int updated, @Param("deleted") int deleted);
+                          @Param("canonicalJson") String canonicalJson,
+                          @Param("objectCount") int objectCount, @Param("relationshipCount") int relationshipCount,
+                          @Param("diagramCount") int diagramCount);
 
     @Modifying
     @Query(value = "INSERT INTO syson_branches (project_id, tenant_id, name, branch_type, is_protected, is_deleted, created_by, created_at, updated_at) "

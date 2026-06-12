@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.eclipse.sirius.web.domain.boundedcontexts.semanticdata.SemanticData;
 import org.eclipse.sirius.web.domain.boundedcontexts.semanticdata.events.SemanticDataUpdatedEvent;
 import org.eclipse.syson.auth.service.AuditLogService;
+import org.eclipse.syson.settings.ProjectSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -32,14 +33,17 @@ public class SemanticDataSaveListener {
     private final ModelSaveHistoryService modelSaveHistoryService;
     private final AuditLogService auditLogService;
     private final jakarta.persistence.EntityManager entityManager;
+    private final ProjectSettingService projectSettingService;
 
     public SemanticDataSaveListener(
             ModelSaveHistoryService modelSaveHistoryService,
             AuditLogService auditLogService,
-            jakarta.persistence.EntityManager entityManager) {
+            jakarta.persistence.EntityManager entityManager,
+            ProjectSettingService projectSettingService) {
         this.modelSaveHistoryService = modelSaveHistoryService;
         this.auditLogService = auditLogService;
         this.entityManager = entityManager;
+        this.projectSettingService = projectSettingService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -57,8 +61,13 @@ public class SemanticDataSaveListener {
                 return;
             }
 
-            // Resolve the main branch for this project, creating one if needed
-            UUID branchId = this.modelSaveHistoryService.resolveMainBranchId(projectId);
+            // Resolve the active branch for this project. The editor branch
+            // selector stores it in project settings; fall back to main only
+            // when no active branch has been selected yet.
+            UUID branchId = resolveActiveBranchId(projectId);
+            if (branchId == null) {
+                branchId = this.modelSaveHistoryService.resolveMainBranchId(projectId);
+            }
 
             if (branchId == null) {
                 // Auto-create a default 'main' branch for this project
@@ -99,6 +108,22 @@ public class SemanticDataSaveListener {
             } catch (Exception auditEx) {
                 logger.warn("Failed to audit history extraction failure: {}", auditEx.getMessage());
             }
+        }
+    }
+
+    private UUID resolveActiveBranchId(String projectId) {
+        String branchIdStr = this.projectSettingService.get(projectId, "default_branch_id", "");
+        if (branchIdStr == null || branchIdStr.isBlank()) {
+            return null;
+        }
+        if (branchIdStr.startsWith("\"") && branchIdStr.endsWith("\"")) {
+            branchIdStr = branchIdStr.substring(1, branchIdStr.length() - 1);
+        }
+        try {
+            return UUID.fromString(branchIdStr);
+        } catch (Exception e) {
+            logger.debug("Invalid active branch setting for project {}: {}", projectId, branchIdStr);
+            return null;
         }
     }
 

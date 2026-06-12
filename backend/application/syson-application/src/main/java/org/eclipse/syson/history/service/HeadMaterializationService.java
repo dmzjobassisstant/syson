@@ -78,8 +78,7 @@ public class HeadMaterializationService {
         }
 
         // Upsert branch head record
-        upsertBranchHead(projectId, branchId, commitId, snapshot.canonicalHash(),
-                createdCount, updatedCount, deletedCount);
+        upsertBranchHead(projectId, branchId, commitId, snapshot);
     }
 
     private void handleCreate(String projectId, UUID branchId, UUID commitId,
@@ -179,8 +178,9 @@ public class HeadMaterializationService {
     }
 
     private void upsertBranchHead(String projectId, UUID branchId, UUID commitId,
-                                   String canonicalHash, int created, int updated, int deleted) {
-        branchHeadRepository.upsertBranchHead(projectId, branchId, commitId, canonicalHash, created, updated, deleted);
+                                   SysmlCanonicalExtractor.CanonicalModelSnapshot snapshot) {
+        branchHeadRepository.upsertBranchHead(projectId, branchId, commitId, snapshot.canonicalHash(),
+                snapshot.canonicalJson(), snapshot.elements().size(), snapshot.relationships().size(), 0);
     }
 
     private SysmlCanonicalExtractor.CanonicalElement findElement(SysmlCanonicalExtractor.CanonicalModelSnapshot snapshot, String stableId) {

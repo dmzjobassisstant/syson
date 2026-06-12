@@ -1147,31 +1147,31 @@
 
     function tryInject() {
       var projectId = getProjectIdFromUrl();
-      var ind = document.getElementById('syson-branch-ind');
-
-      // Hide the branch badge outside an editor/project route instead of
-      // marking injection complete forever on the dashboard. React replaces
-      // headers during route transitions, so this must be idempotent.
+      var wrap = document.getElementById('syson-branch-wrap');
       if (!projectId) {
-        if (ind) ind.style.display = 'none';
+        if (wrap) wrap.style.display = 'none';
         return;
       }
 
       var navBar = document.querySelector('header');
       if (!navBar) return;
-      if (!ind || !document.body.contains(ind)) {
-        ind = document.createElement('span');
-        ind.id = 'syson-branch-ind';
-        ind.innerHTML = '🌿 loading…';
-        ind.style.cssText = 'position:absolute;right:290px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:4px;padding:3px 10px;font-size:11px;font-weight:600;color:#93c5fd;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:4px;white-space:nowrap;z-index:10;';
+      if (!wrap || !document.body.contains(wrap)) {
+        wrap = document.createElement('div');
+        wrap.id = 'syson-branch-wrap';
+        wrap.style.cssText = 'position:absolute;right:250px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:6px;z-index:10;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
+        wrap.innerHTML = '<span id="syson-branch-ind" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#93c5fd;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:4px;white-space:nowrap;">🌿 loading…</span>'
+          + '<select id="syson-branch-select" title="Select branch to load and save into" style="max-width:150px;padding:3px 6px;font-size:11px;border:1px solid rgba(59,130,246,0.35);border-radius:4px;background:#0f172a;color:#dbeafe;"></select>'
+          + '<button id="syson-branch-apply" title="Load selected branch into SysON and save future changes there" style="padding:3px 8px;font-size:11px;font-weight:700;border:1px solid rgba(34,197,94,0.45);border-radius:4px;background:rgba(34,197,94,0.16);color:#bbf7d0;cursor:pointer;">Apply</button>';
         navBar.style.position = 'relative';
-        navBar.appendChild(ind);
-      } else if (!navBar.contains(ind)) {
-        navBar.appendChild(ind);
+        navBar.appendChild(wrap);
+        var applyBtn = wrap.querySelector('#syson-branch-apply');
+        if (applyBtn) applyBtn.addEventListener('click', applySelectedBranch);
+      } else if (!navBar.contains(wrap)) {
+        navBar.appendChild(wrap);
       }
 
-      ind.style.display = 'inline-flex';
-      if (lastProjectId !== projectId || ind.getAttribute('data-loaded') !== 'true') {
+      wrap.style.display = 'inline-flex';
+      if (lastProjectId !== projectId || wrap.getAttribute('data-loaded') !== 'true') {
         lastProjectId = projectId;
         refreshBranchName();
       }
@@ -1204,9 +1204,11 @@
 
   function refreshBranchName() {
     var projectId = getProjectIdFromUrl();
+    var wrap = document.getElementById('syson-branch-wrap');
     var ind = document.getElementById('syson-branch-ind');
+    var select = document.getElementById('syson-branch-select');
     if (!projectId || !ind) return;
-    ind.setAttribute('data-loaded', 'false');
+    if (wrap) wrap.setAttribute('data-loaded', 'false');
     var headers = { 'Authorization': 'Bearer ' + state.token };
     var branchId = '';
     try { branchId = localStorage.getItem('syson-vc-branch-' + projectId) || ''; } catch(e) {}
@@ -1230,13 +1232,49 @@
       for (var i = 0; i < branches.length; i++) {
         if (branches[i].branchId === branchId) { branch = branches[i]; break; }
       }
+      if (select) {
+        select.innerHTML = branches.map(function(b) {
+          var selected = b.branchId === branchId ? ' selected' : '';
+          return '<option value="' + escapeHtml(b.branchId) + '"' + selected + '>' + escapeHtml(b.name || b.branchId.substring(0,8)) + '</option>';
+        }).join('');
+      }
       var name = branch ? branch.name : (branchId ? branchId.substring(0,8) : 'main');
       ind.innerHTML = '🌿 Branch: ' + escapeHtml(name);
       ind.title = branchId ? ('Branch ID: ' + branchId) : 'No branch selected; using main/default context';
-      ind.setAttribute('data-loaded', 'true');
+      if (wrap) wrap.setAttribute('data-loaded', 'true');
     }).catch(function() {
       ind.innerHTML = '🌿 Branch: main';
-      ind.setAttribute('data-loaded', 'true');
+      if (wrap) wrap.setAttribute('data-loaded', 'true');
+    });
+  }
+
+  function applySelectedBranch() {
+    var projectId = getProjectIdFromUrl();
+    var select = document.getElementById('syson-branch-select');
+    var ind = document.getElementById('syson-branch-ind');
+    var btn = document.getElementById('syson-branch-apply');
+    if (!projectId || !select || !select.value) return;
+    var branchId = select.value;
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+    if (ind) ind.innerHTML = '🌿 Applying…';
+    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/apply-branch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ branchId: branchId })
+    }).then(function(r) {
+      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || e.message || 'HTTP ' + r.status); });
+      return r.json();
+    }).then(function(result) {
+      try { localStorage.setItem('syson-vc-branch-' + projectId, branchId); } catch(e) {}
+      if (btn) { btn.textContent = 'Applied'; }
+      if (ind) ind.innerHTML = '🌿 Branch: ' + escapeHtml(result.name || branchId.substring(0,8));
+      // Reload the Sirius workbench so it reads the projected branch blob from
+      // document.content through the normal GraphQL/Sirius loading path.
+      setTimeout(function() { window.location.href = '/projects/' + encodeURIComponent(projectId) + '/edit'; }, 450);
+    }).catch(function(err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
+      if (ind) ind.innerHTML = '🌿 Error';
+      alert('Failed to apply branch: ' + err.message);
     });
   }
 

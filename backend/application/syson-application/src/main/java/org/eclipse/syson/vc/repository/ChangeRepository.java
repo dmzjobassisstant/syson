@@ -38,8 +38,19 @@ public interface ChangeRepository extends JpaRepository<ChangeEntity, UUID> {
 
     long countByProjectId(UUID projectId);
 
-    @Query("SELECT c.commitId, c.operation, c.objectType, c.createdBy, c.patch, c.createdAt, c.afterObject, c.patch "
-            + "FROM ChangeEntity c WHERE c.objectId = :objectId AND c.projectId = :projectId "
-            + "ORDER BY c.createdAt DESC")
+    @Query(value = "SELECT c.commit_id, c.operation, "
+            + "COALESCE(b.name, 'unknown') AS branch_name, "
+            + "COALESCE(u.email, CAST(c.created_by AS text)) AS author, "
+            + "COALESCE(cm.message, '') AS message, "
+            + "c.created_at AS committed_at, "
+            + "COALESCE(c.changed_fields, '[]') AS changed_fields, "
+            + "COALESCE(c.patch, '{}') AS patch "
+            + "FROM syson_changes c "
+            + "LEFT JOIN syson_commits cm ON c.commit_id = cm.commit_id "
+            + "LEFT JOIN syson_branches b ON c.branch_id = b.branch_id "
+            + "LEFT JOIN syson_users u ON c.created_by = u.id "
+            + "WHERE c.object_id = ?1 AND c.project_id = ?2 "
+            + "ORDER BY c.created_at DESC",
+            nativeQuery = true)
     List<Object[]> findByObjectIdAndProjectId(@Param("objectId") UUID objectId, @Param("projectId") UUID projectId);
 }
