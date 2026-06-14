@@ -48,7 +48,13 @@ public class AdminSeeder {
 
     private static final String DEFAULT_EMAIL = "admin";
 
-    private static final String DEFAULT_PASSWORD = "admin";
+    /**
+     * No hardcoded default password — must be set via environment variable.
+     * The previous default ('admin') was a security risk for internet-facing deployments.
+     */
+    private static final String NO_DEFAULT_CREDENTIAL_MESSAGE = 
+        "SYSON_BOOTSTRAP_PASSWORD or SYSON_AUTH_ADMIN_PASSWORD must be set. "
+        + "Default 'admin' password is no longer supported for security reasons.";
 
     private static final String DEFAULT_NAME = "SuperUser";
 
@@ -79,10 +85,18 @@ public class AdminSeeder {
     @PostConstruct
     public void seed() {
         String bootstrapEmail = this.getEnv("SYSON_BOOTSTRAP_EMAIL", this.getEnv("SYSON_AUTH_ADMIN_EMAIL", DEFAULT_EMAIL));
-        String bootstrapPassword = this.getEnv("SYSON_BOOTSTRAP_PASSWORD", this.getEnv("SYSON_AUTH_ADMIN_PASSWORD", DEFAULT_PASSWORD));
+        String bootstrapPassword = this.getEnv("SYSON_BOOTSTRAP_PASSWORD", this.getEnv("SYSON_AUTH_ADMIN_PASSWORD", null));
 
-        if (DEFAULT_PASSWORD.equals(bootstrapPassword)) {
-            LOG.warn("Using install-default superuser password. Change it after first login or set SYSON_BOOTSTRAP_PASSWORD/SYSON_AUTH_ADMIN_PASSWORD.");
+        if (bootstrapPassword == null || bootstrapPassword.isBlank()) {
+            // Generate a strong random password — prevents internet-facing deployments from defaulting to 'admin'
+            bootstrapPassword = this.generateRandomPassword();
+            LOG.warn("==============================================================");
+            LOG.warn("  NO BOOTSTRAP PASSWORD SET — generated random credential.");
+            LOG.warn("  Set SYSON_BOOTSTRAP_PASSWORD env var to persist this across restarts.");
+            LOG.warn("  Email:    {}", bootstrapEmail);
+            LOG.warn("  Password: {}", bootstrapPassword);
+            LOG.warn("  SAVE THIS PASSWORD. It will NOT be shown again.");
+            LOG.warn("==============================================================");
         }
 
         // Ensure default tenant exists
@@ -119,6 +133,16 @@ public class AdminSeeder {
         this.membershipRepository.save(membership);
 
         LOG.info("Seeded bootstrap superuser: {} (id={}) with role 'superuser'", bootstrapEmail, DEFAULT_USER_ID);
+    }
+
+    private String generateRandomPassword() {
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+";
+        StringBuilder sb = new StringBuilder(24);
+        for (int i = 0; i < 24; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 
     private String getEnv(String key, String defaultValue) {
