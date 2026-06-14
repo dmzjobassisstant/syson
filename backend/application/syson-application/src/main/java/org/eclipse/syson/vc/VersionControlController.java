@@ -21,6 +21,7 @@ import java.util.UUID;
 import org.eclipse.syson.auth.TenantContext;
 import org.eclipse.syson.auth.entity.SysonUser;
 import org.eclipse.syson.auth.repository.UserRepository;
+import org.eclipse.syson.auth.service.AccessControlService;
 import org.eclipse.syson.history.service.ModelReconstructionService;
 import org.eclipse.syson.history.service.VersionGraphService;
 import org.eclipse.syson.history.service.VersionGraphService.VersionGraphData;
@@ -85,6 +86,7 @@ public class VersionControlController {
     private final MergeRequestRepository mergeRequestRepository;
     private final TagRepository tagRepository;
     private final BranchProjectionService branchProjectionService;
+    private final AccessControlService accessControlService;
 
     public VersionControlController(VersionControlService versionControlService,
                                      VersionGraphService versionGraphService,
@@ -101,7 +103,8 @@ public class VersionControlController {
                                      BaselineRepository baselineRepository,
                                      MergeRequestRepository mergeRequestRepository,
                                      TagRepository tagRepository,
-                                     BranchProjectionService branchProjectionService) {
+                                     BranchProjectionService branchProjectionService,
+                                     AccessControlService accessControlService) {
         this.versionControlService = versionControlService;
         this.versionGraphService = versionGraphService;
         this.branchLockService = branchLockService;
@@ -118,6 +121,7 @@ public class VersionControlController {
         this.mergeRequestRepository = mergeRequestRepository;
         this.tagRepository = tagRepository;
         this.branchProjectionService = branchProjectionService;
+        this.accessControlService = accessControlService;
     }
 
     // ─── branches ────────────────────────────────────────────────────────
@@ -127,9 +131,9 @@ public class VersionControlController {
      */
     @GetMapping("/projects/{projectId}/branches")
     public ResponseEntity<List<BranchDto>> getBranches(
-            @PathVariable UUID projectId,
-            @RequestParam UUID tenantId) {
-        return ResponseEntity.ok(this.versionControlService.getBranches(projectId, tenantId));
+            @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
+        return ResponseEntity.ok(this.versionControlService.getBranches(projectId, TenantContext.getTenantId()));
     }
 
     /**
@@ -139,10 +143,10 @@ public class VersionControlController {
     public ResponseEntity<BranchDto> createBranch(
             @PathVariable UUID projectId,
             @RequestBody CreateBranchRequest request) {
-        UUID tenantId = request.tenantId() != null ? request.tenantId()
+        this.accessControlService.requireProjectWrite(projectId.toString());
+        UUID tenantId = TenantContext.getTenantId() != null ? TenantContext.getTenantId()
                 : UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID userId = request.userId() != null ? request.userId()
-                : TenantContext.getUserIdAsUuid();
+        UUID userId = TenantContext.getUserIdAsUuid();
         BranchDto branch = this.versionControlService.createBranch(
                 projectId,
                 tenantId,
@@ -168,6 +172,7 @@ public class VersionControlController {
     public ResponseEntity<List<CommitDto>> getCommitHistory(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.versionControlService.getCommitHistory(projectId, branchId));
     }
 
@@ -179,6 +184,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @PathVariable UUID commitId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return this.versionControlService.getCommit(projectId, commitId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -192,10 +198,11 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @RequestBody CreateCommitRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         CommitDto commit = this.versionControlService.createCommit(
                 projectId,
                 branchId,
-                request.userId(),
+                TenantContext.getUserIdAsUuid(),
                 request.message(),
                 request.changes());
         return ResponseEntity.ok(commit);
@@ -211,6 +218,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @PathVariable UUID commitId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.versionControlService.getCommitDiff(projectId, commitId));
     }
 
@@ -224,6 +232,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @RequestParam UUID commitId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.versionControlService.getBaselines(projectId, commitId));
     }
 
@@ -235,13 +244,16 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @RequestBody CreateBaselineRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
+        UUID baselineTenantId = TenantContext.getTenantId() != null ? TenantContext.getTenantId()
+                : UUID.fromString("00000000-0000-0000-0000-000000000001");
         BaselineDto baseline = this.versionControlService.createBaseline(
                 projectId,
-                request.tenantId(),
+                baselineTenantId,
                 request.commitId(),
                 request.code(),
                 request.name(),
-                request.userId());
+                TenantContext.getUserIdAsUuid());
         return ResponseEntity.ok(baseline);
     }
 
@@ -253,6 +265,7 @@ public class VersionControlController {
     @GetMapping("/projects/{projectId}/version-control/overview")
     public ResponseEntity<Map<String, Object>> getOverview(
             @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         long branchCount = this.branchRepository.countByProjectIdAndIsDeletedFalse(projectId);
         long commitCount = this.commitRepository.countByProjectId(projectId);
         long changeCount = this.changeRepository.countByProjectId(projectId);
@@ -281,6 +294,7 @@ public class VersionControlController {
     public ResponseEntity<Map<String, Object>> saveProject(
             @PathVariable UUID projectId,
             @RequestBody(required = false) SaveRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         Map<String, Object> result = new HashMap<>();
         try {
             // Find semantic data for this project via native query
@@ -337,6 +351,7 @@ public class VersionControlController {
     @GetMapping("/projects/{projectId}/version-control/tree")
     public ResponseEntity<VersionGraphData> getVersionTree(
             @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.versionGraphService.getVersionGraph(projectId));
     }
 
@@ -351,6 +366,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @RequestParam UUID base,
             @RequestParam UUID target) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         List<ChangeDto> baseChanges = this.versionControlService.getCommitDiff(projectId, base);
         List<ChangeDto> targetChanges = this.versionControlService.getCommitDiff(projectId, target);
 
@@ -378,6 +394,7 @@ public class VersionControlController {
     public ResponseEntity<BranchLock> getLock(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return this.branchLockService.getLock(projectId.toString(), branchId, "branch")
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -391,6 +408,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @RequestBody AcquireLockRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         try {
             BranchLock lock = this.branchLockService.acquireLock(
@@ -412,6 +430,7 @@ public class VersionControlController {
     public ResponseEntity<Void> releaseLock(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         this.branchLockService.releaseLock(projectId.toString(), branchId, "branch", userId);
         return ResponseEntity.noContent().build();
@@ -425,6 +444,7 @@ public class VersionControlController {
     @GetMapping("/projects/{projectId}/element-locks")
     public ResponseEntity<List<ElementLock>> getProjectElementLocks(
             @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         List<ElementLock> locks = this.elementLockService.getActiveLocks(projectId.toString());
         return ResponseEntity.ok(locks);
     }
@@ -437,6 +457,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable String stableId,
             @RequestParam UUID branchId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return this.elementLockService.getLock(projectId.toString(), branchId, stableId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -450,6 +471,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable String stableId,
             @RequestBody AcquireElementLockRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         String username = this.userRepository.findById(userId)
                 .map(SysonUser::getEmail)
@@ -475,6 +497,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable String stableId,
             @RequestParam UUID branchId) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         this.elementLockService.releaseLock(projectId.toString(), branchId, stableId, userId);
         return ResponseEntity.noContent().build();
@@ -487,6 +510,7 @@ public class VersionControlController {
     public ResponseEntity<Map<String, Object>> releaseAllElementLocks(
             @PathVariable UUID projectId,
             @RequestBody ReleaseAllLocksRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         int released = this.elementLockService.releaseLocksForSave(
                 projectId.toString(), request.branchId(), userId);
@@ -504,6 +528,7 @@ public class VersionControlController {
     public ResponseEntity<IntegrityCheck> getLatestIntegrityCheck(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return this.integrityCheckRepository
                 .findTopByProjectIdAndBranchIdOrderByCheckedAtDesc(projectId.toString(), branchId)
                 .map(ResponseEntity::ok)
@@ -517,6 +542,7 @@ public class VersionControlController {
     public ResponseEntity<IntegrityCheck> runIntegrityCheck(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         IntegrityCheck check = this.integrityCheckService.runCheck(projectId.toString(), branchId, userId);
         return ResponseEntity.ok(check);
@@ -530,6 +556,7 @@ public class VersionControlController {
     @GetMapping("/projects/{projectId}/settings/element-locking")
     public ResponseEntity<Map<String, Object>> getElementLockingSetting(
             @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         boolean enabled = this.projectSettingService.isEnabled(projectId.toString(), "element_locking_enabled");
         Map<String, Object> result = new HashMap<>();
         result.put("enabled", enabled);
@@ -543,6 +570,7 @@ public class VersionControlController {
     public ResponseEntity<Map<String, Object>> setElementLockingSetting(
             @PathVariable UUID projectId,
             @RequestBody SetElementLockingRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         this.projectSettingService.set(projectId.toString(), "element_locking_enabled",
                 String.valueOf(request.enabled()), "Enable element-level edit locking", userId);
@@ -562,6 +590,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable String stableId,
             @RequestBody AcquireElementLockRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         String username = this.userRepository.findById(userId)
                 .map(SysonUser::getEmail)
@@ -590,6 +619,7 @@ public class VersionControlController {
             @PathVariable UUID projectId,
             @PathVariable String stableId,
             @RequestParam UUID branchId) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         int released = this.elementLockService.releaseLockRecursive(
                 projectId.toString(), branchId, stableId, userId);
@@ -606,6 +636,7 @@ public class VersionControlController {
     @GetMapping("/projects/{projectId}/tags")
     public ResponseEntity<List<org.eclipse.syson.locks.entity.Tag>> getTags(
             @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.tagRepository.findByProjectIdOrderByName(projectId.toString()));
     }
 
@@ -617,6 +648,7 @@ public class VersionControlController {
     @GetMapping("/projects/{projectId}/merge-requests")
     public ResponseEntity<List<MergeRequest>> getMergeRequests(
             @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.mergeRequestRepository.findByProjectIdOrderByCreatedAtDesc(projectId.toString()));
     }
 
@@ -628,6 +660,7 @@ public class VersionControlController {
     @GetMapping("/projects/{projectId}/settings/default-branch")
     public ResponseEntity<Map<String, Object>> getDefaultBranch(
             @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         String branchId = this.projectSettingService.get(projectId.toString(), "default_branch_id", "");
         // Strip JSONB quotes if present (stored as "\"value\"")
         if (branchId.startsWith("\"") && branchId.endsWith("\"")) {
@@ -647,6 +680,7 @@ public class VersionControlController {
     public ResponseEntity<Map<String, Object>> applyBranch(
             @PathVariable UUID projectId,
             @RequestBody SetDefaultBranchRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         UUID branchId = UUID.fromString(request.branchId());
         BranchProjectionService.ApplyBranchResult applied = this.branchProjectionService.applyBranch(projectId, branchId, userId);
@@ -665,6 +699,7 @@ public class VersionControlController {
     public ResponseEntity<Map<String, Object>> setDefaultBranch(
             @PathVariable UUID projectId,
             @RequestBody SetDefaultBranchRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
         UUID userId = TenantContext.getUserIdAsUuid();
         // Wrap as JSON string for JSONB column
         String jsonValue = "\"" + request.branchId() + "\"";

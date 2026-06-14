@@ -29,15 +29,15 @@ public class HeadPresentationElementId implements Serializable {
 
     private UUID branchId;
 
-    private String presentationId;
+    private String stableId;
 
     public HeadPresentationElementId() {
     }
 
-    public HeadPresentationElementId(String projectId, UUID branchId, String presentationId) {
+    public HeadPresentationElementId(String projectId, UUID branchId, String stableId) {
         this.projectId = projectId;
         this.branchId = branchId;
-        this.presentationId = presentationId;
+        this.stableId = stableId;
     }
 
     public String getProjectId() {
@@ -56,12 +56,12 @@ public class HeadPresentationElementId implements Serializable {
         this.branchId = branchId;
     }
 
-    public String getPresentationId() {
-        return this.presentationId;
+    public String getStableId() {
+        return this.stableId;
     }
 
-    public void setPresentationId(String presentationId) {
-        this.presentationId = presentationId;
+    public void setStableId(String stableId) {
+        this.stableId = stableId;
     }
 
     @Override
@@ -75,11 +75,11 @@ public class HeadPresentationElementId implements Serializable {
         HeadPresentationElementId that = (HeadPresentationElementId) o;
         return Objects.equals(this.projectId, that.projectId)
                 && Objects.equals(this.branchId, that.branchId)
-                && Objects.equals(this.presentationId, that.presentationId);
+                && Objects.equals(this.stableId, that.stableId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(this.projectId, this.branchId, this.presentationId);
+        return Objects.hash(this.projectId, this.branchId, this.stableId);
     }
 }

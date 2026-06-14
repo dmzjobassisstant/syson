@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.eclipse.syson.auth.service.AccessControlService;
 import org.eclipse.syson.persistence.dto.DiagramNodeDto;
 import org.eclipse.syson.persistence.dto.ElementDto;
 import org.eclipse.syson.persistence.dto.RelationshipDto;
@@ -41,11 +42,14 @@ public class ElementRestController {
     private final ElementPersistenceService persistenceService;
 
     private final CanonicalJsonService canonicalJsonService;
+    private final AccessControlService accessControlService;
 
     public ElementRestController(ElementPersistenceService persistenceService,
-                                  CanonicalJsonService canonicalJsonService) {
+                                  CanonicalJsonService canonicalJsonService,
+                                  AccessControlService accessControlService) {
         this.persistenceService = persistenceService;
         this.canonicalJsonService = canonicalJsonService;
+        this.accessControlService = accessControlService;
     }
 
     /**
@@ -55,6 +59,7 @@ public class ElementRestController {
     public ResponseEntity<List<ElementDto>> getElements(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.persistenceService.getElements(projectId, branchId));
     }
 
@@ -66,6 +71,7 @@ public class ElementRestController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @PathVariable UUID elementId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return this.persistenceService.getElement(projectId, branchId, elementId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -79,6 +85,7 @@ public class ElementRestController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @PathVariable UUID elementId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.persistenceService.getChildren(elementId));
     }
 
@@ -89,6 +96,7 @@ public class ElementRestController {
     public ResponseEntity<List<RelationshipDto>> getRelationships(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.persistenceService.getRelationships(projectId, branchId));
     }
 
@@ -100,6 +108,7 @@ public class ElementRestController {
             @PathVariable UUID projectId,
             @PathVariable UUID branchId,
             @PathVariable UUID diagramId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.persistenceService.getDiagramNodes(diagramId));
     }
 
@@ -113,6 +122,7 @@ public class ElementRestController {
     public ResponseEntity<Map<String, Object>> exportBranch(
             @PathVariable UUID projectId,
             @PathVariable UUID branchId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
         return ResponseEntity.ok(this.canonicalJsonService.exportCanonicalMap(projectId, branchId));
     }
 }

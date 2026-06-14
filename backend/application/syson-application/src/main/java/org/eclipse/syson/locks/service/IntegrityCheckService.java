@@ -54,8 +54,8 @@ public class IntegrityCheckService {
      * @return the integrity check result
      */
     public IntegrityCheck runCheck(String projectId, UUID branchId, UUID userId) {
-        List<HeadElement> elements = headElementRepository.findByProjectIdAndBranchIdAndDeletedFalse(projectId, branchId);
-        List<HeadRelationship> relationships = headRelationshipRepository.findByProjectIdAndBranchIdAndDeletedFalse(projectId, branchId);
+        List<HeadElement> elements = headElementRepository.findByProjectIdAndBranchIdAndIsDeletedFalse(projectId, branchId);
+        List<HeadRelationship> relationships = headRelationshipRepository.findByProjectIdAndBranchIdAndIsDeletedFalse(projectId, branchId);
 
         // Build index of element stable IDs
         Set<String> elementIds = new HashSet<>();
@@ -67,23 +67,23 @@ public class IntegrityCheckService {
 
         // Check 1: Dangling relationships (source/target exists and not deleted)
         for (HeadRelationship rel : relationships) {
-            if (rel.getSourceId() != null && !elementIds.contains(rel.getSourceId())) {
+            if (rel.getSourceStableId() != null && !elementIds.contains(rel.getSourceStableId())) {
                 addFinding(findings, "DANGLING_RELATIONSHIP_SOURCE",
-                        "Relationship " + rel.getStableId() + " references non-existent source: " + rel.getSourceId(),
+                        "Relationship " + rel.getStableId() + " references non-existent source: " + rel.getSourceStableId(),
                         "ERROR", rel.getStableId());
             }
-            if (rel.getTargetId() != null && !elementIds.contains(rel.getTargetId())) {
+            if (rel.getTargetStableId() != null && !elementIds.contains(rel.getTargetStableId())) {
                 addFinding(findings, "DANGLING_RELATIONSHIP_TARGET",
-                        "Relationship " + rel.getStableId() + " references non-existent target: " + rel.getTargetId(),
+                        "Relationship " + rel.getStableId() + " references non-existent target: " + rel.getTargetStableId(),
                         "ERROR", rel.getStableId());
             }
         }
 
         // Check 2: Missing containment owners
         for (HeadElement elem : elements) {
-            if (elem.getOwnerId() != null && !elem.getOwnerId().isEmpty() && !elementIds.contains(elem.getOwnerId())) {
+            if (elem.getOwnerStableId() != null && !elem.getOwnerStableId().isEmpty() && !elementIds.contains(elem.getOwnerStableId())) {
                 addFinding(findings, "MISSING_OWNER",
-                        "Element " + elem.getStableId() + " references non-existent owner: " + elem.getOwnerId(),
+                        "Element " + elem.getStableId() + " references non-existent owner: " + elem.getOwnerStableId(),
                         "ERROR", elem.getStableId());
             }
         }
@@ -91,8 +91,8 @@ public class IntegrityCheckService {
         // Check 3: Cyclic containment (warn)
         Map<String, String> ownerMap = new HashMap<>();
         for (HeadElement elem : elements) {
-            if (elem.getOwnerId() != null && !elem.getOwnerId().isEmpty()) {
-                ownerMap.put(elem.getStableId(), elem.getOwnerId());
+            if (elem.getOwnerStableId() != null && !elem.getOwnerStableId().isEmpty()) {
+                ownerMap.put(elem.getStableId(), elem.getOwnerStableId());
             }
         }
         Set<String> visited = new HashSet<>();

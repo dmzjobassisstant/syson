@@ -836,10 +836,25 @@
       + vcStatCard('🔄', overview.openMRCount || 0, 'Open MRs', '#d97706')
       + '</div>';
 
-    // GitGraph SVG
-    var graphHTML = '<div style="background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:16px;overflow-x:auto;">'
-      + '<h3 style="margin:0 0 10px;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">Revision Graph</h3>'
-      + renderGitGraph(branches, commits, baselines)
+    // GitGraph SVG (enhanced — lanes, routed edges, baseline diamonds, tags, density/theme, click-to-diff)
+    var densityOpts = ['baselines', 'standard', 'full'];
+    var ggHeader = '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #1e293b;">'
+      + '<h3 style="margin:0;font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;">Revision Graph</h3>'
+      + '<div style="display:flex;gap:10px;align-items:center;">'
+      + '<div id="syson-gg-density" style="display:inline-flex;border-radius:999px;border:1px solid #334155;overflow:hidden;">'
+      + densityOpts.map(function (m) { return '<button type="button" data-density="' + m + '" aria-pressed="false" style="border:0;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;background:transparent;color:#94a3b8;">' + m + '</button>'; }).join('')
+      + '</div>'
+      + '<div id="syson-gg-theme" style="display:inline-flex;border-radius:999px;border:1px solid #334155;overflow:hidden;">'
+      + '<button type="button" data-theme="light" aria-pressed="false" style="border:0;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;background:transparent;color:#94a3b8;">Light</button>'
+      + '<button type="button" data-theme="dark" aria-pressed="false" style="border:0;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;background:transparent;color:#94a3b8;">Dark</button>'
+      + '</div>'
+      + '</div></div>';
+    var graphHTML = '<div id="syson-gitgraph-wrap" style="background:#020617;border:1px solid #1e293b;border-radius:10px;margin-bottom:16px;overflow:hidden;">'
+      + ggHeader
+      + '<div id="syson-gitgraph-scroll" style="overflow:auto;max-height:60vh;background:#020617;">'
+      + renderGitGraph(branches, commits, baselines, tags)
+      + '</div>'
+      + '<div id="syson-gitgraph-diff" style="border-top:1px solid #1e293b;"></div>'
       + '</div>';
 
     // Branch selector
@@ -904,6 +919,9 @@
       + '</div>';
 
     box.innerHTML = statsHTML + graphHTML + branchSelectorHTML + branchesHTML + createBranchHTML + baselinesHTML + tagsHTML + editorBtn;
+
+    // Wire enhanced GitGraph interactivity (density/theme toggles, tooltips, click-to-diff).
+    initGitGraph(projectId, branches, commits, baselines, tags);
 
     // Branch selector event
     var setBtn = document.getElementById('syson-vc-set-branch');
@@ -982,85 +1000,397 @@
       + items.join('') + '</div>';
   }
 
-  function renderGitGraph(branches, commits, baselines) {
+  // ── GitGraph: self-contained state + helpers (adapted from BowTie VersionGraph.tsx) ──
+  // All GitGraph UI is built from these closures; the login boot path is untouched.
+  var _gitGraphState = { density: 'standard', theme: 'dark' };
+  var _gitGraphData = { branches: [], commits: [], baselines: [], tags: [], projectId: null };
+
+  var _ggThemes = {
+    light: { bg: '#f8fafc', grid: 'rgba(100,116,139,0.16)', guide: 'rgba(100,116,139,.10)',
+      rowEven: 'rgba(248,250,252,.9)', rowOdd: 'rgba(226,232,240,.5)',
+      text: '#0f172a', textMuted: '#475569', textDim: '#64748b', nodeFill: '#ffffff',
+      baselineText: '#dc2626', centerDot: '#ffffff', railAlpha: 0.4, dark: false },
+    dark:  { bg: '#020617', grid: '#1e293b', guide: 'rgba(148,163,184,.06)',
+      rowEven: 'rgba(15,23,42,.45)', rowOdd: 'rgba(2,6,23,.20)',
+      text: '#e2e8f0', textMuted: '#94a3b8', textDim: '#64748b', nodeFill: '#0f172a',
+      baselineText: '#fca5a5', centerDot: '#ffffff', railAlpha: 0.42, dark: true }
+  };
+  var _ggPalette = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#84cc16'];
+  var _ggBranchTypeColors = { main: '#3b82f6', master: '#3b82f6', working: '#22c55e',
+    feature: '#22c55e', review: '#f59e0b', release: '#ef4444', hotfix: '#ef4444', template: '#a855f7' };
+
+  var _ggLEFT = 26, _ggLANE = 30, _ggROW = 34, _ggROWF = 38, _ggPADT = 30, _ggPADB = 26, _ggMSGGAP = 28, _ggMSGW = 640;
+
+  function _vcParseParents(s) {
+    if (Array.isArray(s)) return s.filter(function (x) { return x; });
+    if (!s) return [];
+    return String(s).split(',').map(function (x) { return String(x).trim(); }).filter(Boolean);
+  }
+  function _ggBranchColor(branchType, name, lane) {
+    if (branchType && _ggBranchTypeColors[branchType]) return _ggBranchTypeColors[branchType];
+    if (name && _ggBranchTypeColors[name]) return _ggBranchTypeColors[name];
+    return _ggPalette[Math.abs(lane | 0) % _ggPalette.length];
+  }
+  function _ggAlpha(hex, a) {
+    var c = String(hex).replace('#', '');
+    if (c.length < 6) return hex;
+    var r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+  }
+  function _ggFmtDate(s) {
+    if (!s) return '—';
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return String(s);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  function _ggShort(id) { return id ? String(id).slice(0, 7) : '—'; }
+  function _ggTrunc(t, n) { t = t || ''; return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+  function _ggLaneX(lane) { return _ggLEFT + lane * _ggLANE; }
+  function _ggRoute(fx, fy, tx, ty) {
+    if (fx === tx) return 'M ' + fx + ' ' + fy + ' L ' + tx + ' ' + ty;
+    var bend = Math.max(8, Math.min(18, Math.abs(ty - fy) / 3));
+    var my = fy + Math.sign(ty - fy || 1) * bend;
+    return 'M ' + fx + ' ' + fy + ' C ' + fx + ' ' + my + ', ' + tx + ' ' + my + ', ' + tx + ' ' + (my + Math.sign(ty - fy || 1) * 2) + ' L ' + tx + ' ' + ty;
+  }
+
+  // Renders the commit-graph SVG as a string. Density/theme come from _gitGraphState.
+  function renderGitGraph(branches, commits, baselines, tags) {
+    branches = branches || []; commits = commits || []; baselines = baselines || []; tags = tags || [];
+    var esc = escapeHtml;
     if (!commits.length) {
-      return '<p style="color:#475569;font-size:.82rem;text-align:center;padding:20px;">No commits yet. Create a branch and save a model to see the revision graph.</p>';
+      return '<p style="color:#64748b;font-size:.82rem;text-align:center;padding:24px;font-family:Roboto,Helvetica Neue,Arial,sans-serif;">No commits yet. Create a branch and save a model to see the revision graph.</p>';
     }
-    // Sort commits by time (newest first)
-    var sorted = commits.slice().sort(function(a, b) {
-      return new Date(b.committedAt || 0).getTime() - new Date(a.committedAt || 0).getTime();
-    });
-    // Limit display
-    var display = sorted.slice(0, 50);
-    var branchMap = {};
-    branches.forEach(function(b) { branchMap[b.branchId] = b; });
-    var baselineMap = {};
-    baselines.forEach(function(b) { baselineMap[b.commitId] = b; });
-    // Assign lanes to branches
-    var laneMap = {};
-    var laneCount = 0;
-    branches.forEach(function(b, i) {
-      laneMap[b.branchId] = i;
-      laneCount = i + 1;
-    });
-    var laneW = 28;
-    var rowH = 32;
-    var leftPad = 20;
-    var topPad = 16;
-    var graphW = leftPad + Math.max(laneCount, 1) * laneW + 500;
-    var graphH = topPad + display.length * rowH + 20;
-    var colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#84cc16'];
+    var theme = _ggThemes[_gitGraphState.theme] || _ggThemes.dark;
+    var density = _gitGraphState.density || 'standard';
 
-    var svg = '<svg width="' + graphW + '" height="' + graphH + '" xmlns="http://www.w3.org/2000/svg" style="font-family:monospace;font-size:11px;">';
-    svg += '<rect width="100%" height="100%" fill="#020617" rx="8"/>';
+    // Normalize + sort branches (main/master first, then alpha) → lane assignment
+    var sBranches = branches.slice().map(function (b) {
+      return { id: String(b.branchId || ''), name: String(b.name || 'branch'), type: String(b.branchType || ''),
+        headCommitId: b.headCommitId ? String(b.headCommitId) : null };
+    }).filter(function (b) { return b.id; })
+      .sort(function (a, b) {
+        if (a.name === 'main' || a.name === 'master') return -1;
+        if (b.name === 'main' || b.name === 'master') return 1;
+        return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+      });
+    var branchById = {};
+    sBranches.forEach(function (b, i) { b.lane = i; branchById[b.id] = b; });
+    var maxLane = Math.max(0, sBranches.length - 1);
 
-    display.forEach(function(c, row) {
-      var lane = laneMap[c.branchId] != null ? laneMap[c.branchId] : 0;
-      var x = leftPad + lane * laneW + laneW / 2;
-      var y = topPad + row * rowH + rowH / 2;
-      var color = colors[lane % colors.length];
-      var isBaseline = baselineMap[c.commitId];
-      // Draw lane line
-      if (row < display.length - 1) {
-        var nextLane = laneMap[display[row + 1].branchId] != null ? laneMap[display[row + 1].branchId] : 0;
-        var nx = leftPad + nextLane * laneW + laneW / 2;
-        var ny = topPad + (row + 1) * rowH + rowH / 2;
-        if (nextLane === lane) {
-          svg += '<line x1="' + x + '" y1="' + y + '" x2="' + nx + '" y2="' + ny + '" stroke="' + color + '" stroke-width="2" opacity="0.4"/>';
+    // Normalize commits
+    var sCommits = commits.map(function (c) {
+      return { id: String(c.commitId || ''), branchId: String(c.branchId || ''), commitNumber: Number(c.commitNumber || 0),
+        message: String(c.message || 'No message'), committedAt: String(c.committedAt || ''),
+        author: String(c.authorUserId || ''), parents: _vcParseParents(c.parentCommitIds) };
+    }).filter(function (c) { return c.id; });
+    var commitById = {};
+    sCommits.forEach(function (c) { commitById[c.id] = c; });
+
+    var headIds = {};
+    sBranches.forEach(function (b) { if (b.headCommitId) headIds[b.headCommitId] = true; });
+
+    var baselineByCommit = {};
+    baselines.forEach(function (b) { var k = String(b.commitId || ''); if (k) { (baselineByCommit[k] || (baselineByCommit[k] = [])).push({ code: String(b.baselineCode || b.name || 'baseline'), name: String(b.name || '') }); } });
+    var tagByCommit = {};
+    tags.forEach(function (t) { var k = String(t.commitId || ''); if (k) { (tagByCommit[k] || (tagByCommit[k] = [])).push({ name: String(t.name || 'tag') }); } });
+
+    // Density filter (mirrors BowTie DensityMode)
+    function show(c) {
+      if (density === 'full') return true;
+      var isBl = !!baselineByCommit[c.id], isRoot = c.parents.length === 0, isHead = !!headIds[c.id];
+      if (density === 'baselines') return isBl || isHead || isRoot;
+      var isMerge = c.parents.length > 1;
+      return isBl || isMerge || isHead || isRoot;
+    }
+
+    var visible = sCommits.filter(show).sort(function (a, b) {
+      var at = new Date(a.committedAt).getTime(), bt = new Date(b.committedAt).getTime();
+      var d = (isNaN(bt) ? 0 : bt) - (isNaN(at) ? 0 : at);
+      return d || (b.commitNumber - a.commitNumber);
+    });
+    if (!visible.length) {
+      return '<p style="color:#64748b;font-size:.82rem;text-align:center;padding:24px;">No commits match the current density filter (' + density + ').</p>';
+    }
+
+    var rowH = density === 'full' ? _ggROWF : _ggROW;
+    var messageX = _ggLEFT + (maxLane + 1) * _ggLANE + _ggMSGGAP;
+    var graphW = messageX + _ggMSGW;
+    var graphH = _ggPADT + visible.length * rowH + _ggPADB;
+
+    // Rows (commit → lane/x/y/color/kind)
+    var rows = visible.map(function (commit, row) {
+      var branch = branchById[commit.branchId];
+      var lane = branch ? branch.lane : 0;
+      var color = _ggBranchColor(branch ? branch.type : '', branch ? branch.name : '', lane);
+      return { commit: commit, branch: branch, x: _ggLaneX(lane), y: _ggPADT + row * rowH, lane: lane, color: color,
+        isMerge: commit.parents.length > 1, isBaseline: !!baselineByCommit[commit.id], isHead: !!headIds[commit.id] };
+    });
+    var rowById = {};
+    rows.forEach(function (r) { rowById[r.commit.id] = r; });
+
+    // Edges (parent → child), with ghost routing for filtered-out parents
+    var edges = [];
+    rows.forEach(function (row) {
+      row.commit.parents.forEach(function (pid, index) {
+        var pr = rowById[pid], ghost = false;
+        if (!pr) {
+          var parent = commitById[pid];
+          if (!parent) return;
+          var pBranch = branchById[parent.branchId];
+          var pLane = pBranch ? pBranch.lane : row.lane;
+          pr = { x: _ggLaneX(pLane), y: row.y + rowH * 1.4, color: _ggBranchColor(pBranch ? pBranch.type : '', pBranch ? pBranch.name : '', pLane) };
+          ghost = true;
         } else {
-          var midY = (y + ny) / 2;
-          svg += '<path d="M ' + x + ' ' + y + ' C ' + x + ' ' + midY + ', ' + nx + ' ' + midY + ', ' + nx + ' ' + ny + '" stroke="' + color + '" stroke-width="2" fill="none" opacity="0.4"/>';
+          pr = { x: pr.x, y: pr.y, color: pr.color };
         }
-      }
-      // Draw commit node
-      var r = isBaseline ? 7 : 5;
-      svg += '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + color + '" stroke="#020617" stroke-width="2"/>';
-      if (isBaseline) {
-        svg += '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="none" stroke="#dc2626" stroke-width="1.5"/>';
-      }
-      // Commit message
-      var msgX = leftPad + Math.max(laneCount, 1) * laneW + 16;
-      var msg = (c.message || 'No message');
-      if (msg.length > 60) msg = msg.substring(0, 59) + '…';
-      svg += '<text x="' + msgX + '" y="' + (y + 4) + '" fill="#e2e8f0">' + escapeHtml(msg) + '</text>';
-      // Hash
-      var hashX = msgX + 400;
-      svg += '<text x="' + hashX + '" y="' + (y + 4) + '" fill="#475569" font-size="10">' + (c.commitId ? c.commitId.substring(0,7) : '—') + '</text>';
-      // Date
-      var dateX = hashX + 60;
-      var dateStr = c.committedAt ? new Date(c.committedAt).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
-      svg += '<text x="' + dateX + '" y="' + (y + 4) + '" fill="#334155" font-size="10">' + dateStr + '</text>';
+        edges.push({ fx: row.x, fy: row.y, tx: pr.x, ty: pr.y,
+          color: index > 0 ? pr.color : row.color, merge: index > 0 || row.isMerge, ghost: ghost });
+      });
     });
 
-    // Branch labels at top
-    branches.forEach(function(b, i) {
-      var x = leftPad + i * laneW + laneW / 2;
-      var color = colors[i % colors.length];
-      svg += '<text x="' + x + '" y="12" fill="' + color + '" font-size="9" text-anchor="middle" font-weight="bold">' + escapeHtml((b.name || '').substring(0, 8)) + '</text>';
+    // Lane rails (translucent vertical bars per branch)
+    var branchRows = {};
+    rows.forEach(function (r) { var k = r.branch ? r.branch.id : r.commit.branchId; (branchRows[k] || (branchRows[k] = [])).push(r); });
+    var rails = Object.keys(branchRows).map(function (k) {
+      var list = branchRows[k], first = list[0], last = list[list.length - 1];
+      return { x: first.x, y1: first.y, y2: Math.max(first.y, last.y), color: first.color };
+    });
+
+    // ── Build SVG ──
+    var svg = '<svg id="syson-gitgraph-svg" width="' + graphW + '" height="' + graphH + '" viewBox="0 0 ' + graphW + ' ' + graphH +
+      '" role="img" aria-label="Commit graph: ' + visible.length + ' of ' + sCommits.length + ' commits across ' + sBranches.length + ' branches"' +
+      ' style="display:block;min-width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;">';
+    svg += '<rect x="0" y="0" width="' + graphW + '" height="' + graphH + '" fill="' + theme.bg + '"/>';
+    svg += '<defs><filter id="ggGlow" x="-80%" y="-80%" width="260%" height="260%">' +
+      '<feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+
+    // Row stripes
+    rows.forEach(function (r, i) {
+      svg += '<rect x="0" y="' + (r.y - rowH / 2) + '" width="' + graphW + '" height="' + rowH + '" fill="' + (i % 2 === 0 ? theme.rowEven : theme.rowOdd) + '"/>';
+    });
+    // Lane guides
+    for (var lane = 0; lane <= maxLane; lane++) {
+      svg += '<line x1="' + _ggLaneX(lane) + '" y1="12" x2="' + _ggLaneX(lane) + '" y2="' + (graphH - 12) + '" stroke="' + theme.guide + '" stroke-width="1"/>';
+    }
+    // Rails
+    rails.forEach(function (s) {
+      svg += '<line x1="' + s.x + '" y1="' + s.y1 + '" x2="' + s.x + '" y2="' + s.y2 + '" stroke="' + _ggAlpha(s.color, theme.railAlpha) + '" stroke-width="4" stroke-linecap="round"/>';
+    });
+    // Edges
+    edges.forEach(function (e) {
+      var op = e.ghost ? 0.22 : (e.merge ? 0.78 : 0.6);
+      svg += '<path d="' + _ggRoute(e.fx, e.fy, e.tx, e.ty) + '" fill="none" stroke="' + _ggAlpha(e.color, op) + '" ' +
+        'stroke-width="' + (e.merge ? 3.2 : 2.4) + '" stroke-linecap="round" stroke-linejoin="round"' + (e.ghost ? ' stroke-dasharray="5 5"' : '') + '/>';
+    });
+    // Branch header labels
+    sBranches.forEach(function (b) {
+      svg += '<text x="' + _ggLaneX(b.lane) + '" y="12" fill="' + _ggBranchColor(b.type, b.name, b.lane) + '" font-size="9" text-anchor="middle" font-weight="700">' + esc(_ggTrunc(b.name, 10)) + '</text>';
+    });
+
+    // Commit nodes
+    rows.forEach(function (row) {
+      var c = row.commit;
+      var r = row.isBaseline ? 7.5 : row.isMerge ? 6.5 : row.isHead ? 6.5 : 5.2;
+      var titleText = (row.branch ? row.branch.name : c.branchId) + ' · #' + c.commitNumber +
+        (row.isMerge ? ' · merge' : '') + (row.isBaseline ? ' · baseline' : '') + ' · ' + c.message + ' · ' + _ggShort(c.id) + ' · ' + _ggFmtDate(c.committedAt);
+      svg += '<g class="syson-gg-node" tabindex="0" role="button" aria-label="commit ' + _ggShort(c.id) + ': ' + esc(_ggTrunc(c.message, 60)) + '"' +
+        ' data-commit="' + esc(c.id) + '" data-branch="' + esc(c.branchId) + '" style="cursor:pointer;">';
+      svg += '<title>' + esc(titleText) + '</title>';
+      // Invisible hit target for easy hover/click
+      svg += '<circle cx="' + row.x + '" cy="' + row.y + '" r="13" fill="transparent"/>';
+      if (row.isMerge) {
+        svg += '<rect x="' + (row.x - r) + '" y="' + (row.y - r) + '" width="' + (r * 2) + '" height="' + (r * 2) + '" rx="2" transform="rotate(45 ' + row.x + ' ' + row.y + ')" fill="' + theme.nodeFill + '" stroke="' + row.color + '" stroke-width="2.4" filter="url(#ggGlow)"/>';
+      } else {
+        svg += '<circle cx="' + row.x + '" cy="' + row.y + '" r="' + r + '" fill="' + (row.isBaseline ? row.color : theme.nodeFill) + '" stroke="' + row.color + '" stroke-width="' + (row.isBaseline || row.isHead ? 2.7 : 2.1) + '"' + (row.isBaseline || row.isHead ? ' filter="url(#ggGlow)"' : '') + '/>';
+        if (row.isBaseline) {
+          svg += '<circle cx="' + row.x + '" cy="' + row.y + '" r="' + (r + 2.5) + '" fill="none" stroke="' + theme.baselineText + '" stroke-width="1.4" opacity="0.7"/>';
+        }
+        svg += '<circle cx="' + row.x + '" cy="' + row.y + '" r="2.1" fill="' + (row.isBaseline ? theme.centerDot : row.color) + '"/>';
+      }
+      // Message / hash / date columns
+      svg += '<text x="' + messageX + '" y="' + (row.y + 4) + '" fill="' + theme.text + '" font-size="12" font-weight="' + (row.isBaseline ? 700 : 500) + '">' + esc(_ggTrunc(c.message, 52)) + '</text>';
+      svg += '<text x="' + (messageX + 380) + '" y="' + (row.y + 4) + '" fill="' + theme.textDim + '" font-size="10.5">' + _ggShort(c.id) + '</text>';
+      svg += '<text x="' + (messageX + _ggMSGW - 90) + '" y="' + (row.y + 4) + '" fill="' + theme.textDim + '" font-size="10">' + _ggFmtDate(c.committedAt) + '</text>';
+      // Baseline + tag pills
+      var pillX = messageX + 470;
+      (baselineByCommit[c.id] || []).forEach(function (bl) {
+        var w = Math.max(42, bl.code.length * 7 + 18);
+        svg += '<g transform="translate(' + pillX + ',' + (row.y - 9) + ')">' +
+          '<rect x="0" y="0" width="' + w + '" height="18" rx="9" fill="rgba(239,68,68,.14)" stroke="rgba(239,68,68,.6)" stroke-width="1"/>' +
+          '<polygon points="0,9 -5,4 -10,9 -5,14" fill="' + theme.baselineText + '"/>' +
+          '<text x="14" y="12.5" fill="' + theme.baselineText + '" font-size="10.5" font-weight="700">' + esc(_ggTrunc(bl.code, 18)) + '</text></g>';
+        pillX += w + 7;
+      });
+      (tagByCommit[c.id] || []).forEach(function (tg) {
+        var w = Math.max(40, tg.name.length * 7 + 22);
+        svg += '<g transform="translate(' + pillX + ',' + (row.y - 9) + ')">' +
+          '<rect x="0" y="0" width="' + w + '" height="18" rx="9" fill="rgba(5,150,105,.14)" stroke="rgba(5,150,105,.6)" stroke-width="1"/>' +
+          '<circle cx="8" cy="9" r="3" fill="#10b981"/>' +
+          '<text x="16" y="12.5" fill="#10b981" font-size="10.5" font-weight="700">' + esc(_ggTrunc(tg.name, 16)) + '</text></g>';
+        pillX += w + 7;
+      });
+      svg += '</g>';
     });
 
     svg += '</svg>';
     return svg;
+  }
+
+  // Re-renders the SVG into the scroll container using the current density/theme.
+  function _ggReRender() {
+    var scroll = document.getElementById('syson-gitgraph-scroll');
+    if (!scroll) return;
+    var t = _ggThemes[_gitGraphState.theme] || _ggThemes.dark;
+    scroll.style.background = t.bg;
+    scroll.innerHTML = renderGitGraph(_gitGraphData.branches, _gitGraphData.commits, _gitGraphData.baselines, _gitGraphData.tags);
+    _ggSyncButtons();
+  }
+
+  // Updates density/theme button active styling + aria-pressed.
+  function _ggSyncButtons() {
+    var theme = _ggThemes[_gitGraphState.theme] || _ggThemes.dark;
+    var muted = theme.dark ? '#94a3b8' : '#64748b';
+    function styleBtns(container, attr, val) {
+      if (!container) return;
+      var btns = container.querySelectorAll('button[' + attr + ']');
+      for (var i = 0; i < btns.length; i++) {
+        var active = btns[i].getAttribute(attr) === val;
+        btns[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+        btns[i].style.cssText = 'border:0;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;' + (active ? 'background:#261e58;color:#fff;' : ('background:transparent;color:' + muted + ';'));
+      }
+    }
+    styleBtns(document.getElementById('syson-gg-density'), 'data-density', _gitGraphState.density);
+    styleBtns(document.getElementById('syson-gg-theme'), 'data-theme', _gitGraphState.theme);
+  }
+
+  // Wires density + theme toggle buttons (delegated, survive innerHTML re-render).
+  function _ggWireControls() {
+    var dens = document.getElementById('syson-gg-density');
+    if (dens && !dens.getAttribute('data-wired')) {
+      dens.setAttribute('data-wired', '1');
+      dens.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('button[data-density]') : null;
+        if (!b) return;
+        _gitGraphState.density = b.getAttribute('data-density');
+        _ggReRender();
+      });
+    }
+    var th = document.getElementById('syson-gg-theme');
+    if (th && !th.getAttribute('data-wired')) {
+      th.setAttribute('data-wired', '1');
+      th.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('button[data-theme]') : null;
+        if (!b) return;
+        _gitGraphState.theme = b.getAttribute('data-theme');
+        _ggReRender();
+      });
+    }
+  }
+
+  // Lazily fetches and renders a commit's diff (ChangeDto list) via _origFetch.
+  function showGitGraphDiff(projectId, branchId, commitId) {
+    var panel = document.getElementById('syson-gitgraph-diff');
+    if (!panel) return;
+    panel.style.padding = '12px 14px';
+    panel.innerHTML = '<div style="color:#94a3b8;font-size:.8rem;">Loading diff for ' + _ggShort(commitId) + '…</div>';
+    var headers = { 'Authorization': 'Bearer ' + state.token };
+    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/branches/' + branchId + '/commits/' + commitId + '/diff', { headers: headers })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (changes) {
+        changes = changes || [];
+        var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<span style="color:#e2e8f0;font-weight:700;font-size:.85rem;">Diff · ' + _ggShort(commitId) + ' · ' + changes.length + ' change' + (changes.length !== 1 ? 's' : '') + '</span>' +
+          '<button id="syson-gg-diff-close" style="background:none;border:0;color:#64748b;font-size:1.1rem;cursor:pointer;">×</button></div>';
+        if (!changes.length) {
+          h += '<div style="color:#64748b;font-size:.82rem;">No element changes recorded for this commit.</div>';
+        } else {
+          h += changes.map(function (ch) {
+            var op = String(ch.operation || '?').toUpperCase();
+            var opColor = op === 'CREATE' ? '#4ade80' : op === 'DELETE' ? '#f87171' : op === 'UPDATE' ? '#facc15' : '#94a3b8';
+            return '<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid #1e293b;font-size:.78rem;">' +
+              '<span style="color:#475569;font-family:monospace;width:24px;">' + (ch.changeSeq != null ? ch.changeSeq : '·') + '</span>' +
+              '<span style="color:' + opColor + ';font-weight:700;width:62px;">' + escapeHtml(op) + '</span>' +
+              '<span style="color:#94a3b8;width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(ch.objectType || 'object') + '</span>' +
+              '<span style="color:#64748b;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(String(ch.objectId || '').slice(0, 18)) + '</span>' +
+              '<span style="color:#475569;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(ch.patch || '') + '">' + escapeHtml(_ggTrunc(ch.patch || '', 60)) + '</span>' +
+              '</div>';
+          }).join('');
+        }
+        panel.innerHTML = h;
+        var cb = document.getElementById('syson-gg-diff-close');
+        if (cb) cb.addEventListener('click', function () { panel.innerHTML = ''; panel.style.padding = '0'; });
+      })['catch'](function (err) {
+        panel.innerHTML = '<div style="color:#f87171;font-size:.82rem;">Diff error: ' + escapeHtml(err.message) + '</div>';
+      });
+  }
+
+  // Self-contained wiring: density/theme controls + delegated SVG hover/keyboard/click.
+  function initGitGraph(projectId, branches, commits, baselines, tags) {
+    _gitGraphData = { branches: branches || [], commits: commits || [], baselines: baselines || [], tags: tags || [], projectId: projectId };
+    _ggSyncButtons();
+    _ggWireControls();
+
+    var scroll = document.getElementById('syson-gitgraph-scroll');
+    if (!scroll) return;
+    var t = _ggThemes[_gitGraphState.theme] || _ggThemes.dark;
+    scroll.style.background = t.bg;
+
+    // Rich HTML tooltip (single, reused element)
+    var tip = document.getElementById('syson-gg-tooltip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = 'syson-gg-tooltip';
+      tip.style.cssText = 'position:fixed;z-index:100020;pointer-events:none;display:none;max-width:320px;padding:10px 12px;border-radius:8px;font-family:Roboto,Helvetica Neue,Arial,sans-serif;font-size:12px;line-height:1.5;box-shadow:0 12px 30px rgba(0,0,0,.35);';
+      document.body.appendChild(tip);
+    }
+
+    function nodeOf(target) {
+      var el = target;
+      while (el && el !== scroll) { if (el.classList && el.classList.contains('syson-gg-node')) return el; el = el.parentNode; }
+      return null;
+    }
+    function findCommit(id) {
+      for (var i = 0; i < _gitGraphData.commits.length; i++) { if (String(_gitGraphData.commits[i].commitId) === id) return _gitGraphData.commits[i]; }
+      return null;
+    }
+    function showTip(node, ev) {
+      var c = findCommit(node.getAttribute('data-commit'));
+      if (!c) return;
+      var b = null;
+      for (var j = 0; j < _gitGraphData.branches.length; j++) { if (String(_gitGraphData.branches[j].branchId) === String(c.branchId)) { b = _gitGraphData.branches[j]; break; } }
+      var isMerge = _vcParseParents(c.parentCommitIds).length > 1;
+      var theme = _ggThemes[_gitGraphState.theme] || _ggThemes.dark;
+      var bColor = b ? _ggBranchColor(b.branchType, b.name, 0) : '#3b82f6';
+      tip.style.background = theme.dark ? '#0f172a' : '#ffffff';
+      tip.style.color = theme.text;
+      tip.style.border = '1px solid ' + (theme.dark ? '#334155' : '#e2e8f0');
+      tip.innerHTML = '<div style="font-weight:700;color:' + bColor + ';margin-bottom:2px;">' + escapeHtml(b ? b.name : c.branchId) + ' · #' + (c.commitNumber || 0) + (isMerge ? ' · merge' : '') + '</div>' +
+        '<div style="margin-bottom:4px;">' + escapeHtml(c.message || 'No message') + '</div>' +
+        '<div style="opacity:.8;font-size:11px;">' + _ggShort(c.commitId) + ' · ' + _ggFmtDate(c.committedAt) + (c.authorUserId ? ' · by ' + escapeHtml(String(c.authorUserId).slice(0, 8)) : '') + '</div>';
+      tip.style.display = 'block';
+      moveTip(ev);
+    }
+    function moveTip(ev) {
+      var px = (ev && ev.clientX != null ? ev.clientX : 0) + 14, py = (ev && ev.clientY != null ? ev.clientY : 0) + 14;
+      if (px + tip.offsetWidth > window.innerWidth - 8) px = window.innerWidth - tip.offsetWidth - 8;
+      if (py + tip.offsetHeight > window.innerHeight - 8) py = window.innerHeight - tip.offsetHeight - 8;
+      tip.style.left = px + 'px'; tip.style.top = py + 'px';
+    }
+    function hideTip() { tip.style.display = 'none'; }
+    function triggerDiff(node) {
+      hideTip();
+      showGitGraphDiff(_gitGraphData.projectId, node.getAttribute('data-branch'), node.getAttribute('data-commit'));
+    }
+
+    // Delegated handlers on the (persistent) scroll container.
+    scroll.addEventListener('mouseover', function (e) { var n = nodeOf(e.target); if (n) showTip(n, e); });
+    scroll.addEventListener('mousemove', function (e) { if (tip.style.display === 'block') moveTip(e); });
+    scroll.addEventListener('mouseout', function (e) { var n = nodeOf(e.target); if (n) { var rel = e.relatedTarget; if (!rel || !n.contains(rel)) hideTip(); } });
+    scroll.addEventListener('click', function (e) { var n = nodeOf(e.target); if (n) triggerDiff(n); });
+    scroll.addEventListener('keydown', function (e) {
+      var n = e.target;
+      if (n && n.classList && n.classList.contains('syson-gg-node') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); triggerDiff(n); }
+    });
   }
 
   // ── Element History Button ────────────────────────────────────────────────

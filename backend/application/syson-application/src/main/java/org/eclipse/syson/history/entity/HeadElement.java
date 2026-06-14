@@ -47,14 +47,11 @@ public class HeadElement {
     @Column(name = "stable_id", nullable = false, length = 512)
     private String stableId;
 
-    @Column(name = "element_id", length = 512)
-    private String elementId;
-
     @Column(name = "document_id")
     private UUID documentId;
 
-    @Column(name = "owner_id", length = 512)
-    private String ownerId;
+    @Column(name = "owner_stable_id", length = 512)
+    private String ownerStableId;
 
     @Column(name = "qualified_name", columnDefinition = "TEXT")
     private String qualifiedName;
@@ -85,8 +82,8 @@ public class HeadElement {
     @Column(name = "deleted_commit_id")
     private UUID deletedCommitId;
 
-    @Column(name = "deleted", nullable = false)
-    private boolean deleted;
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
@@ -121,14 +118,6 @@ public class HeadElement {
         this.stableId = stableId;
     }
 
-    public String getElementId() {
-        return this.elementId;
-    }
-
-    public void setElementId(String elementId) {
-        this.elementId = elementId;
-    }
-
     public UUID getDocumentId() {
         return this.documentId;
     }
@@ -137,12 +126,12 @@ public class HeadElement {
         this.documentId = documentId;
     }
 
-    public String getOwnerId() {
-        return this.ownerId;
+    public String getOwnerStableId() {
+        return this.ownerStableId;
     }
 
-    public void setOwnerId(String ownerId) {
-        this.ownerId = ownerId;
+    public void setOwnerStableId(String ownerStableId) {
+        this.ownerStableId = ownerStableId;
     }
 
     public String getQualifiedName() {
@@ -218,11 +207,11 @@ public class HeadElement {
     }
 
     public boolean isDeleted() {
-        return this.deleted;
+        return this.isDeleted;
     }
 
-    public void setDeleted(boolean deleted) {
-        this.deleted = deleted;
+    public void setDeleted(boolean isDeleted) {
+        this.isDeleted = isDeleted;
     }
 
     public OffsetDateTime getCreatedAt() {

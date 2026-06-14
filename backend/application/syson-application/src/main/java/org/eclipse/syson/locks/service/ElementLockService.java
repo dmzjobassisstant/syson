@@ -62,7 +62,7 @@ public class ElementLockService {
      */
     public ElementLock acquireLock(String projectId, UUID branchId, String stableId, UUID userId,
                                     String username, String sessionId, String deviceId, String reason, int ttlMinutes) {
-        Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(projectId, branchId, stableId, "edit");
+        Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockTypeForUpdate(projectId, branchId, stableId, "edit");
 
         if (existingLock.isPresent()) {
             ElementLock lock = existingLock.get();
@@ -113,7 +113,7 @@ public class ElementLockService {
      * Releases an element lock. Only the lock owner can release it.
      */
     public void releaseLock(String projectId, UUID branchId, String stableId, UUID userId) {
-        Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(projectId, branchId, stableId, "edit");
+        Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockTypeForUpdate(projectId, branchId, stableId, "edit");
         if (existingLock.isEmpty()) {
             return;
         }
@@ -133,7 +133,7 @@ public class ElementLockService {
      * Refreshes an existing element lock with a new TTL.
      */
     public void refreshLock(String projectId, UUID branchId, String stableId, UUID userId, int ttlMinutes) {
-        Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(projectId, branchId, stableId, "edit");
+        Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockTypeForUpdate(projectId, branchId, stableId, "edit");
         if (existingLock.isEmpty()) {
             throw new IllegalStateException("No active lock found on element " + stableId);
         }
@@ -156,7 +156,7 @@ public class ElementLockService {
      * Forces release of an element lock (admin override).
      */
     public void forceRelease(String projectId, UUID branchId, String stableId, UUID adminUserId) {
-        Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockType(projectId, branchId, stableId, "edit");
+        Optional<ElementLock> existingLock = elementLockRepository.findByProjectIdAndBranchIdAndStableIdAndLockTypeForUpdate(projectId, branchId, stableId, "edit");
         if (existingLock.isPresent()) {
             ElementLock lock = existingLock.get();
             elementLockRepository.delete(lock);

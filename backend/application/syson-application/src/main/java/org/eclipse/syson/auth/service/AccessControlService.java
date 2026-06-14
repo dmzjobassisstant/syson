@@ -98,7 +98,10 @@ public class AccessControlService {
         if (userId == null) {
             return false;
         }
-        if (this.hasTenantRole(userId, TenantRole.ADMIN)) {
+        // Only SUPERUSER gets a global bypass. ADMIN must be explicitly added as a
+        // project member. This prevents cross-tenant privilege escalation where an
+        // ADMIN of tenant A could otherwise read/write projects owned by tenant B.
+        if (this.hasTenantRole(userId, TenantRole.SUPERUSER)) {
             return true;
         }
         return this.projectMembershipRepository.findByIdProjectIdAndIdUserId(projectId, userId)

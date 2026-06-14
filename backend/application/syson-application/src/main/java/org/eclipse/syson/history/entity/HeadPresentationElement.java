@@ -44,11 +44,11 @@ public class HeadPresentationElement {
     private UUID branchId;
 
     @Id
-    @Column(name = "presentation_id", nullable = false, length = 512)
-    private String presentationId;
+    @Column(name = "stable_id", nullable = false, length = 512)
+    private String stableId;
 
-    @Column(name = "diagram_id", length = 512)
-    private String diagramId;
+    @Column(name = "diagram_stable_id", length = 512, nullable = false)
+    private String diagramStableId;
 
     @Column(name = "semantic_element_id", length = 512)
     private String semanticElementId;
@@ -83,8 +83,8 @@ public class HeadPresentationElement {
     @Column(name = "deleted_commit_id")
     private UUID deletedCommitId;
 
-    @Column(name = "deleted", nullable = false)
-    private boolean deleted;
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted;
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
@@ -108,20 +108,20 @@ public class HeadPresentationElement {
         this.branchId = branchId;
     }
 
-    public String getPresentationId() {
-        return this.presentationId;
+    public String getStableId() {
+        return this.stableId;
     }
 
-    public void setPresentationId(String presentationId) {
-        this.presentationId = presentationId;
+    public void setStableId(String stableId) {
+        this.stableId = stableId;
     }
 
-    public String getDiagramId() {
-        return this.diagramId;
+    public String getDiagramStableId() {
+        return this.diagramStableId;
     }
 
-    public void setDiagramId(String diagramId) {
-        this.diagramId = diagramId;
+    public void setDiagramStableId(String diagramStableId) {
+        this.diagramStableId = diagramStableId;
     }
 
     public String getSemanticElementId() {
@@ -205,11 +205,11 @@ public class HeadPresentationElement {
     }
 
     public boolean isDeleted() {
-        return this.deleted;
+        return this.isDeleted;
     }
 
-    public void setDeleted(boolean deleted) {
-        this.deleted = deleted;
+    public void setDeleted(boolean isDeleted) {
+        this.isDeleted = isDeleted;
     }
 
     public OffsetDateTime getUpdatedAt() {

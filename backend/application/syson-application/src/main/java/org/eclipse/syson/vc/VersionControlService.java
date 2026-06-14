@@ -146,9 +146,9 @@ public class VersionControlService {
     @Transactional
     public CommitDto createCommit(UUID projectId, UUID branchId, UUID userId,
                                   String message, List<ChangeDto> changes) {
-        // 1. Determine next commit number and parent chain position
+        // 1. Determine next commit number and parent chain position (pessimistic lock to prevent race)
         Optional<CommitEntity> lastCommit = this.commitRepository
-                .findTopByProjectIdAndBranchIdOrderByCommitNumberDesc(projectId, branchId);
+                .findTopByProjectIdAndBranchIdOrderByCommitNumberDescForUpdate(projectId, branchId);
         long nextNumber = lastCommit.map(c -> c.getCommitNumber() + 1).orElse(1L);
         String parentHash = lastCommit.map(CommitEntity::getCommitHash).orElse("0");
         String parentCommitIds = lastCommit.isPresent()
@@ -333,7 +333,7 @@ public class VersionControlService {
 
     private long getNextCommitNumber(UUID projectId, UUID branchId) {
         return this.commitRepository
-                .findTopByProjectIdAndBranchIdOrderByCommitNumberDesc(projectId, branchId)
+                .findTopByProjectIdAndBranchIdOrderByCommitNumberDescForUpdate(projectId, branchId)
                 .map(c -> c.getCommitNumber() + 1)
                 .orElse(1L);
     }

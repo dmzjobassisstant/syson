@@ -162,9 +162,12 @@ public class UserController {
     }
 
     @PostMapping("/password/reset/request")
-    public ResponseEntity<PasswordResetTokenResponse> requestPasswordReset(@RequestBody PasswordResetRequest req) {
-        String token = this.passwordResetService.requestPasswordReset(req.email());
-        return ResponseEntity.ok(new PasswordResetTokenResponse("Password reset requested", token));
+    public ResponseEntity<Map<String, String>> requestPasswordReset(@RequestBody PasswordResetRequest req) {
+        // Always create/store the token (for email delivery) but NEVER expose it in
+        // the API response. The same message is returned regardless of whether the
+        // email exists to avoid account enumeration.
+        this.passwordResetService.requestPasswordReset(req.email());
+        return ResponseEntity.ok(Map.of("message", "If the email exists, a reset link has been sent."));
     }
 
     @PostMapping("/password/reset/complete")
@@ -222,8 +225,14 @@ public class UserController {
     @PutMapping("/admin/tenants/{tenantId}/roles/{userId}")
     public ResponseEntity<Map<String, String>> adminAssignTenantRole(@PathVariable UUID tenantId, @PathVariable UUID userId,
             @RequestBody AssignTenantRoleRequest req, HttpServletRequest request) {
+        TenantRole targetRole = TenantRole.from(req.role());
+        // Only SUPERUSER may assign the SUPERUSER role. ADMIN can assign up to ADMIN.
+        if (targetRole == TenantRole.SUPERUSER
+                && !currentRoles().stream().anyMatch("superuser"::equalsIgnoreCase)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only superusers can assign the SUPERUSER role");
+        }
         SysonUser targetUser = this.userRepository.findById(userId).orElse(null);
-        this.roleManagementService.assignTenantRole(userId, tenantId, TenantRole.from(req.role()));
+        this.roleManagementService.assignTenantRole(userId, tenantId, targetRole);
         this.adminService.logEvent("platform_role_changed", "user", userId.toString(), targetUser != null ? targetUser.getEmail() : null, null, null, "{\"role\":\"" + req.role() + "\"}", null, request);
         return ResponseEntity.ok(Map.of("message", "Tenant role assigned"));
     }
@@ -263,7 +272,16 @@ public class UserController {
             @RequestParam(required = false) String targetType,
             @RequestParam(required = false) String targetId,
             @RequestParam(defaultValue = "100") int limit) {
-        return this.auditLogService.findEvents(new AuditEventSearchCriteria(actorId, action, targetType, targetId, limit));
+        List<AuditEvent> events = this.auditLogService.findEvents(new AuditEventSearchCriteria(actorId, action, targetType, targetId, limit));
+        // SUPERUSER sees all events; everyone else (including ADMIN) only sees
+        // events scoped to their own tenant.
+        if (currentRoles().stream().anyMatch("superuser"::equalsIgnoreCase)) {
+            return events;
+        }
+        UUID tenantId = TenantContext.getTenantId();
+        return events.stream()
+                .filter(event -> tenantId != null && tenantId.equals(event.getTenantId()))
+                .toList();
     }
 
     public record UserProfile(UUID id, String email, String name, boolean active, boolean emailVerified, OffsetDateTime lastLoginAt, List<String> roles) {}

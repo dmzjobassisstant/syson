@@ -43,14 +43,8 @@ public class BranchHead {
     @Column(name = "branch_id", nullable = false)
     private UUID branchId;
 
-    @Column(name = "tenant_id")
-    private UUID tenantId;
-
     @Column(name = "head_commit_id")
     private UUID headCommitId;
-
-    @Column(name = "semantic_data_id")
-    private UUID semanticDataId;
 
     @Column(name = "canonical_hash", length = 128)
     private String canonicalHash;
@@ -71,8 +65,8 @@ public class BranchHead {
     @Column(name = "last_extracted_at")
     private OffsetDateTime lastExtractedAt;
 
-    @Column(name = "extraction_version")
-    private Integer extractionVersion;
+    @Column(name = "extraction_version", length = 50)
+    private String extractionVersion;
 
     public BranchHead() {
     }
@@ -93,28 +87,12 @@ public class BranchHead {
         this.branchId = branchId;
     }
 
-    public UUID getTenantId() {
-        return this.tenantId;
-    }
-
-    public void setTenantId(UUID tenantId) {
-        this.tenantId = tenantId;
-    }
-
     public UUID getHeadCommitId() {
         return this.headCommitId;
     }
 
     public void setHeadCommitId(UUID headCommitId) {
         this.headCommitId = headCommitId;
-    }
-
-    public UUID getSemanticDataId() {
-        return this.semanticDataId;
-    }
-
-    public void setSemanticDataId(UUID semanticDataId) {
-        this.semanticDataId = semanticDataId;
     }
 
     public String getCanonicalHash() {
@@ -165,11 +143,11 @@ public class BranchHead {
         this.lastExtractedAt = lastExtractedAt;
     }
 
-    public Integer getExtractionVersion() {
+    public String getExtractionVersion() {
         return this.extractionVersion;
     }
 
-    public void setExtractionVersion(Integer extractionVersion) {
+    public void setExtractionVersion(String extractionVersion) {
         this.extractionVersion = extractionVersion;
     }
 }

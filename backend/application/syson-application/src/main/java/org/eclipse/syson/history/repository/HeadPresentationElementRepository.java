@@ -28,6 +28,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface HeadPresentationElementRepository extends JpaRepository<HeadPresentationElement, HeadPresentationElementId> {
 
-    List<HeadPresentationElement> findByProjectIdAndBranchIdAndDiagramIdAndDeletedFalse(
-            String projectId, UUID branchId, String diagramId);
+    List<HeadPresentationElement> findByProjectIdAndBranchIdAndDiagramStableIdAndIsDeletedFalse(
+            String projectId, UUID branchId, String diagramStableId);
 }

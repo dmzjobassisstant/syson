@@ -28,5 +28,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface HeadDiagramRepository extends JpaRepository<HeadDiagram, HeadDiagramId> {
 
-    List<HeadDiagram> findByProjectIdAndBranchIdAndDeletedFalse(String projectId, UUID branchId);
+    List<HeadDiagram> findByProjectIdAndBranchIdAndIsDeletedFalse(String projectId, UUID branchId);
 }

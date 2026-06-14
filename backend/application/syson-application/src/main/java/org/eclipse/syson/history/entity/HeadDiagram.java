@@ -44,11 +44,11 @@ public class HeadDiagram {
     private UUID branchId;
 
     @Id
-    @Column(name = "diagram_id", nullable = false, length = 512)
-    private String diagramId;
+    @Column(name = "stable_id", nullable = false, length = 512)
+    private String stableId;
 
-    @Column(name = "representation_id")
-    private UUID representationId;
+    @Column(name = "representation_id", columnDefinition = "TEXT")
+    private String representationId;
 
     @Column(name = "target_object_id", length = 512)
     private String targetObjectId;
@@ -75,8 +75,8 @@ public class HeadDiagram {
     @Column(name = "deleted_commit_id")
     private UUID deletedCommitId;
 
-    @Column(name = "deleted", nullable = false)
-    private boolean deleted;
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted;
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
@@ -100,19 +100,19 @@ public class HeadDiagram {
         this.branchId = branchId;
     }
 
-    public String getDiagramId() {
-        return this.diagramId;
+    public String getStableId() {
+        return this.stableId;
     }
 
-    public void setDiagramId(String diagramId) {
-        this.diagramId = diagramId;
+    public void setStableId(String stableId) {
+        this.stableId = stableId;
     }
 
-    public UUID getRepresentationId() {
+    public String getRepresentationId() {
         return this.representationId;
     }
 
-    public void setRepresentationId(UUID representationId) {
+    public void setRepresentationId(String representationId) {
         this.representationId = representationId;
     }
 
@@ -181,11 +181,11 @@ public class HeadDiagram {
     }
 
     public boolean isDeleted() {
-        return this.deleted;
+        return this.isDeleted;
     }
 
-    public void setDeleted(boolean deleted) {
-        this.deleted = deleted;
+    public void setDeleted(boolean isDeleted) {
+        this.isDeleted = isDeleted;
     }
 
     public OffsetDateTime getUpdatedAt() {

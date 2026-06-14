@@ -29,15 +29,15 @@ public class HeadDiagramId implements Serializable {
 
     private UUID branchId;
 
-    private String diagramId;
+    private String stableId;
 
     public HeadDiagramId() {
     }
 
-    public HeadDiagramId(String projectId, UUID branchId, String diagramId) {
+    public HeadDiagramId(String projectId, UUID branchId, String stableId) {
         this.projectId = projectId;
         this.branchId = branchId;
-        this.diagramId = diagramId;
+        this.stableId = stableId;
     }
 
     public String getProjectId() {
@@ -56,12 +56,12 @@ public class HeadDiagramId implements Serializable {
         this.branchId = branchId;
     }
 
-    public String getDiagramId() {
-        return this.diagramId;
+    public String getStableId() {
+        return this.stableId;
     }
 
-    public void setDiagramId(String diagramId) {
-        this.diagramId = diagramId;
+    public void setStableId(String stableId) {
+        this.stableId = stableId;
     }
 
     @Override
@@ -75,11 +75,11 @@ public class HeadDiagramId implements Serializable {
         HeadDiagramId that = (HeadDiagramId) o;
         return Objects.equals(this.projectId, that.projectId)
                 && Objects.equals(this.branchId, that.branchId)
-                && Objects.equals(this.diagramId, that.diagramId);
+                && Objects.equals(this.stableId, that.stableId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(this.projectId, this.branchId, this.diagramId);
+        return Objects.hash(this.projectId, this.branchId, this.stableId);
     }
 }

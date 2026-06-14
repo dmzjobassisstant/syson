@@ -91,13 +91,12 @@ public class HeadMaterializationService {
             rel.setProjectId(projectId);
             rel.setBranchId(branchId);
             rel.setStableId(relationship.stableId());
-            rel.setRelationshipId(relationship.relationshipId());
             rel.setRelType(relationship.relType());
-            rel.setSourceId(relationship.sourceId());
-            rel.setTargetId(relationship.targetId());
+            rel.setSourceStableId(relationship.sourceId());
+            rel.setTargetStableId(relationship.targetId());
             rel.setSourceRole(relationship.sourceRole());
             rel.setTargetRole(relationship.targetRole());
-            rel.setOwnerId(relationship.ownerId());
+            rel.setOwnerStableId(relationship.ownerId());
             rel.setAttributes(relationship.attributes() != null ? sysmlObjectHasher.canonicalizeJson(relationship.attributes()) : "{}");
             rel.setObjectHash(relationship.objectHash());
             rel.setCreatedCommitId(commitId);
@@ -110,10 +109,9 @@ public class HeadMaterializationService {
                 elem.setProjectId(projectId);
                 elem.setBranchId(branchId);
                 elem.setStableId(element.stableId());
-                elem.setElementId(element.elementId());
                 elem.setSysmlType(element.sysmlType());
                 elem.setName(element.name());
-                elem.setOwnerId(element.ownerId());
+                elem.setOwnerStableId(element.ownerId());
                 elem.setQualifiedName(element.qualifiedName());
                 elem.setAttributes(element.attributes() != null ? sysmlObjectHasher.canonicalizeJson(element.attributes()) : "{}");
                 elem.setObjectHash(element.objectHash());
@@ -132,11 +130,11 @@ public class HeadMaterializationService {
             HeadRelationship existing = headRelationshipRepository.findByProjectIdAndBranchIdAndStableId(projectId, branchId, diff.stableId()).orElse(null);
             if (existing != null) {
                 existing.setRelType(relationship.relType());
-                existing.setSourceId(relationship.sourceId());
-                existing.setTargetId(relationship.targetId());
+                existing.setSourceStableId(relationship.sourceId());
+                existing.setTargetStableId(relationship.targetId());
                 existing.setSourceRole(relationship.sourceRole());
                 existing.setTargetRole(relationship.targetRole());
-                existing.setOwnerId(relationship.ownerId());
+                existing.setOwnerStableId(relationship.ownerId());
                 existing.setAttributes(relationship.attributes() != null ? sysmlObjectHasher.canonicalizeJson(relationship.attributes()) : "{}");
                 existing.setObjectHash(relationship.objectHash());
                 existing.setUpdatedCommitId(commitId);
@@ -148,7 +146,7 @@ public class HeadMaterializationService {
                 HeadElement existing = headElementRepository.findByProjectIdAndBranchIdAndStableId(projectId, branchId, diff.stableId()).orElse(null);
                 if (existing != null) {
                     existing.setName(element.name());
-                    existing.setOwnerId(element.ownerId());
+                    existing.setOwnerStableId(element.ownerId());
                     existing.setQualifiedName(element.qualifiedName());
                     existing.setAttributes(element.attributes() != null ? sysmlObjectHasher.canonicalizeJson(element.attributes()) : "{}");
                     existing.setObjectHash(element.objectHash());

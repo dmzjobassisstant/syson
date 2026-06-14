@@ -18,7 +18,12 @@ import java.util.UUID;
 
 import org.eclipse.syson.vc.entity.CommitEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * Spring Data JPA repository for {@link CommitEntity}.
@@ -29,6 +34,14 @@ import org.springframework.stereotype.Repository;
 public interface CommitRepository extends JpaRepository<CommitEntity, UUID> {
 
     List<CommitEntity> findByProjectIdAndBranchIdOrderByCommittedAtDesc(UUID projectId, UUID branchId);
+
+    /**
+     * Finds the latest commit for a branch with a pessimistic write lock (SELECT ... FOR UPDATE).
+     * This prevents race conditions in concurrent commit numbering.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM CommitEntity c WHERE c.projectId = :projectId AND c.branchId = :branchId ORDER BY c.commitNumber DESC LIMIT 1")
+    Optional<CommitEntity> findTopByProjectIdAndBranchIdOrderByCommitNumberDescForUpdate(@Param("projectId") UUID projectId, @Param("branchId") UUID branchId);
 
     Optional<CommitEntity> findTopByProjectIdAndBranchIdOrderByCommitNumberDesc(UUID projectId, UUID branchId);
 

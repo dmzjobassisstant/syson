@@ -53,7 +53,7 @@ public class BranchLockService {
      */
     public BranchLock acquireLock(String projectId, UUID branchId, UUID userId,
                                    String sessionId, String deviceId, String reason, int ttlMinutes) {
-        Optional<BranchLock> existingLock = branchLockRepository.findByProjectIdAndBranchIdAndLockType(projectId, branchId, "branch");
+        Optional<BranchLock> existingLock = branchLockRepository.findByProjectIdAndBranchIdAndLockTypeForUpdate(projectId, branchId, "branch");
 
         if (existingLock.isPresent()) {
             BranchLock lock = existingLock.get();

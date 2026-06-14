@@ -47,17 +47,14 @@ public class HeadRelationship {
     @Column(name = "stable_id", nullable = false, length = 512)
     private String stableId;
 
-    @Column(name = "relationship_id", length = 512)
-    private String relationshipId;
-
     @Column(name = "rel_type", length = 255)
     private String relType;
 
-    @Column(name = "source_id", length = 512)
-    private String sourceId;
+    @Column(name = "source_stable_id", length = 512)
+    private String sourceStableId;
 
-    @Column(name = "target_id", length = 512)
-    private String targetId;
+    @Column(name = "target_stable_id", length = 512)
+    private String targetStableId;
 
     @Column(name = "source_role", length = 255)
     private String sourceRole;
@@ -65,8 +62,11 @@ public class HeadRelationship {
     @Column(name = "target_role", length = 255)
     private String targetRole;
 
-    @Column(name = "owner_id", length = 512)
-    private String ownerId;
+    @Column(name = "owner_stable_id", length = 512)
+    private String ownerStableId;
+
+    @Column(name = "name")
+    private String name;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "attributes", columnDefinition = "jsonb")
@@ -88,8 +88,8 @@ public class HeadRelationship {
     @Column(name = "deleted_commit_id")
     private UUID deletedCommitId;
 
-    @Column(name = "deleted", nullable = false)
-    private boolean deleted;
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted;
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
@@ -124,14 +124,6 @@ public class HeadRelationship {
         this.stableId = stableId;
     }
 
-    public String getRelationshipId() {
-        return this.relationshipId;
-    }
-
-    public void setRelationshipId(String relationshipId) {
-        this.relationshipId = relationshipId;
-    }
-
     public String getRelType() {
         return this.relType;
     }
@@ -140,20 +132,20 @@ public class HeadRelationship {
         this.relType = relType;
     }
 
-    public String getSourceId() {
-        return this.sourceId;
+    public String getSourceStableId() {
+        return this.sourceStableId;
     }
 
-    public void setSourceId(String sourceId) {
-        this.sourceId = sourceId;
+    public void setSourceStableId(String sourceStableId) {
+        this.sourceStableId = sourceStableId;
     }
 
-    public String getTargetId() {
-        return this.targetId;
+    public String getTargetStableId() {
+        return this.targetStableId;
     }
 
-    public void setTargetId(String targetId) {
-        this.targetId = targetId;
+    public void setTargetStableId(String targetStableId) {
+        this.targetStableId = targetStableId;
     }
 
     public String getSourceRole() {
@@ -172,12 +164,20 @@ public class HeadRelationship {
         this.targetRole = targetRole;
     }
 
-    public String getOwnerId() {
-        return this.ownerId;
+    public String getOwnerStableId() {
+        return this.ownerStableId;
     }
 
-    public void setOwnerId(String ownerId) {
-        this.ownerId = ownerId;
+    public void setOwnerStableId(String ownerStableId) {
+        this.ownerStableId = ownerStableId;
+    }
+
+    public String getName() {
+        return this.name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public String getAttributes() {
@@ -229,11 +229,11 @@ public class HeadRelationship {
     }
 
     public boolean isDeleted() {
-        return this.deleted;
+        return this.isDeleted;
     }
 
-    public void setDeleted(boolean deleted) {
-        this.deleted = deleted;
+    public void setDeleted(boolean isDeleted) {
+        this.isDeleted = isDeleted;
     }
 
     public OffsetDateTime getCreatedAt() {

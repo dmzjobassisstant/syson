@@ -63,17 +63,16 @@ public class ModelReconstructionService {
         }
 
         // Reconstruct from head tables
-        List<HeadElement> elements = headElementRepository.findByProjectIdAndBranchIdAndDeletedFalse(projectId, branchId);
-        List<HeadRelationship> relationships = headRelationshipRepository.findByProjectIdAndBranchIdAndDeletedFalse(projectId, branchId);
+        List<HeadElement> elements = headElementRepository.findByProjectIdAndBranchIdAndIsDeletedFalse(projectId, branchId);
+        List<HeadRelationship> relationships = headRelationshipRepository.findByProjectIdAndBranchIdAndIsDeletedFalse(projectId, branchId);
 
         List<Map<String, Object>> elementMaps = new ArrayList<>();
         for (HeadElement elem : elements) {
             Map<String, Object> elemMap = new HashMap<>();
             elemMap.put("stableId", elem.getStableId());
-            elemMap.put("elementId", elem.getElementId());
             elemMap.put("sysmlType", elem.getSysmlType());
             elemMap.put("name", elem.getName());
-            elemMap.put("ownerId", elem.getOwnerId());
+            elemMap.put("ownerId", elem.getOwnerStableId());
             elemMap.put("qualifiedName", elem.getQualifiedName());
             elemMap.put("attributes", elem.getAttributes());
             elemMap.put("objectHash", elem.getObjectHash());
@@ -84,13 +83,12 @@ public class ModelReconstructionService {
         for (HeadRelationship rel : relationships) {
             Map<String, Object> relMap = new HashMap<>();
             relMap.put("stableId", rel.getStableId());
-            relMap.put("relationshipId", rel.getRelationshipId());
             relMap.put("relType", rel.getRelType());
-            relMap.put("sourceId", rel.getSourceId());
-            relMap.put("targetId", rel.getTargetId());
+            relMap.put("sourceId", rel.getSourceStableId());
+            relMap.put("targetId", rel.getTargetStableId());
             relMap.put("sourceRole", rel.getSourceRole());
             relMap.put("targetRole", rel.getTargetRole());
-            relMap.put("ownerId", rel.getOwnerId());
+            relMap.put("ownerId", rel.getOwnerStableId());
             relMap.put("attributes", rel.getAttributes());
             relMap.put("objectHash", rel.getObjectHash());
             relationshipMaps.add(relMap);

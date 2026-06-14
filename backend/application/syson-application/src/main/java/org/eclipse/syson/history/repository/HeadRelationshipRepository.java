@@ -29,9 +29,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface HeadRelationshipRepository extends JpaRepository<HeadRelationship, HeadRelationshipId> {
 
-    List<HeadRelationship> findByProjectIdAndBranchIdAndDeletedFalse(String projectId, UUID branchId);
+    List<HeadRelationship> findByProjectIdAndBranchIdAndIsDeletedFalse(String projectId, UUID branchId);
 
-    List<HeadRelationship> findByProjectIdAndBranchIdAndSourceId(String projectId, UUID branchId, String sourceId);
+    List<HeadRelationship> findByProjectIdAndBranchIdAndSourceStableId(String projectId, UUID branchId, String sourceStableId);
 
     Optional<HeadRelationship> findByProjectIdAndBranchIdAndStableId(String projectId, UUID branchId, String stableId);
 }

@@ -383,7 +383,7 @@ public class EnterpriseHistoryWarehouseRedTest {
     public void elementLockServiceContract() {
         Class<?> service = this.requiredClass(LOCKS_SERVICE_PKG + ".ElementLockService");
 
-        this.assertHasMethod(service, "acquireLock", STRING, UUID, STRING, UUID, STRING, STRING, STRING, "int");
+        this.assertHasMethod(service, "acquireLock", STRING, UUID, STRING, UUID, STRING, STRING, STRING, STRING, "int");
         this.assertHasMethod(service, "releaseLock", STRING, UUID, STRING, UUID);
         this.assertHasMethod(service, "refreshLock", STRING, UUID, STRING, UUID, "int");
         this.assertHasMethod(service, "getLock", STRING, UUID, STRING);

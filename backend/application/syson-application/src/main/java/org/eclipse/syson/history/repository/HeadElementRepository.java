@@ -31,7 +31,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface HeadElementRepository extends JpaRepository<HeadElement, HeadElementId> {
 
-    List<HeadElement> findByProjectIdAndBranchIdAndDeletedFalse(String projectId, UUID branchId);
+    List<HeadElement> findByProjectIdAndBranchIdAndIsDeletedFalse(String projectId, UUID branchId);
 
     Optional<HeadElement> findByProjectIdAndBranchIdAndStableId(String projectId, UUID branchId, String stableId);
 
