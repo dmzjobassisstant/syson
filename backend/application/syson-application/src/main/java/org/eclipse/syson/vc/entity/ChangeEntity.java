@@ -61,12 +61,15 @@ public class ChangeEntity {
     private String afterHash;
 
     @Column(name = "patch", columnDefinition = "JSONB")
+    @org.hibernate.annotations.ColumnTransformer(write = "?::jsonb")
     private String patch;
 
     @Column(name = "before_object", columnDefinition = "JSONB")
+    @org.hibernate.annotations.ColumnTransformer(write = "?::jsonb")
     private String beforeObject;
 
     @Column(name = "after_object", columnDefinition = "JSONB")
+    @org.hibernate.annotations.ColumnTransformer(write = "?::jsonb")
     private String afterObject;
 
     @Column(name = "created_at")

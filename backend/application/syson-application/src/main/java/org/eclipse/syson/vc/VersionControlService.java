@@ -254,12 +254,17 @@ public class VersionControlService {
             ce.setChangeSeq(seq);
             ce.setObjectType(dto.objectType());
             ce.setObjectId(dto.objectId());
-            ce.setOperation(dto.operation());
+            ce.setOperation(dto.operation() != null ? dto.operation().toLowerCase() : null);
             ce.setPatch(dto.patch());
             ce.setBeforeObject(dto.beforeObject());
             ce.setAfterObject(dto.afterObject());
             ce.setCreatedAt(now);
             ce.setCreatedBy(userId);
+            ce.setBranchId(branchId);
+            ce.setProjectRef(projectId.toString());
+            ce.setStableObjectId(dto.objectId() != null ? dto.objectId().toString() : null);
+            ce.setChangedFields("[]");
+            ce.setExtractorVersion("v1");
 
             // Per-change hash: SHA-256(objectType:objectId:operation:patch)
             String changeHash = sha256(

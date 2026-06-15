@@ -222,8 +222,8 @@
     }
     #syson-user-bar {
       display: none; align-items: center; gap: 10px;
-      color: #f8fafc; font-size: 0.82rem; line-height: 1;
-      padding: 5px 10px; border-radius: 999px;
+      color: #f8fafc; font-size: 0.8125rem; line-height: 1; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+      padding: 5px 10px; border-radius: 4px;
       background: rgba(15,23,42,0.82); border: 1px solid rgba(255,255,255,0.18);
       white-space: nowrap; margin-left: 12px; max-width: 48vw;
     }
@@ -244,6 +244,89 @@
     #syson-dashboard-btn { border-color: #2563eb; color: #dbeafe; }
     #syson-admin-btn { border-color: #9b59b6; color: #f3e8ff; font-weight: 700; }
     #syson-logout-btn:hover, #syson-dashboard-btn:hover, #syson-admin-btn:hover { background: rgba(255,255,255,0.08); }
+
+    /* ── consolidated user dropdown (clickable account name) ── */
+    #syson-menu-trigger {
+      cursor: pointer; padding: 2px 10px; border-radius: 4px;
+    }
+    #syson-menu-trigger:hover {
+      background: rgba(255,255,255,0.08);
+    }
+    .syson-dropdown {
+      position: absolute; top: 100%; right: 0; margin-top: 6px;
+      background: #0f172a; border: 1px solid #261e58; border-radius: 4px;
+      min-width: 180px; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); z-index: 10001;
+      padding: 6px 0; display: none;
+    }
+    .syson-dropdown.open { display: block; }
+    .syson-dropdown button {
+      display: block; width: 100%; text-align: left;
+      padding: 7px 14px; font-size: 0.8125rem; cursor: pointer; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+      border: none; background: transparent; color: #e2e8f0; font-weight: 500;
+    }
+    .syson-dropdown button:hover { background: rgba(255,255,255,0.08); }
+    .syson-dropdown .dd-dashboard { color: #93c5fd; }
+    .syson-dropdown .dd-admin   { color: #f3e8ff; }
+    .syson-dropdown .dd-logout  { color: #fca5a5; }
+    .syson-dropdown .dd-divider { border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0; }
+
+    /* ── save button (next to user bar) ── */
+    #syson-save-btn-ub {
+      border: 1px solid #3b82f6; border-radius: 4px;
+      background: #261e58; color: #e2e8f0;
+      padding: 4px 9px; font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1; white-space: nowrap;
+    }
+    #syson-save-btn-ub:hover { background: #3b82f6; color: #fff; }
+
+    /* ── branch menu ── */
+    #syson-branch-menu-btn {
+      border: 1px solid rgba(34,197,94,0.35); border-radius: 4px;
+      background: rgba(34,197,94,0.1); color: #bbf7d0;
+      padding: 4px 9px; font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
+      max-width: 240px; overflow: hidden; text-overflow: ellipsis;
+    }
+    #syson-branch-menu-btn:hover { background: rgba(34,197,94,0.2); }
+    .syson-branch-dropdown {
+      position: absolute; top: 100%; right: 0; margin-top: 6px;
+      background: #0f172a; border: 1px solid #261e58; border-radius: 4px;
+      width: 320px; max-height: 420px; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); z-index: 10001;
+      display: none; flex-direction: column;
+    }
+    .syson-branch-dropdown.open { display: flex; }
+    .syson-branch-dropdown .bd-search {
+      padding: 8px; border-bottom: 1px solid rgba(59,130,246,0.15);
+    }
+    .syson-branch-dropdown .bd-search input {
+      width: 100%; padding: 6px 10px; font-size: 11px; border: 1px solid rgba(59,130,246,0.25);
+      border-radius: 4px; background: #1e293b; color: #dbeafe; box-sizing: border-box;
+    }
+    .syson-branch-dropdown .bd-list {
+      flex: 1; overflow-y: auto; padding: 4px 0;
+    }
+    .syson-branch-dropdown .bd-item {
+      padding: 7px 12px; cursor: pointer; font-size: 11px; color: #94a3b8;
+      display: flex; align-items: center; gap: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .syson-branch-dropdown .bd-item:hover { background: rgba(59,130,246,0.1); color: #dbeafe; }
+    .syson-branch-dropdown .bd-item.active { background: rgba(34,197,94,0.1); color: #bbf7d0; font-weight: 600; }
+    .syson-branch-dropdown .bd-item .bd-icon { font-size: 10px; text-transform: uppercase; opacity: 0.6; letter-spacing: 0.5px; }
+    .syson-branch-dropdown .bd-item .bd-name { flex: 1; }
+    .syson-branch-dropdown .bd-actions {
+      padding: 8px; border-top: 1px solid rgba(59,130,246,0.15);
+      display: flex; gap: 6px;
+    }
+    .syson-branch-dropdown .bd-actions button {
+      flex: 1; padding: 6px 10px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer;
+    }
+    .bd-btn-apply { border: 1px solid rgba(34,197,94,0.45); background: rgba(34,197,94,0.16); color: #bbf7d0; }
+    .bd-btn-apply:hover { background: rgba(34,197,94,0.35); }
+    .bd-btn-diff { border: 1px solid rgba(168,85,247,0.45); background: rgba(168,85,247,0.16); color: #e9d5ff; }
+    .bd-btn-diff:hover { background: rgba(168,85,247,0.35); }
+    .bd-btn-diff-main { border: 1px solid rgba(59,130,246,0.45); background: rgba(59,130,246,0.16); color: #93c5fd; }
+    .bd-btn-diff-main:hover { background: rgba(59,130,246,0.35); }
   `;
 
   function ensureAuthStyles() {
@@ -385,18 +468,28 @@
       var badgeHTML = state.roles.map(function(r) {
         return '<span class="role-badge ' + r.toLowerCase() + '">' + r + '</span>';
       }).join('');
-      var adminButtonHTML = isSuperUser() ? '<button id="syson-admin-btn" title="Administration">Admin</button>' : '';
+      var adminMenuHTML = isSuperUser()
+        ? '<div class="dd-divider"></div><button class="dd-admin" data-action="admin">Administration</button>'
+        : '';
       bar.innerHTML =
-        '<span class="syson-user-email">' + state.email + '</span>' +
+        '<div id="syson-menu-wrapper" style="position:relative;display:inline-flex;cursor:pointer;">' +
+        '<span id="syson-menu-trigger" class="syson-user-email" title="Dashboard, Admin, Sign out ▾">' + state.email + ' ▾</span>' +
         badgeHTML +
-        '<button id="syson-dashboard-btn" title="Dashboard">Dashboard</button>' +
-        adminButtonHTML +
-        '<button id="syson-logout-btn" title="Sign out">Sign out</button>';
+        '<div id="syson-menu-dd" class="syson-dropdown" style="top:100%;left:0;">' +
+        '<button class="dd-dashboard" data-action="dashboard">Dashboard</button>' +
+        adminMenuHTML +
+        '<div class="dd-divider"></div>' +
+        '<button class="dd-logout" data-action="logout">Sign out</button>' +
+        '</div></div>' +
+        '<button id="syson-save-btn-ub" title="Save model — records history to version control">Save</button>';
       bar.style.display = 'flex';
-      document.getElementById('syson-logout-btn').addEventListener('click', logout);
-      document.getElementById('syson-dashboard-btn').addEventListener('click', showDashboard);
-      var adminBtn = document.getElementById('syson-admin-btn');
-      if (adminBtn) adminBtn.addEventListener('click', showAdminConsole);
+      document.getElementById('syson-save-btn-ub').addEventListener('click', triggerSave);
+      var menuBtn = document.getElementById('syson-menu-trigger');
+      var menuWrapper = document.getElementById('syson-menu-wrapper');
+      var menuDD = document.getElementById('syson-menu-dd');
+      menuWrapper.addEventListener('click', function(e) { e.stopPropagation(); menuDD.classList.toggle('open'); });
+      menuDD.addEventListener('click', function(e) { e.stopPropagation(); var btn = e.target.closest('button'); if (!btn) return; var action = btn.getAttribute('data-action'); if (action === 'dashboard') showDashboard(); else if (action === 'admin') showAdminConsole(); else if (action === 'logout') logout(); menuDD.classList.remove('open'); });
+      document.addEventListener('click', function() { menuDD.classList.remove('open'); }, true);
     }
 
     // Initial mount
@@ -448,7 +541,7 @@
             + '<div><span style="color:#e0e0e0;font-size:0.85rem;font-weight:500;">' + escapeHtml(displayName) + '</span>'
             + '<br><span style="color:#555;font-size:0.68rem;font-family:monospace;">' + pid.substring(0,16) + '…</span></div>'
             + '<div style="display:flex;gap:6px;align-items:center;">'
-            + '<button class="syson-vc-btn" data-project-id="' + escapeHtml(pid) + '" style="padding:3px 8px;border:1px solid #3b82f6;border-radius:4px;background:transparent;color:#3b82f6;font-size:.68rem;cursor:pointer;font-weight:600;">🔀 VC</button>'
+            + '<button class="syson-vc-btn" data-project-id="' + escapeHtml(pid) + '" style="padding:3px 8px;border:1px solid #3b82f6;border-radius:4px;background:transparent;color:#3b82f6;font-size:.68rem;cursor:pointer;font-weight:600;">VC</button>'
             + '<span style="background:#261e58;color:#fff;font-size:0.68rem;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;">' + (p.role || '') + '</span>'
             + '</div></div>';
         }).join('');
@@ -793,7 +886,7 @@
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100002;display:flex;align-items:center;justify-content:center;background:rgba(38,30,88,0.65);font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
     overlay.innerHTML = '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:14px;width:min(1200px,96vw);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);color:#e2e8f0;">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;">'
-      + '<div><h2 style="margin:0;font-size:1.1rem;">🔀 Version Control</h2>'
+      + '<div><h2 style="margin:0;font-size:1.1rem;">Version Control</h2>'
       + '<p style="margin:4px 0 0;color:#64748b;font-size:.78rem;">Project: ' + escapeHtml(projectId.substring(0,16)) + '…</p></div>'
       + '<button id="syson-vc-close" style="background:none;border:none;color:#64748b;font-size:1.6rem;cursor:pointer;">×</button></div>'
       + '<div id="syson-vc-content" style="padding:16px 20px;"><p style="color:#64748b;">Loading version control data…</p></div>'
@@ -831,10 +924,10 @@
 
     // Stats cards
     var statsHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
-      + vcStatCard('🌿', overview.branchCount || 0, 'Branches', '#3b82f6')
-      + vcStatCard('📦', overview.commitCount || 0, 'Commits', '#be1a78')
-      + vcStatCard('📋', overview.baselineCount || 0, 'Baselines', '#dc2626')
-      + vcStatCard('🏷️', overview.tagCount || 0, 'Tags', '#059669')
+      + vcStatCard('', overview.branchCount || 0, 'Branches', '#3b82f6')
+      + vcStatCard('', overview.commitCount || 0, 'Commits', '#22c55e')
+      + vcStatCard('', overview.baselineCount || 0, 'Baselines', '#dc2626')
+      + vcStatCard('', overview.tagCount || 0, 'Tags', '#059669')
       + vcStatCard('🔄', overview.openMRCount || 0, 'Open MRs', '#d97706')
       + '</div>';
 
@@ -899,7 +992,7 @@
     // Baselines list
     var baselinesHTML = vcListSection('Baselines', baselines.map(function(b) {
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
-        + '<div><span style="color:#dc2626;font-weight:600;">📋 ' + escapeHtml(b.name || b.baselineCode || 'unnamed') + '</span></div>'
+        + '<div><span style="color:#dc2626;font-weight:600;">' + escapeHtml(b.name || b.baselineCode || 'unnamed') + '</span></div>'
         + '<span style="color:#475569;font-size:.75rem;">' + escapeHtml(b.status || '') + '</span>'
         + '</div>';
     }));
@@ -907,7 +1000,7 @@
     // Tags list
     var tagsHTML = vcListSection('Tags', tags.map(function(t) {
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b;">'
-        + '<span style="color:#059669;font-weight:600;">🏷️ ' + escapeHtml(t.name || 'unnamed') + '</span>'
+        + '<span style="color:#059669;font-weight:600;">' + escapeHtml(t.name || 'unnamed') + '</span>'
         + '<span style="color:#475569;font-size:.75rem;">' + escapeHtml(t.description || '') + '</span>'
         + '</div>';
     }));
@@ -1396,45 +1489,203 @@
   }
 
   // ── Element History Button ────────────────────────────────────────────────
-  // Injects a "📋 History" button into the Sirius properties panel header.
+  // Injects a "History" button into the Sirius properties panel header.
   // When clicked, fetches element change history and shows an overlay.
 
-  // ── Save Button ──────────────────────────────────────────────────────────
-  // Injects a save button into the top navbar, next to the branch indicator.
+  // ═══════════════════════════════════════════════════════════════════
+  // BRANCH CONTEXT MENU — consolidated dropdown with search
+  // ═══════════════════════════════════════════════════════════════════
 
-  function injectSaveButton() {
+  var _branchMenuState = { branches: [], activeBranchId: null, projectId: null };
+
+  function mountBranchMenu() {
     if (!state.token) return;
     function tryInject() {
-      var existing = document.getElementById('syson-save-btn');
-      if (!isProjectEditorUrl()) {
-        if (existing) existing.remove();
+      var projectId = getProjectIdFromUrl();
+      if (!projectId || !isProjectEditorUrl()) {
+        var btn = document.getElementById('syson-branch-menu-btn');
+        if (btn) btn.style.display = 'none';
         return;
       }
       var navBar = findEditorHeader();
       if (!navBar) return;
-      if (existing && navBar.contains(existing)) return;
-      if (existing) existing.remove();
 
-      var saveBtn = document.createElement('button');
-      saveBtn.id = 'syson-save-btn';
-      saveBtn.innerHTML = '💾 Save';
-      saveBtn.title = 'Save model — records history to version control';
-      saveBtn.style.cssText = 'position:absolute;right:calc(250px + 13.3333vw);top:50%;transform:translateY(-50%);padding:4px 12px;font-size:12px;font-weight:600;background:#261e58;color:#e2e8f0;border:1px solid #3b82f6;border-radius:6px;cursor:pointer;white-space:nowrap;z-index:10;display:inline-flex;align-items:center;gap:4px;';
-      saveBtn.addEventListener('mouseenter', function() { this.style.background = '#3b82f6'; this.style.color = '#fff'; });
-      saveBtn.addEventListener('mouseleave', function() { this.style.background = '#261e58'; this.style.color = '#e2e8f0'; });
-      saveBtn.addEventListener('click', function() { triggerSave(); });
-      navBar.style.position = 'relative';
-      navBar.appendChild(saveBtn);
+      var wrapper = document.getElementById('syson-branch-menu-wrapper');
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.id = 'syson-branch-menu-wrapper';
+        wrapper.style.cssText = 'position:absolute;right:calc(80px + 20vw);top:50%;transform:translateY(-50%);z-index:10;';
+        navBar.style.position = 'relative';
+        navBar.appendChild(wrapper);
+      }
+      if (!navBar.contains(wrapper)) navBar.appendChild(wrapper);
+
+      var btn = document.getElementById('syson-branch-menu-btn');
+      if (!btn) {
+        wrapper.innerHTML = '<div id="syson-branch-menu-trigger" style="position:relative;display:inline-flex;">'
+          + '<button id="syson-branch-menu-btn">Config. Context: …</button>'
+          + '<div id="syson-branch-dd" class="syson-branch-dropdown">'
+          + '<div class="bd-search"><input id="syson-branch-search" type="text" placeholder="Search branches\u2026" /></div>'
+          + '<div id="syson-branch-list" class="bd-list"></div>'
+          + '<div id="syson-branch-info" style="padding:6px 12px;font-size:10px;color:#475569;border-top:1px solid rgba(59,130,246,0.1);"></div>'
+          + '<div class="bd-actions">'
+          + '<button id="syson-bd-apply" class="bd-btn-apply">Apply</button>'
+          + '<button id="syson-bd-diff-bp" class="bd-btn-diff">Diff vs Branch Point</button>'
+          + '<button id="syson-bd-diff-parent" class="bd-btn-diff-main">Diff vs Parent</button>'
+          + '</div></div></div>';
+        btn = document.getElementById('syson-branch-menu-btn');
+
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var dd = document.getElementById('syson-branch-dd');
+          if (dd.classList.contains('open')) { dd.classList.remove('open'); return; }
+          loadBranchesForMenu(projectId);
+          dd.classList.add('open');
+        });
+
+        document.addEventListener('click', function(e) {
+          var dd = document.getElementById('syson-branch-dd');
+          var trig = document.getElementById('syson-branch-menu-trigger');
+          if (dd && trig && !trig.contains(e.target)) dd.classList.remove('open');
+        }, true);
+
+        var searchInput = document.getElementById('syson-branch-search');
+        searchInput.addEventListener('input', function() { filterBranchList(this.value); });
+
+        document.getElementById('syson-bd-apply').addEventListener('click', function() {
+          var dd = document.getElementById('syson-branch-dd');
+          dd.classList.remove('open');
+          applyBranchById(_branchMenuState.activeBranchId);
+        });
+        document.getElementById('syson-bd-diff-bp').addEventListener('click', function() {
+          openDiffViewerFor('vs-branch-point');
+        });
+        document.getElementById('syson-bd-diff-parent').addEventListener('click', function() {
+          openDiffViewerFor('vs-parent-latest');
+        });
+      }
+
+      btn.style.display = 'inline-flex';
+      if (_branchMenuState.projectId !== projectId) {
+        _branchMenuState.projectId = projectId;
+        _branchMenuState.branches = [];
+        _branchMenuState.activeBranchId = localStorage.getItem('syson-vc-branch-' + projectId) || '';
+        loadBranchesForMenu(projectId);
+      }
     }
     installEditorChromeRouteGuard(tryInject);
     [50, 300, 1000, 3000, 6000].forEach(function(delay) { setTimeout(tryInject, delay); });
   }
 
+  function loadBranchesForMenu(projectId) {
+    var headers = { 'Authorization': 'Bearer ' + state.token };
+    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/tree', { headers: headers })
+      .then(function(r) { return r.ok ? r.json() : {}; })
+      .then(function(data) {
+        var branches = (data && data.branches) || [];
+        _branchMenuState.branches = branches;
+        if (!_branchMenuState.activeBranchId && branches.length === 1) {
+          _branchMenuState.activeBranchId = branches[0].branchId;
+        }
+        renderBranchList(branches);
+        updateBranchButton();
+      })
+      .catch(function() {
+        renderBranchList([]);
+      });
+  }
+
+  function renderBranchList(branches) {
+    var list = document.getElementById('syson-branch-list');
+    if (!list) return;
+    var filter = (document.getElementById('syson-branch-search') || {}).value || '';
+    var activeId = _branchMenuState.activeBranchId;
+    var filtered = filter
+      ? branches.filter(function(b) {
+          var n = (b.name || '').toLowerCase();
+          var id = (b.branchId || '').toLowerCase();
+          var f = filter.toLowerCase();
+          return n.indexOf(f) >= 0 || id.indexOf(f) >= 0;
+        })
+      : branches;
+    list.innerHTML = filtered.map(function(b) {
+      var isActive = b.branchId === activeId;
+      var icon = b.branchType === 'main' ? 'main' : 'feature';
+      var cls = 'bd-item' + (isActive ? ' active' : '');
+      return '<div class="' + cls + '" data-branch-id="' + escapeHtml(b.branchId) + '">'
+        + '<span class="bd-icon">' + icon + '</span>'
+        + '<span class="bd-name">' + escapeHtml(b.name || b.branchId.substring(0,8)) + '</span>'
+        + (isActive ? '<span style="font-size:10px;color:#4ade80;">active</span>' : '')
+        + '</div>';
+      }).join('');
+    list.querySelectorAll('.bd-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        var bid = this.getAttribute('data-branch-id');
+        _branchMenuState.activeBranchId = bid;
+        localStorage.setItem('syson-vc-branch-' + (_branchMenuState.projectId || getProjectIdFromUrl()), bid);
+        renderBranchList(_branchMenuState.branches);
+        updateBranchButton();
+        var info = document.getElementById('syson-branch-info');
+        if (info) info.textContent = 'Selected: ' + bid.substring(0,12) + '\u2026 \u2014 click Apply to switch';
+      });
+    });
+    var info = document.getElementById('syson-branch-info');
+    if (info && activeId) info.textContent = 'Active: ' + activeId.substring(0,12) + '\u2026';
+  }
+
+  function filterBranchList(query) {
+    renderBranchList(_branchMenuState.branches);
+  }
+
+  function updateBranchButton() {
+    var btn = document.getElementById('syson-branch-menu-btn');
+    if (!btn) return;
+    var branches = _branchMenuState.branches;
+    var activeId = _branchMenuState.activeBranchId;
+    var branch = null;
+    for (var i = 0; i < branches.length; i++) {
+      if (branches[i].branchId === activeId) { branch = branches[i]; break; }
+    }
+    var name = branch ? branch.name : (activeId ? activeId.substring(0,8) : 'main');
+    btn.textContent = 'Config. Context: ' + name;
+    btn.title = 'Config. Context — select branch, apply, diff, merge';
+  }
+
+  function applyBranchById(branchId) {
+    if (!branchId) return;
+    var projectId = _branchMenuState.projectId || getProjectIdFromUrl();
+    var btn = document.getElementById('syson-branch-menu-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/apply-branch', {
+      method: 'POST',
+      body: JSON.stringify({ branchId: branchId }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) { return r.ok ? r.json() : r.json().then(function(e) { return Promise.reject(new Error(e.message || 'HTTP ' + r.status)); }); })
+      .then(function(result) {
+        if (btn) { btn.style.opacity = '1'; btn.textContent = '\u2714 ' + (result.name || ''); }
+        setTimeout(function() { window.location.reload(); }, 500);
+      }).catch(function(err) {
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        alert('Failed to apply branch: ' + err.message);
+      });
+  }
+
+  function openDiffViewerFor(mode) {
+    var projectId = _branchMenuState.projectId || getProjectIdFromUrl();
+    var branchId = _branchMenuState.activeBranchId;
+    if (!projectId || !branchId) { alert('Select a branch first'); return; }
+    var dd = document.getElementById('syson-branch-dd');
+    if (dd) dd.classList.remove('open');
+    diffViewerState = { open: false, data: null, mode: mode, selectedIds: new Set() };
+    openDiffViewer();
+  }
+
+
   function triggerSave() {
     var projectId = getProjectIdFromUrl();
     if (!projectId) { alert('Open a project first to save.'); return; }
-    var saveBtn = document.getElementById('syson-save-btn');
-    if (saveBtn) { saveBtn.style.opacity = '0.5'; saveBtn.innerHTML = '⏳'; }
+    var saveBtn = document.getElementById('syson-save-btn-ub') || document.getElementById('syson-save-btn');
+    if (saveBtn) { saveBtn.style.opacity = '0.5'; saveBtn.innerHTML = 'Saving…'; }
     // Resolve branch
     var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || '';
     _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/settings/default-branch', { headers: { 'Authorization': 'Bearer ' + state.token } })
@@ -1451,176 +1702,19 @@
       })
       .then(function(r) { return r.ok ? r.json() : Promise.reject(r.statusText); })
       .then(function(result) {
-        if (saveBtn) { saveBtn.innerHTML = '✅'; saveBtn.style.opacity = '1'; saveBtn.style.color = '#4ade80'; saveBtn.style.borderColor = '#4ade80'; }
+        if (saveBtn) { saveBtn.innerHTML = 'Saved'; saveBtn.style.opacity = '1'; saveBtn.style.color = '#4ade80'; saveBtn.style.borderColor = '#4ade80'; }
         console.log('Save complete:', result.message);
-        setTimeout(function() { if (saveBtn) { saveBtn.innerHTML = '💾 Save'; saveBtn.style.opacity = '1'; saveBtn.style.background = '#261e58'; saveBtn.style.color = '#e2e8f0'; saveBtn.style.borderColor = '#3b82f6'; }}, 2000);
+        setTimeout(function() { if (saveBtn) { saveBtn.innerHTML = 'Save'; saveBtn.style.opacity = '1'; saveBtn.style.background = '#261e58'; saveBtn.style.color = '#e2e8f0'; saveBtn.style.borderColor = '#3b82f6'; }}, 2000);
       })
       .catch(function(err) {
-        if (saveBtn) { saveBtn.innerHTML = '❌'; saveBtn.style.opacity = '1'; saveBtn.style.color = '#f87171'; saveBtn.style.borderColor = '#f87171'; }
-        console.error('Save failed:', err);
-        setTimeout(function() { if (saveBtn) { saveBtn.innerHTML = '💾 Save'; saveBtn.style.opacity = '1'; saveBtn.style.background = '#261e58'; saveBtn.style.color = '#e2e8f0'; saveBtn.style.borderColor = '#3b82f6'; }}, 2000);
+        console.error('Save failed', err);
+        if (saveBtn) { saveBtn.innerHTML = 'Save'; saveBtn.style.opacity = '1'; saveBtn.style.background = '#261e58'; saveBtn.style.color = '#e2e8f0'; saveBtn.style.borderColor = '#3b82f6'; }
+        setTimeout(function() { if (saveBtn) { saveBtn.innerHTML = 'Save'; saveBtn.style.opacity = '1'; saveBtn.style.background = '#261e58'; saveBtn.style.color = '#e2e8f0'; saveBtn.style.borderColor = '#3b82f6'; }}, 2000);
       });
   }
 
   // ── Branch Indicator ─────────────────────────────────────────────────────
   // Injects a branch indicator into the top navigation bar.
-
-  function injectBranchIndicator() {
-    if (!state.token) return;
-    var lastProjectId = null;
-    var refreshTimer = null;
-
-    function tryInject() {
-      var projectId = getProjectIdFromUrl();
-      var wrap = document.getElementById('syson-branch-wrap');
-      if (!projectId || !isProjectEditorUrl()) {
-        if (wrap) wrap.remove();
-        return;
-      }
-
-      var navBar = findEditorHeader();
-      if (!navBar) return;
-      if (!wrap || !document.body.contains(wrap)) {
-        wrap = document.createElement('div');
-        wrap.id = 'syson-branch-wrap';
-        wrap.style.cssText = 'position:absolute;right:calc(80px + 13.3333vw);top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:6px;z-index:10;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
-        wrap.innerHTML = '<span id="syson-branch-ind" style="display:none;align-items:center;gap:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#93c5fd;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:4px;white-space:nowrap;">🌿 loading…</span>'
-          + '<select id="syson-branch-select" title="Select branch to load and save into" style="max-width:150px;padding:3px 6px;font-size:11px;border:1px solid rgba(59,130,246,0.35);border-radius:4px;background:#0f172a;color:#dbeafe;"></select>'
-          + '<button id="syson-branch-apply" title="Load selected branch into SysON and save future changes there" style="padding:3px 8px;font-size:11px;font-weight:700;border:1px solid rgba(34,197,94,0.45);border-radius:4px;background:rgba(34,197,94,0.16);color:#bbf7d0;cursor:pointer;">Apply</button>';
-        navBar.style.position = 'relative';
-        navBar.appendChild(wrap);
-        var applyBtn = wrap.querySelector('#syson-branch-apply');
-        if (applyBtn) applyBtn.addEventListener('click', applySelectedBranch);
-      } else if (!navBar.contains(wrap)) {
-        navBar.appendChild(wrap);
-      }
-
-      wrap.style.display = 'inline-flex';
-      injectDiffButton(navBar);
-      if (lastProjectId !== projectId || wrap.getAttribute('data-loaded') !== 'true') {
-        lastProjectId = projectId;
-        refreshBranchName();
-      }
-      if (!refreshTimer) {
-        refreshTimer = setInterval(refreshBranchName, 30000);
-      }
-    }
-
-    installEditorChromeRouteGuard(tryInject);
-    [50, 300, 1000, 3000, 6000].forEach(function(delay) { setTimeout(tryInject, delay); });
-  }
-
-  function refreshBranchName() {
-    var projectId = getProjectIdFromUrl();
-    var wrap = document.getElementById('syson-branch-wrap');
-    var ind = document.getElementById('syson-branch-ind');
-    var select = document.getElementById('syson-branch-select');
-    if (!projectId || !ind) return;
-    if (wrap) wrap.setAttribute('data-loaded', 'false');
-    var headers = { 'Authorization': 'Bearer ' + state.token };
-    var branchId = '';
-    try { branchId = localStorage.getItem('syson-vc-branch-' + projectId) || ''; } catch(e) {}
-
-    var defaultBranchPromise = branchId
-      ? Promise.resolve({ branchId: branchId })
-      : _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/settings/default-branch', { headers: headers })
-          .then(function(r) { return r.ok ? r.json() : {}; })
-          .catch(function() { return {}; });
-
-    Promise.all([
-      defaultBranchPromise,
-      _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/tree', { headers: headers })
-        .then(function(r) { return r.ok ? r.json() : {}; })
-        .catch(function() { return {}; })
-    ]).then(function(data) {
-      branchId = (data[0] && data[0].branchId) || branchId || '';
-      var branches = (data[1] && data[1].branches) || [];
-      if (!branchId && branches.length === 1) branchId = branches[0].branchId;
-      var branch = null;
-      for (var i = 0; i < branches.length; i++) {
-        if (branches[i].branchId === branchId) { branch = branches[i]; break; }
-      }
-      if (select) {
-        select.innerHTML = branches.map(function(b) {
-          var selected = b.branchId === branchId ? ' selected' : '';
-          return '<option value="' + escapeHtml(b.branchId) + '"' + selected + '>' + escapeHtml(b.name || b.branchId.substring(0,8)) + '</option>';
-        }).join('');
-      }
-      var name = branch ? branch.name : (branchId ? branchId.substring(0,8) : 'main');
-      ind.innerHTML = '🌿 Branch: ' + escapeHtml(name);
-      ind.title = branchId ? ('Branch ID: ' + branchId) : 'No branch selected; using main/default context';
-      if (wrap) wrap.setAttribute('data-loaded', 'true');
-    }).catch(function() {
-      ind.innerHTML = '🌿 Branch: main';
-      if (wrap) wrap.setAttribute('data-loaded', 'true');
-    });
-  }
-
-  function applySelectedBranch() {
-    var projectId = getProjectIdFromUrl();
-    var select = document.getElementById('syson-branch-select');
-    var ind = document.getElementById('syson-branch-ind');
-    var btn = document.getElementById('syson-branch-apply');
-    if (!projectId || !select || !select.value) return;
-    var branchId = select.value;
-    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
-    if (ind) ind.innerHTML = '🌿 Applying…';
-    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/version-control/apply-branch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
-      body: JSON.stringify({ branchId: branchId })
-    }).then(function(r) {
-      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || e.message || 'HTTP ' + r.status); });
-      return r.json();
-    }).then(function(result) {
-      try { localStorage.setItem('syson-vc-branch-' + projectId, branchId); } catch(e) {}
-      if (btn) { btn.textContent = 'Applied'; }
-      if (ind) ind.innerHTML = '🌿 Branch: ' + escapeHtml(result.name || branchId.substring(0,8));
-      // Hard reload so the Sirius workbench fully re-bootstraps, dropping the
-      // old WebSocket subscriptions and Apollo cache. The backend has already
-      // disposed the editing context processor, so this forces a cold load
-      // from document.content with the projected branch content.
-      setTimeout(function() { window.location.reload(); }, 450);
-    }).catch(function(err) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
-      if (ind) ind.innerHTML = '🌿 Error';
-      alert('Failed to apply branch: ' + err.message);
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // DIFF VIEWER + MERGE WIZARD
-  // ═══════════════════════════════════════════════════════════════════
-
-  /**
-   * Injects a "Diff" button next to the branch controls. Clicking it opens
-   * a full-screen modal showing element-level changes with two modes:
-   *   - vs branch point (what changed since branching)
-   *   - vs parent latest (merge delta)
-   * Plus a "Create Merge Request" action for selective merging.
-   */
-  function injectDiffButton(navBar) {
-    if (!navBar) return;
-    var existing = document.getElementById('syson-diff-btn');
-    if (existing) { existing.style.display = ''; return; }
-    var diffBtn = document.createElement('button');
-    diffBtn.id = 'syson-diff-btn';
-    diffBtn.textContent = '⇄ Diff';
-    diffBtn.title = 'Compare branches and merge changes';
-    diffBtn.style.cssText = 'padding:3px 8px;font-size:11px;font-weight:700;border:1px solid rgba(168,85,247,0.45);border-radius:4px;background:rgba(168,85,247,0.16);color:#e9d5ff;cursor:pointer;margin-left:4px;';
-    diffBtn.addEventListener('mouseenter', function() { this.style.background = 'rgba(168,85,247,0.35)'; });
-    diffBtn.addEventListener('mouseleave', function() { this.style.background = 'rgba(168,85,247,0.16)'; });
-    diffBtn.addEventListener('click', function() { openDiffViewer(); });
-    var wrap = document.getElementById('syson-branch-wrap');
-    if (wrap) {
-      wrap.appendChild(diffBtn);
-    } else {
-      navBar.appendChild(diffBtn);
-    }
-  }
-
-  /** Current diff viewer state */
-  var diffViewerState = { open: false, data: null, mode: 'vs-branch-point', selectedIds: new Set() };
 
   function openDiffViewer() {
     var projectId = getProjectIdFromUrl();
@@ -1820,7 +1914,7 @@
     overlay.innerHTML = ''
       + '<div style="background:#0f172a;border:1px solid #261e58;border-radius:8px;width:500px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);">'
       + '  <div style="padding:16px 20px;border-bottom:1px solid rgba(59,130,246,0.2);">'
-      + '    <span style="font-size:16px;font-weight:700;color:#e2e8f0;">🔀 Create Merge Request</span>'
+      + '    <span style="font-size:16px;font-weight:700;color:#e2e8f0;">Create Merge Request</span>'
       + '  </div>'
       + '  <div style="padding:20px;overflow-y:auto;flex:1;">'
       + '    <div style="margin-bottom:12px;"><label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:4px;">Source branch (merge from)</label><input id="syson-mr-source" type="text" value="' + escapeHtml(sourceBranchId) + '" readonly style="width:100%;padding:8px 10px;font-size:12px;background:#1e293b;border:1px solid rgba(59,130,246,0.2);border-radius:4px;color:#94a3b8;" /></div>'
@@ -1925,7 +2019,7 @@
       // Create history button
       var btn = document.createElement('button');
       btn.id = 'syson-history-btn';
-      btn.textContent = '📋 History';
+      btn.textContent = 'History';
       btn.title = 'View element change history';
       btn.style.cssText = 'margin-left:8px;padding:2px 8px;font-size:11px;background:#261e58;color:#fff;border:none;border-radius:3px;cursor:pointer;vertical-align:middle;';
       btn.addEventListener('click', function() { showElementHistory(); });
@@ -1946,25 +2040,57 @@
     if (hashMatch) return hashMatch[1];
 
     // 3. Check data attributes on details/properties panel
-    var detailsPanel = document.querySelector('[data-testid="details"], [class*="DetailsView"], [class*="details-view"], [class*="PropertiesView"], [class*="properties-view"]');
+    var detailsPanel = document.querySelector('[data-testid="details"], [class*="DetailsView"], [class*="details-view"], [class*="PropertiesView"], [class*="properties-view"], [class*="details"]');
     if (detailsPanel) {
-      var allAttrs = detailsPanel.querySelectorAll('[data-elementid], [data-objectid]');
-      if (allAttrs.length > 0) return allAttrs[0].getAttribute('data-elementid') || allAttrs[0].getAttribute('data-objectid');
+      var allAttrs = detailsPanel.querySelectorAll('[data-elementid], [data-objectid], [data-semanticelementid], [data-testid]');
+      for (var ai = 0; ai < allAttrs.length; ai++) {
+        var a = allAttrs[ai];
+        var id = a.getAttribute('data-elementid') || a.getAttribute('data-objectid') || a.getAttribute('data-semanticelementid');
+        if (id) return id;
+      }
     }
 
-    // 4. Check React fiber on the properties/details panel for selected object
-    var panel = detailsPanel || document.querySelector('[class*="PropertiesView"], [class*="properties-view"]');
-    if (panel && typeof getReactFiber === 'function') {
-      var fiber = getReactFiber(panel);
-      if (fiber) {
-        var f = fiber;
-        for (var j = 0; j < 15 && f; j++) {
-          var p = f.memoizedProps || f.pendingProps || {};
-          if (p.selectedObjectId) return p.selectedObjectId;
-          if (p.objectId) return p.objectId;
-          if (p.editingContextId) return p.editingContextId;
-          f = f.return;
-        }
+    // 4. React fiber traversal — walk ALL React roots on the page
+    var fiberRoots = [];
+    var rootKey = Object.keys(document).find(function(k) { return k.startsWith('__reactContainer$') || k.startsWith('__reactFiber$'); });
+    if (rootKey) {
+      var rootNode = document[rootKey];
+      if (rootNode) fiberRoots.push(rootNode);
+    }
+    // Also check #root
+    var rootEl = document.getElementById('root');
+    if (rootEl) {
+      var reactKey = Object.keys(rootEl).find(function(k) { return k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'); });
+      if (reactKey) fiberRoots.push(rootEl[reactKey]);
+    }
+    // Also check any element with __reactFiber
+    var allElements = document.querySelectorAll('*');
+    for (var ei = 0; ei < Math.min(allElements.length, 200); ei++) {
+      var el = allElements[ei];
+      var fk = Object.keys(el).find(function(k) { return k.startsWith('__reactFiber$'); });
+      if (fk && el[fk]) { fiberRoots.push(el[fk]); break; }
+    }
+
+    // Walk fiber tree looking for selectedObjectId
+    var walked = new Set();
+    for (var ri = 0; ri < fiberRoots.length; ri++) {
+      var stack = [fiberRoots[ri]];
+      while (stack.length > 0) {
+        var f = stack.pop();
+        if (!f || walked.has(f)) continue;
+        walked.add(f);
+        if (walked.size > 5000) break; // safety limit
+        var mp = f.memoizedProps || {};
+        var sp = f.stateNode && f.stateNode.props;
+        // Check for element selection ID
+        var sid = mp.selectedObjectId || mp.objectId || mp.semanticElementId
+               || mp.elementId || mp.editingContextId
+               || (mp.selection && mp.selection.entries && mp.selection.entries[0] && mp.selection.entries[0].id)
+               || (sp && (sp.selectedObjectId || sp.objectId || sp.elementId));
+        if (sid && typeof sid === 'string' && sid.length > 10 && sid.indexOf('-') > 0) return sid;
+        // Push children
+        if (f.child) stack.push(f.child);
+        if (f.sibling) stack.push(f.sibling);
       }
     }
 
@@ -2028,8 +2154,10 @@
       return;
     }
     // Fetch element history
-    var url = '/api/v1/user/projects/' + projectId + '/elements/' + elementId + '/history';
-    _origFetch(url).then(function(resp) {
+    var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || getBranchIdFromUrl() || '';
+    var url = '/api/v1/user/projects/' + projectId + '/elements/' + encodeURIComponent(elementId) + '/history'
+      + (branchId ? '?branchId=' + encodeURIComponent(branchId) : '');
+    _origFetch(url, { headers: { 'Authorization': 'Bearer ' + state.token } }).then(function(resp) {
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       return resp.json();
     }).then(function(data) {
@@ -2050,7 +2178,7 @@
 
     var header = document.createElement('div');
     header.style.cssText = 'padding:16px;background:#16213e;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;';
-    header.innerHTML = '<div><strong style="font-size:14px;">📋 Element History</strong><br><span style="font-size:11px;color:#888;">' + elementId.substring(0, 30) + '...</span></div>';
+    header.innerHTML = '<div><strong style="font-size:14px;">Element History</strong><br><span style="font-size:11px;color:#888;">' + elementId.substring(0, 30) + '...</span></div>';
 
     var closeBtn = document.createElement('button');
     closeBtn.textContent = '×';
@@ -2245,7 +2373,7 @@
       }
 
       // Add History option
-      items.push({ label: '📋 View History', action: function() { showElementHistoryById(projectId, stableId); } });
+      items.push({ label: 'View History', action: function() { showElementHistoryById(projectId, stableId); } });
 
       for (var i = 0; i < items.length; i++) {
         var item = items[i];
@@ -2338,7 +2466,11 @@
   }
 
   function showElementHistoryById(projectId, stableId) {
-    _origFetch('/api/v1/user/projects/' + projectId + '/elements/' + stableId + '/history')
+    var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || getBranchIdFromUrl() || '';
+    var url = '/api/v1/user/projects/' + projectId + '/elements/' + encodeURIComponent(stableId) + '/history'
+      + (branchId ? '?branchId=' + encodeURIComponent(branchId) : '');
+    _origFetch(url,
+      { headers: { 'Authorization': 'Bearer ' + state.token } })
       .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function(data) { renderHistoryOverlay(data, projectId, stableId); })
       .catch(function(err) { alert('Failed to load history: ' + err.message); });
@@ -2528,14 +2660,13 @@
     }, 4 * 60 * 60 * 1000);
     // Mount user bar after DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); injectHistoryButton(); injectElementLockUI(); injectSaveButton(); injectBranchIndicator(); });
+      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); injectHistoryButton(); injectElementLockUI(); mountBranchMenu(); });
     } else {
       mountUserBar();
       handleAdminDeepLink();
       injectHistoryButton();
       injectElementLockUI();
-      injectSaveButton();
-      injectBranchIndicator();
+      mountBranchMenu();
     }
   } else {
     // Not authenticated — show login and block app load

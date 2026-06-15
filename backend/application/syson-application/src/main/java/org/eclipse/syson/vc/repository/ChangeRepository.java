@@ -49,8 +49,12 @@ public interface ChangeRepository extends JpaRepository<ChangeEntity, UUID> {
             + "LEFT JOIN syson_commits cm ON c.commit_id = cm.commit_id "
             + "LEFT JOIN syson_branches b ON c.branch_id = b.branch_id "
             + "LEFT JOIN syson_users u ON c.created_by = u.id "
-            + "WHERE c.object_id = ?1 AND c.project_id = ?2 "
+            + "WHERE c.project_id = ?2 "
+            + "AND (CAST(c.object_id AS text) = ?1 "
+            + "     OR c.stable_object_id = ?1 "
+            + "     OR c.before_object ->> 'id' = ?1 "
+            + "     OR c.after_object ->> 'id' = ?1) "
             + "ORDER BY c.created_at DESC",
             nativeQuery = true)
-    List<Object[]> findByObjectIdAndProjectId(@Param("objectId") UUID objectId, @Param("projectId") UUID projectId);
+    List<Object[]> findHistoryByObjectRefAndProjectId(@Param("objectRef") String objectRef, @Param("projectId") UUID projectId);
 }

@@ -114,6 +114,7 @@ public class HeadMaterializationService {
                 elem.setOwnerStableId(element.ownerId());
                 elem.setQualifiedName(element.qualifiedName());
                 elem.setAttributes(element.attributes() != null ? sysmlObjectHasher.canonicalizeJson(element.attributes()) : "{}");
+                elem.setRawObject(element.rawJson() != null ? element.rawJson() : "{}");
                 elem.setObjectHash(element.objectHash());
                 elem.setCreatedCommitId(commitId);
                 elem.setDeleted(false);
@@ -149,6 +150,7 @@ public class HeadMaterializationService {
                     existing.setOwnerStableId(element.ownerId());
                     existing.setQualifiedName(element.qualifiedName());
                     existing.setAttributes(element.attributes() != null ? sysmlObjectHasher.canonicalizeJson(element.attributes()) : "{}");
+                    existing.setRawObject(element.rawJson() != null ? element.rawJson() : "{}");
                     existing.setObjectHash(element.objectHash());
                     existing.setUpdatedCommitId(commitId);
                     headElementRepository.save(existing);

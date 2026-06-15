@@ -50,7 +50,7 @@ public class CommitPersistenceService {
                         projectId,                               // projectId
                         null,                                    // commitId - set by VC service
                         0,                                       // changeSeq - set by VC service
-                        d.objectType(),                          // objectType
+                        "element",                               // objectType category for syson_changes
                         stableIdToUuid(d.stableId()),            // objectId (UUID)
                         d.operation(),                           // operation
                         d.beforeHash(),                          // beforeHash

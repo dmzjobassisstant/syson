@@ -51,14 +51,12 @@ public class ElementHistoryService {
         // Collect all branch IDs in the ancestry chain
         List<UUID> branchAncestry = collectBranchAncestry(branchId);
 
-        // Query changes for the element using available repository method
-        UUID objectUuid = safeUuid(stableId);
         UUID projectUuid = safeUuid(projectId);
-        if (objectUuid == null || projectUuid == null) {
+        if (projectUuid == null || stableId == null || stableId.isBlank()) {
             return history;
         }
 
-        List<Object[]> changeRecords = changeRepository.findByObjectIdAndProjectId(objectUuid, projectUuid);
+        List<Object[]> changeRecords = changeRepository.findHistoryByObjectRefAndProjectId(stableId, projectUuid);
 
         for (Object[] record : changeRecords) {
             Map<String, Object> entry = new HashMap<>();

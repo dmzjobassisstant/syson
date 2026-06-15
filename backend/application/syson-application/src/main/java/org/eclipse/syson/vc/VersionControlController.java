@@ -88,6 +88,8 @@ public class VersionControlController {
     private final BranchProjectionService branchProjectionService;
     private final BranchDiffService branchDiffService;
     private final org.eclipse.syson.history.repository.BranchHeadRepository branchHeadRepository;
+    private final org.eclipse.syson.history.service.ModelSaveHistoryService modelSaveHistoryService;
+    private final jakarta.persistence.EntityManager entityManager;
     private final AccessControlService accessControlService;
 
     public VersionControlController(VersionControlService versionControlService,
@@ -108,6 +110,8 @@ public class VersionControlController {
                                      BranchProjectionService branchProjectionService,
                                      BranchDiffService branchDiffService,
                                      org.eclipse.syson.history.repository.BranchHeadRepository branchHeadRepository,
+                                     org.eclipse.syson.history.service.ModelSaveHistoryService modelSaveHistoryService,
+                                     jakarta.persistence.EntityManager entityManager,
                                      AccessControlService accessControlService) {
         this.versionControlService = versionControlService;
         this.versionGraphService = versionGraphService;
@@ -127,6 +131,8 @@ public class VersionControlController {
         this.branchProjectionService = branchProjectionService;
         this.branchDiffService = branchDiffService;
         this.branchHeadRepository = branchHeadRepository;
+        this.modelSaveHistoryService = modelSaveHistoryService;
+        this.entityManager = entityManager;
         this.accessControlService = accessControlService;
     }
 
@@ -328,9 +334,18 @@ public class VersionControlController {
                     ? request.branchId()
                     : resolveBranchForSave(projectId);
 
-            // Call the save pipeline via the history service
-            boolean success = this.versionControlService.triggerSaveFromSemanticData(
-                    projectId, semanticDataId, branchId, TenantContext.getUserIdAsUuid());
+            // Run the real BowTie-style history pipeline: extract current Sirius
+            // documents, diff against branch HEAD, persist syson_changes, then
+            // materialize HEAD. The previous implementation only created a
+            // zero-change marker commit, so History had nothing to show.
+            Map<UUID, String> documentContents = loadDocumentContents(semanticDataId);
+            boolean success = this.modelSaveHistoryService.processSaveFromDocumentContents(
+                    documentContents, projectId.toString(), branchId, TenantContext.getUserIdAsUuid());
+            if (!success) {
+                // Still seed the selected branch projection so branch switching remains safe.
+                success = this.versionControlService.triggerSaveFromSemanticData(
+                        projectId, semanticDataId, branchId, TenantContext.getUserIdAsUuid());
+            }
             result.put("saved", success);
             result.put("branchId", branchId.toString());
             result.put("message", success ? "Save complete — history recorded" : "Save completed (no new changes)");
@@ -340,6 +355,21 @@ public class VersionControlController {
             result.put("message", "Save failed: " + e.getMessage());
             return ResponseEntity.status(500).body(result);
         }
+    }
+
+    private Map<UUID, String> loadDocumentContents(UUID semanticDataId) {
+        Map<UUID, String> documents = new HashMap<>();
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = this.entityManager.createNativeQuery(
+                "SELECT id, content FROM document WHERE semantic_data_id = ?1")
+                .setParameter(1, semanticDataId)
+                .getResultList();
+        for (Object[] row : rows) {
+            if (row[0] != null && row[1] != null) {
+                documents.put((UUID) row[0], row[1].toString());
+            }
+        }
+        return documents;
     }
 
     private UUID resolveBranchForSave(UUID projectId) {

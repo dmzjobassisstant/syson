@@ -358,8 +358,20 @@ public class SysmlCanonicalExtractor {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 Map<String, Object> root = mapper.readValue(content, Map.class);
 
-                // EMF JSON has "json" and "ns" metadata plus object entries
-                // Walk all top-level keys that are object entries (have "eClass" or similar)
+                // Sirius/EMF JSON stores model roots under a top-level "content" array.
+                // Older extractor logic only walked top-level maps, which skipped real
+                // SysON documents and produced zero element history rows.
+                Object contentValue = root.get("content");
+                if (contentValue instanceof List<?> contentList) {
+                    for (Object item : contentList) {
+                        if (item instanceof Map<?, ?> objMap) {
+                            processJsonObject(objMap, docId.toString(), projectId, branchId, null, elements, relationships);
+                        }
+                    }
+                    continue;
+                }
+
+                // Fallback for any older object-entry shape.
                 for (Map.Entry<String, Object> objEntry : root.entrySet()) {
                     if (objEntry.getKey().equals("json") || objEntry.getKey().equals("ns")
                             || objEntry.getKey().equals("migration")) {
@@ -388,38 +400,47 @@ public class SysmlCanonicalExtractor {
     private void processJsonObject(Map<?, ?> obj, String docId, String projectId, UUID branchId,
                                     String ownerId, List<CanonicalElement> elements,
                                     List<CanonicalRelationship> relationships) {
-        String id = getStringValue(obj, "id");
+        String objectId = getStringValue(obj, "id");
         String eClass = getStringValue(obj, "eClass");
+        Map<?, ?> data = obj.get("data") instanceof Map<?, ?> dataMap ? dataMap : Map.of();
+        String elementId = getStringValue(data, "elementId");
+        String id = elementId != null ? elementId : objectId;
         if (id == null) {
             return;
         }
 
-        // Extract name from various SysML name features
-        String name = getStringValue(obj, "name");
+        // Extract name from nested SysON/Sirius data first, then legacy top-level fields.
+        String name = getStringValue(data, "name");
+        if (name == null) name = getStringValue(data, "declaredName");
+        if (name == null) name = getStringValue(data, "label");
+        if (name == null) name = getStringValue(obj, "name");
         if (name == null) name = getStringValue(obj, "declaredName");
         if (name == null) name = getStringValue(obj, "label");
 
         String sysmlType = eClass != null ? extractTypeName(eClass) : "Unknown";
 
-        // Build stable ID
-        String stableId = this.stableSysmlIdService.stableIdFor(docId, ownerId != null ? ownerId : "", sysmlType, name != null ? name : "");
+        // Prefer SysML/Sirius elementId as the stable history key. This is what
+        // the properties panel and selection state expose in the UI.
+        String stableId = id;
 
-        // Build attributes map
+        // Build attributes map from nested data payload plus basic metadata.
         Map<String, Object> attributes = new TreeMap<>();
-        for (Map.Entry<?, ?> feature : obj.entrySet()) {
-            String key = (String) feature.getKey();
-            if (!key.equals("id") && !key.equals("eClass")) {
+        for (Map.Entry<?, ?> feature : data.entrySet()) {
+            String key = String.valueOf(feature.getKey());
+            if (!key.equals("elementId")) {
                 attributes.put(key, feature.getValue());
             }
         }
+        attributes.put("siriusObjectId", objectId);
+        attributes.put("eClass", eClass);
 
         String rawJson = this.sysmlObjectHasher.canonicalizeJson((Map<String, Object>) obj);
         String objectHash = this.sysmlObjectHasher.hashObject(rawJson);
 
         elements.add(new CanonicalElement(stableId, id, sysmlType, name, ownerId, null, attributes, rawJson, objectHash));
 
-        // Process containment children
-        for (Map.Entry<?, ?> feature : obj.entrySet()) {
+        // Process containment children from the nested data payload.
+        for (Map.Entry<?, ?> feature : data.entrySet()) {
             Object value = feature.getValue();
             if (value instanceof Map<?, ?> childMap) {
                 if (childMap.containsKey("eClass") || childMap.containsKey("id")) {

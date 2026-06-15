@@ -231,6 +231,40 @@ public class ModelSaveHistoryService {
     }
 
     /**
+     * Processes a save from raw document content rows.
+     *
+     * @param docContents map of Sirius document IDs to serialized document JSON
+     * @param projectId the project identifier
+     * @param branchId  the branch identifier
+     * @param userId    the user performing the save
+     */
+    public boolean processSaveFromDocumentContents(Map<UUID, String> docContents, String projectId, UUID branchId, UUID userId) {
+        if (docContents == null || docContents.isEmpty()) {
+            return false;
+        }
+
+        SysmlCanonicalExtractor.CanonicalModelSnapshot currentSnapshot =
+                sysmlCanonicalExtractor.extractFromDocuments(docContents, projectId, branchId);
+        SysmlCanonicalExtractor.CanonicalModelSnapshot previousSnapshot = loadPreviousSnapshot(projectId, branchId);
+        List<SysmlModelDiffService.ObjectDiff> diffs = sysmlModelDiffService.diff(previousSnapshot, currentSnapshot);
+        if (diffs.isEmpty()) {
+            return false;
+        }
+
+        org.eclipse.syson.vc.dto.CommitDto commit = commitPersistenceService.persistCommit(
+                UUID.fromString(projectId), branchId, userId, "Model save: " + diffs.size() + " changes", diffs);
+        headMaterializationService.materializeHead(projectId, branchId, commit.commitId(), currentSnapshot, diffs);
+        auditLogService.log(
+                userId.toString(),
+                "model_save",
+                projectId,
+                AuditEventType.MODEL_SAVE,
+                "Model saved with " + diffs.size() + " changes"
+        );
+        return true;
+    }
+
+    /**
      * Resolves the main branch ID for a project, creating one if needed.
      *
      * @param projectId the project identifier (String)
