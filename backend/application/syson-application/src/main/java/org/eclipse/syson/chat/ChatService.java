@@ -18,8 +18,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.eclipse.syson.chat.ChatStructuredOutputParser.ParsedChatOutput;
 import org.eclipse.syson.chat.dto.ChatGenerateRequest;
 import org.eclipse.syson.chat.dto.ChatModifyRequest;
+import org.eclipse.syson.chat.dto.ChatProcessRequest;
 import org.eclipse.syson.chat.dto.ChatResponse;
 import org.eclipse.syson.chat.dto.ValidateResponse;
 import org.eclipse.syson.chat.entity.ChatConversationEntity;
@@ -42,24 +44,57 @@ public class ChatService {
     private static final Logger LOG = LoggerFactory.getLogger(ChatService.class);
 
     static final String SYSTEM_PROMPT = """
-You are a SysML v2 modeling assistant. Generate ONLY valid SysML v2 textual notation.
+You are the SysMLv2 Architect/SysON modeling assistant. The client UI has no action-mode buttons.
+You MUST infer the required action from the user's words and return exactly one XML wrapper rooted at <syson-response>.
+No markdown fences. No prose outside the XML.
 
-CRITICAL RULES:
+Always include a user-facing progress/status node first:
+<chat_feedback verbosity="progress|done|error">Short verbose text for the chat: what you are doing, what was created, or what needs review.</chat_feedback>
+
+Then include exactly ONE of these three action structures:
+
+1) New reusable SysML library to load/import as .sysml:
+<sysml_library name="LibraryName" filename="LibraryName.sysml"><![CDATA[
+package LibraryName {
+  private import ScalarValues::*;
+  part def Example { attribute mass : Real; }
+}
+]]></sysml_library>
+
+2) New full SysML model to load as .sysml:
+<sysml_model name="ModelName" filename="ModelName.sysml"><![CDATA[
+package ModelName {
+  private import ScalarValues::*;
+  part def System { }
+}
+]]></sysml_model>
+
+3) Existing model modification as a sequence of Sirius Web command operations:
+<sirius_commands target="existing-model">
+  <command action="CREATE" elementType="part_def" name="FanAssembly" parentId="optional-uuid">
+    <property name="description" value="Cooling fan assembly"/>
+  </command>
+  <command action="CREATE" elementType="port" name="airIn" parentId="optional-uuid"/>
+  <command action="UPDATE" elementType="part_def" targetId="optional-uuid">
+    <property name="name" value="UpdatedName"/>
+  </command>
+</sirius_commands>
+
+Detection policy:
+- If the user asks for a reusable library, standard catalog, importable definitions, or "load as library", return <sysml_library>.
+- If the user asks to create/generate/build a whole new model, return <sysml_model>.
+- If the user asks to modify/add/remove/update something in the current model, return <sirius_commands>.
+
+SysML generation rules:
 1. Use OMG SysML v2 syntax.
 2. Package: `package Name { ... }`
 3. Part definitions: `part def Name { ... }`
 4. Specialization: `part def Child :> Parent { ... }`
-5. Ports: `in port name : Type;` (direction BEFORE `port`)
-6. Enums: `enum def Name { literal Name1; literal Name2; }`
+5. Ports: `in port name : Type;` or `out port name : Type;`
+6. Enums: `enum def Name { enum literal one; enum literal two; }`
 7. Requirements: `requirement def ReqId { doc /* text */ }`
-8. Attributes: `attribute name : Type;`
-9. Relationships: use OMG syntax (composition, specialization, satisfy)
-10. Imports: `private import PackageName::*;`
-11. Transitions: `transition t first A then B;`
-12. Never generate: `actor`/`useCase` shorthand, `value Real;`, `view Name : kind { }`.
-
-When modifying, return ONLY a JSON array:
-[{"operation":"CREATE","parentId":"uuid","elementType":"part_def","name":"X","properties":{...}}]
+8. Attributes: `attribute name : Real;` only with `private import ScalarValues::*;`.
+9. Do not generate: `actor`/`useCase` shorthand, `value Real;`, or unverified `view Name : kind { }`.
 """;
 
     private final LlmClientService llmClientService;
@@ -68,19 +103,55 @@ When modifying, return ONLY a JSON array:
     private final ChangeExecutionService changeExecutionService;
     private final ChatConversationRepository conversationRepository;
     private final ChatMessageRepository messageRepository;
+    private final ChatStructuredOutputParser structuredOutputParser;
 
     public ChatService(LlmClientService llmClientService,
                        ModelSerializationService modelSerializationService,
                        SysmlSyntaxValidator sysmlSyntaxValidator,
                        ChangeExecutionService changeExecutionService,
                        ChatConversationRepository conversationRepository,
-                       ChatMessageRepository messageRepository) {
+                       ChatMessageRepository messageRepository,
+                       ChatStructuredOutputParser structuredOutputParser) {
         this.llmClientService = llmClientService;
         this.modelSerializationService = modelSerializationService;
         this.sysmlSyntaxValidator = sysmlSyntaxValidator;
         this.changeExecutionService = changeExecutionService;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
+        this.structuredOutputParser = structuredOutputParser;
+    }
+
+    /**
+     * Processes a prompt through the structured LLM contract. The LLM decides whether
+     * the output is a SysML model, reusable library, or Sirius command sequence.
+     */
+    @Transactional
+    public ChatResponse processPrompt(UUID projectId, ChatProcessRequest request, UUID userId) throws IOException {
+        UUID conversationId = getOrCreateConversation(projectId, request.conversationId(), request.prompt(), userId);
+        String currentModel = modelSerializationService.serializeCurrentModel(projectId, request.branchId());
+        String userPrompt = "Project: " + projectId + "\n"
+                + "Current branch: " + (request.branchId() == null ? "active/default" : request.branchId()) + "\n"
+                + "Current model snapshot:\n```sysml\n" + currentModel + "\n```\n\n"
+                + "User request: " + request.prompt() + "\n\n"
+                + "Infer the action and return the required XML structure.";
+
+        String llmOutput = llmClientService.chat(SYSTEM_PROMPT, userPrompt,
+                request.apiEndpoint(), request.apiKey(), request.model());
+        ParsedChatOutput parsed = structuredOutputParser.parse(llmOutput);
+
+        ValidateResponse validationResult = null;
+        if (parsed.sysmlText() != null && !parsed.sysmlText().isBlank()) {
+            validationResult = sysmlSyntaxValidator.validate(parsed.sysmlText(), null);
+        }
+
+        saveMessage(conversationId, "user", request.prompt(), null);
+        saveMessage(conversationId, "assistant", llmOutput, null);
+
+        String feedback = parsed.feedback() == null || parsed.feedback().isBlank()
+                ? defaultFeedback(parsed.type(), parsed.sysmlText(), parsed.changes().size())
+                : parsed.feedback();
+        return new ChatResponse(conversationId, feedback, parsed.sysmlText(),
+                validationResult, parsed.changes(), false, null);
     }
 
     /**
@@ -202,5 +273,18 @@ When modifying, return ONLY a JSON array:
             return "Untitled";
         }
         return value.length() > maxLen ? value.substring(0, maxLen) : value;
+    }
+
+    private String defaultFeedback(String type, String sysmlText, int changeCount) {
+        if (ChatStructuredOutputParser.TYPE_SYSML_LIBRARY.equals(type)) {
+            return "Prepared a reusable SysML library with " + (sysmlText == null ? 0 : sysmlText.length()) + " characters of .sysml source.";
+        }
+        if (ChatStructuredOutputParser.TYPE_SYSML_MODEL.equals(type)) {
+            return "Prepared a new SysML model with " + (sysmlText == null ? 0 : sysmlText.length()) + " characters of .sysml source.";
+        }
+        if (ChatStructuredOutputParser.TYPE_SIRIUS_COMMANDS.equals(type)) {
+            return "Prepared " + changeCount + " Sirius command(s) for review before execution.";
+        }
+        return "No executable model action was returned.";
     }
 }

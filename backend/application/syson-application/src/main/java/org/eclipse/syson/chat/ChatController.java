@@ -21,6 +21,7 @@ import org.eclipse.syson.auth.TenantContext;
 import org.eclipse.syson.chat.dto.ChatExecuteRequest;
 import org.eclipse.syson.chat.dto.ChatGenerateRequest;
 import org.eclipse.syson.chat.dto.ChatModifyRequest;
+import org.eclipse.syson.chat.dto.ChatProcessRequest;
 import org.eclipse.syson.chat.dto.ChatResponse;
 import org.eclipse.syson.chat.dto.ConversationDto;
 import org.slf4j.Logger;
@@ -63,6 +64,32 @@ public class ChatController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
         }
         return userId;
+    }
+
+    /**
+     * POST /api/v1/projects/{projectId}/chat/process
+     * <p>
+     * Sends a prompt to the configured LLM and lets the structured system prompt
+     * determine whether to return .sysml source, a library, or Sirius commands.
+     */
+    @PostMapping("/process")
+    public ResponseEntity<ChatResponse> processPrompt(
+            @PathVariable String projectId,
+            @RequestBody ChatProcessRequest request) {
+        UUID userId = requireAuthenticatedUser();
+        UUID projectUuid;
+        try {
+            projectUuid = UUID.fromString(projectId);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid project ID format");
+        }
+        try {
+            ChatResponse response = chatService.processPrompt(projectUuid, request, userId);
+            return ResponseEntity.ok(response);
+        } catch (IOException e) {
+            LOG.error("LLM call failed for structured chat on project {}", projectId, e);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "LLM service unavailable: " + e.getMessage());
+        }
     }
 
     /**

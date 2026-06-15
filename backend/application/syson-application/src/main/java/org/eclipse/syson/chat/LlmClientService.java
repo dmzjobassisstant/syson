@@ -18,6 +18,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,6 +43,7 @@ public class LlmClientService {
     private static final Logger LOG = LoggerFactory.getLogger(LlmClientService.class);
 
     private final HttpClient httpClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final String endpoint;
     private final String apiKey;
     private final String model;
@@ -64,17 +67,27 @@ public class LlmClientService {
      * @throws IOException if the HTTP call fails
      */
     public String chat(String systemPrompt, String userPrompt) throws IOException {
-        if (endpoint == null || endpoint.isBlank()) {
+        return chat(systemPrompt, userPrompt, null, null, null);
+    }
+
+    /**
+     * Sends a chat completion request with optional per-request client overrides.
+     */
+    public String chat(String systemPrompt, String userPrompt, String endpointOverride, String apiKeyOverride, String modelOverride) throws IOException {
+        String effectiveEndpoint = firstNonBlank(endpointOverride, endpoint);
+        String effectiveApiKey = firstNonBlank(apiKeyOverride, apiKey);
+        String effectiveModel = firstNonBlank(modelOverride, model);
+        if (effectiveEndpoint == null || effectiveEndpoint.isBlank()) {
             LOG.warn("LLM endpoint not configured; returning echo response");
-            return "{\"message\": \"LLM endpoint not configured. Prompt was: " + escapeJson(userPrompt) + "\"}";
+            return "<syson-response><chat_feedback>LLM endpoint not configured. Prompt was: " + escapeXml(userPrompt) + "</chat_feedback></syson-response>";
         }
 
         try {
-            String body = buildRequestBody(systemPrompt, userPrompt);
+            String body = buildRequestBody(systemPrompt, userPrompt, effectiveModel);
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint))
+                    .uri(URI.create(effectiveEndpoint))
                     .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Authorization", "Bearer " + effectiveApiKey)
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
@@ -92,10 +105,10 @@ public class LlmClientService {
         }
     }
 
-    private String buildRequestBody(String systemPrompt, String userPrompt) {
+    private String buildRequestBody(String systemPrompt, String userPrompt, String effectiveModel) {
         // Build an OpenAI-compatible chat completion request body
         return "{"
-                + "\"model\": \"" + escapeJson(model) + "\","
+                + "\"model\": \"" + escapeJson(effectiveModel) + "\","
                 + "\"messages\": ["
                 + "{\"role\": \"system\", \"content\": \"" + escapeJson(systemPrompt) + "\"},"
                 + "{\"role\": \"user\", \"content\": \"" + escapeJson(userPrompt) + "\"}"
@@ -105,23 +118,25 @@ public class LlmClientService {
     }
 
     private String extractContent(String responseBody) {
-        // Simple extraction of content from OpenAI-compatible response
-        // In production, use a JSON parser; this is a minimal implementation
-        String marker = "\"content\":\"";
-        int idx = responseBody.indexOf(marker);
-        if (idx < 0) {
-            marker = "\"content\": \"";
-            idx = responseBody.indexOf(marker);
-        }
-        if (idx >= 0) {
-            int start = idx + marker.length();
-            int end = responseBody.indexOf("\"", start);
-            if (end > start) {
-                return responseBody.substring(start, end)
-                        .replace("\\n", "\n")
-                        .replace("\\\"", "\"")
-                        .replace("\\\\", "\\");
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode choices = root.path("choices");
+            if (choices.isArray() && choices.size() > 0) {
+                JsonNode content = choices.get(0).path("message").path("content");
+                if (content.isTextual()) {
+                    return content.asText();
+                }
+                JsonNode text = choices.get(0).path("text");
+                if (text.isTextual()) {
+                    return text.asText();
+                }
             }
+            JsonNode content = root.path("content");
+            if (content.isTextual()) {
+                return content.asText();
+            }
+        } catch (Exception e) {
+            LOG.debug("LLM response was not JSON or did not match OpenAI-compatible shape", e);
         }
         return responseBody;
     }
@@ -135,5 +150,23 @@ public class LlmClientService {
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
+    }
+
+    private String escapeXml(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&apos;");
+    }
+
+    private String firstNonBlank(String candidate, String fallback) {
+        if (candidate != null && !candidate.isBlank()) {
+            return candidate;
+        }
+        return fallback;
     }
 }

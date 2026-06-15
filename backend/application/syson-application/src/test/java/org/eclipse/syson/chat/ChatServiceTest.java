@@ -26,6 +26,7 @@ import java.util.UUID;
 
 import org.eclipse.syson.chat.dto.ChatGenerateRequest;
 import org.eclipse.syson.chat.dto.ChatModifyRequest;
+import org.eclipse.syson.chat.dto.ChatProcessRequest;
 import org.eclipse.syson.chat.dto.ChatResponse;
 import org.eclipse.syson.chat.dto.ChangeOperation;
 import org.eclipse.syson.chat.dto.ConversationDto;
@@ -78,7 +79,8 @@ class ChatServiceTest {
                 sysmlSyntaxValidator,
                 changeExecutionService,
                 conversationRepository,
-                messageRepository);
+                messageRepository,
+                new ChatStructuredOutputParser());
     }
 
     @Test
@@ -198,6 +200,52 @@ class ChatServiceTest {
         assertEquals(1, conversations.size());
         assertEquals("First conversation", conversations.get(0).title());
         assertEquals(3, conversations.get(0).messageCount());
+    }
+
+    @Test
+    void processPrompt_shouldDetectSysmlModelFromStructuredResponse() throws Exception {
+        String llmOutput = "<syson-response>"
+                + "<chat_feedback verbosity=\"done\">Created the cooling fan model as .sysml.</chat_feedback>"
+                + "<sysml_model name=\"CoolingFan\"><![CDATA[package CoolingFan { private import ScalarValues::*; part def FanAssembly { attribute diameter : Real; } }]]></sysml_model>"
+                + "</syson-response>";
+        when(modelSerializationService.serializeCurrentModel(PROJECT_ID, null)).thenReturn("");
+        when(llmClientService.chat(anyString(), anyString(), any(), any(), any())).thenReturn(llmOutput);
+        when(sysmlSyntaxValidator.validate(anyString(), any()))
+                .thenReturn(new org.eclipse.syson.chat.dto.ValidateResponse(true, List.of(), 0, 0));
+        ChatConversationEntity mockConv = new ChatConversationEntity();
+        mockConv.setId(UUID.randomUUID());
+        mockConv.setProjectId(PROJECT_ID);
+        when(conversationRepository.save(org.mockito.ArgumentMatchers.any())).thenReturn(mockConv);
+        when(conversationRepository.findById(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(mockConv));
+
+        ChatResponse response = chatService.processPrompt(PROJECT_ID,
+                new ChatProcessRequest("Generate a cooling fan model", null, null, "http://llm", "key", "model"), USER_ID);
+
+        assertEquals("Created the cooling fan model as .sysml.", response.message());
+        assertTrue(response.sysmlText().contains("FanAssembly"));
+        assertTrue(response.validationResult().valid());
+    }
+
+    @Test
+    void processPrompt_shouldDetectSiriusCommandSequenceFromStructuredResponse() throws Exception {
+        String llmOutput = "<syson-response>"
+                + "<chat_feedback verbosity=\"progress\">Prepared updates to the fan model.</chat_feedback>"
+                + "<sirius_commands target=\"existing-model\"><command action=\"CREATE\" elementType=\"part_def\" name=\"FanBlade\"/></sirius_commands>"
+                + "</syson-response>";
+        when(modelSerializationService.serializeCurrentModel(PROJECT_ID, null)).thenReturn("package Existing { }");
+        when(llmClientService.chat(anyString(), anyString(), any(), any(), any())).thenReturn(llmOutput);
+        ChatConversationEntity mockConv = new ChatConversationEntity();
+        mockConv.setId(UUID.randomUUID());
+        mockConv.setProjectId(PROJECT_ID);
+        when(conversationRepository.save(org.mockito.ArgumentMatchers.any())).thenReturn(mockConv);
+        when(conversationRepository.findById(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(mockConv));
+
+        ChatResponse response = chatService.processPrompt(PROJECT_ID,
+                new ChatProcessRequest("Add blades to this model", null, null, "http://llm", "key", "model"), USER_ID);
+
+        assertEquals("Prepared updates to the fan model.", response.message());
+        assertEquals(1, response.changes().size());
+        assertEquals("FanBlade", response.changes().get(0).name());
     }
 
     @Test

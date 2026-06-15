@@ -2701,6 +2701,22 @@
     projectId: null
   };
 
+  function chatProcess(projectId, prompt, branchId, clientConfig) {
+    clientConfig = clientConfig || {};
+    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({
+        prompt: prompt,
+        branchId: branchId || null,
+        conversationId: _chatState.activeConversationId || null,
+        apiEndpoint: clientConfig.apiEndpoint || '',
+        apiKey: clientConfig.apiKey || '',
+        model: clientConfig.model || ''
+      })
+    }).then(function(r) { return r.json(); });
+  }
+
   function chatGenerate(projectId, prompt, loadAsLibrary) {
     return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/generate', {
       method: 'POST',
@@ -2795,21 +2811,16 @@
 
     var inputHTML =
       '<div style="border-top:1px solid #e0e0e0;padding:12px 16px;background:#fafafa;">' +
-        '<div style="display:flex;align-items:center;gap:8px;">' +
-          '<textarea id="syson-chat-input" rows="2" placeholder="Describe what you want to generate or modify\u2026" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.85rem;resize:none;outline:none;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();document.getElementById(\'syson-chat-send\').click();}"></textarea>' +
+        '<div style="display:grid;grid-template-columns:1fr 170px 150px;gap:8px;margin-bottom:8px;align-items:center;">' +
+          '<input id="syson-chat-api-endpoint" placeholder="LLM API endpoint (OpenAI-compatible)" style="padding:7px 9px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.75rem;outline:none;" />' +
+          '<input id="syson-chat-model" placeholder="Model" style="padding:7px 9px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.75rem;outline:none;" />' +
+          '<input id="syson-chat-api-key" placeholder="API key" type="password" style="padding:7px 9px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.75rem;outline:none;" />' +
         '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
-          '<div style="display:flex;align-items:center;gap:12px;">' +
-            '<label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;color:' + CHAT_STYLE.lightText + ';cursor:pointer;">' +
-              '<input type="checkbox" id="syson-chat-load-library" style="margin:0;cursor:pointer;" /> Load as Library' +
-            '</label>' +
-            '<div style="display:inline-flex;border:1px solid #ddd;border-radius:99px;overflow:hidden;">' +
-              '<button type="button" id="syson-chat-mode-generate" style="border:0;padding:5px 12px;font-size:0.72rem;font-weight:700;cursor:pointer;background:' + CHAT_STYLE.primary + ';color:#fff;">Generate New</button>' +
-              '<button type="button" id="syson-chat-mode-modify" style="border:0;padding:5px 12px;font-size:0.72rem;font-weight:700;cursor:pointer;background:transparent;color:' + CHAT_STYLE.lightText + ';">Modify Existing</button>' +
-            '</div>' +
-          '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<textarea id="syson-chat-input" rows="2" placeholder="Describe the model or change. The LLM decides: new .sysml model, reusable library, or Sirius command sequence…" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.85rem;resize:none;outline:none;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();document.getElementById(\'syson-chat-send\').click();}"></textarea>' +
           '<button id="syson-chat-send" style="padding:8px 18px;font-size:0.8rem;font-weight:700;border:none;border-radius:' + CHAT_STYLE.radius + ';background:' + CHAT_STYLE.primary + ';color:#fff;cursor:pointer;">Send</button>' +
         '</div>' +
+        '<div style="margin-top:7px;font-size:0.72rem;color:' + CHAT_STYLE.lightText + ';">Action is inferred from the system prompt contract: .sysml model, reusable library, or Sirius Web commands. Feedback from &lt;chat_feedback&gt; is displayed here.</div>' +
       '</div>';
 
     chatArea.innerHTML = headerHTML + messagesHTML + inputHTML;
@@ -2822,19 +2833,7 @@
     document.getElementById('syson-chat-close').addEventListener('click', closeChatModal);
     backdrop.addEventListener('click', closeChatModal);
     document.getElementById('syson-chat-new-btn').addEventListener('click', newChatConversation);
-
-    var modeGen = document.getElementById('syson-chat-mode-generate');
-    var modeMod = document.getElementById('syson-chat-mode-modify');
-    modeGen.addEventListener('click', function() {
-      _chatState.mode = 'generate';
-      modeGen.style.background = CHAT_STYLE.primary; modeGen.style.color = '#fff';
-      modeMod.style.background = 'transparent'; modeMod.style.color = CHAT_STYLE.lightText;
-    });
-    modeMod.addEventListener('click', function() {
-      _chatState.mode = 'modify';
-      modeMod.style.background = CHAT_STYLE.primary; modeMod.style.color = '#fff';
-      modeGen.style.background = 'transparent'; modeGen.style.color = CHAT_STYLE.lightText;
-    });
+    hydrateChatClientConfig();
 
     document.getElementById('syson-chat-send').addEventListener('click', sendChatMessage);
     document.getElementById('syson-chat-input').focus();
@@ -2990,15 +2989,42 @@
     renderChatMessages(_chatState.messages);
   }
 
+  function readChatClientConfig() {
+    var endpoint = document.getElementById('syson-chat-api-endpoint');
+    var key = document.getElementById('syson-chat-api-key');
+    var model = document.getElementById('syson-chat-model');
+    var config = {
+      apiEndpoint: endpoint ? endpoint.value.trim() : '',
+      apiKey: key ? key.value.trim() : '',
+      model: model ? model.value.trim() : ''
+    };
+    try {
+      localStorage.setItem('syson-chat-api-endpoint', config.apiEndpoint);
+      localStorage.setItem('syson-chat-model', config.model);
+      if (config.apiKey) localStorage.setItem('syson-chat-api-key', config.apiKey);
+    } catch (e) {}
+    return config;
+  }
+
+  function hydrateChatClientConfig() {
+    try {
+      var endpoint = document.getElementById('syson-chat-api-endpoint');
+      var key = document.getElementById('syson-chat-api-key');
+      var model = document.getElementById('syson-chat-model');
+      if (endpoint) endpoint.value = localStorage.getItem('syson-chat-api-endpoint') || '';
+      if (key) key.value = localStorage.getItem('syson-chat-api-key') || '';
+      if (model) model.value = localStorage.getItem('syson-chat-model') || '';
+    } catch (e) {}
+  }
+
   function sendChatMessage() {
     var input = document.getElementById('syson-chat-input');
     if (!input) return;
     var prompt = input.value.trim();
     if (!prompt) return;
 
-    var loadAsLibrary = document.getElementById('syson-chat-load-library') ? document.getElementById('syson-chat-load-library').checked : false;
+    var clientConfig = readChatClientConfig();
     var projectId = _chatState.projectId;
-    var mode = _chatState.mode;
 
     input.value = '';
     addChatMessage('user', prompt);
@@ -3018,44 +3044,26 @@
 
     var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || '';
 
-    if (mode === 'generate') {
-      chatGenerate(projectId, prompt, loadAsLibrary).then(function(result) {
-        finishSend();
-        var content = result.content || result.text || result.message || JSON.stringify(result);
-        if (result.source || result.sysml) {
-          var source = result.source || result.sysml;
-          validateSysml(source, null).then(function(validation) {
-            var extra = {};
-            if (validation && validation.errors && validation.errors.length) {
-              extra.validationErrors = validation.errors;
-            }
-            addChatMessage('assistant', content, extra);
-          }).catch(function() {
-            addChatMessage('assistant', content);
-          });
-        } else {
-          addChatMessage('assistant', content);
-        }
-        loadChatConversations(projectId);
-      }).catch(function(err) {
-        finishSend();
-        addChatMessage('assistant', '\u274c Error: ' + escapeHtml(err.message));
-      });
-    } else {
-      chatModify(projectId, prompt, branchId).then(function(result) {
-        finishSend();
-        var content = result.content || result.text || result.message || JSON.stringify(result);
-        var extra = {};
-        if (result.changes && result.changes.length) {
-          extra.proposedChanges = result.changes;
-        }
-        addChatMessage('assistant', content, extra);
-        loadChatConversations(projectId);
-      }).catch(function(err) {
-        finishSend();
-        addChatMessage('assistant', '\u274c Error: ' + escapeHtml(err.message));
-      });
-    }
+    chatProcess(projectId, prompt, branchId, clientConfig).then(function(result) {
+      finishSend();
+      if (result.conversationId) _chatState.activeConversationId = result.conversationId;
+      var content = result.message || result.content || result.text || JSON.stringify(result);
+      var extra = {};
+      if (result.validationResult && result.validationResult.errors && result.validationResult.errors.length) {
+        extra.validationErrors = result.validationResult.errors;
+      }
+      if (result.changes && result.changes.length) {
+        extra.proposedChanges = result.changes;
+      }
+      if (result.sysmlText) {
+        content += '\n\n.sysml source returned (' + result.sysmlText.length + ' chars).';
+      }
+      addChatMessage('assistant', content, extra);
+      loadChatConversations(projectId);
+    }).catch(function(err) {
+      finishSend();
+      addChatMessage('assistant', '\u274c Error: ' + escapeHtml(err.message));
+    });
   }
 
   // ═══ Change Approval Panel ═══
