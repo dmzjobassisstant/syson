@@ -47,6 +47,9 @@ public class ProjectTemplateContextSchemaPatcher implements TypeDefinitionConfig
     private static final String PROJECT_TEMPLATE_CONTEXT = "ProjectTemplateContext";
     private static final String CREATE_PROJECT_INPUT = "CreateProjectInput";
     private static final String NATURES = "natures";
+    private static final String DIAGRAM_DESCRIPTION = "DiagramDescription";
+    private static final String NODE_DESCRIPTIONS = "nodeDescriptions";
+    private static final String DROP_NODE_COMPATIBILITY = "dropNodeCompatibility";
 
     @Override
     public void configure(TypeDefinitionRegistry registry) {
@@ -54,6 +57,7 @@ public class ProjectTemplateContextSchemaPatcher implements TypeDefinitionConfig
         addContextArgumentToProjectTemplates(registry);
         addAllProjectTemplatesField(registry);
         makeCreateProjectNaturesOptional(registry);
+        relaxDiagramDescriptionFrontendCompatibilityFields(registry);
     }
 
     private void addProjectTemplateContextEnum(TypeDefinitionRegistry registry) {
@@ -149,5 +153,38 @@ public class ProjectTemplateContextSchemaPatcher implements TypeDefinitionConfig
                 registry.add(patchedInput);
             }
         });
+    }
+
+    private void relaxDiagramDescriptionFrontendCompatibilityFields(TypeDefinitionRegistry registry) {
+        registry.getType(DIAGRAM_DESCRIPTION, ObjectTypeDefinition.class).ifPresent(diagramType -> {
+            List<FieldDefinition> patchedFields = relaxDiagramDescriptionFields(diagramType.getFieldDefinitions());
+            if (!patchedFields.equals(diagramType.getFieldDefinitions())) {
+                ObjectTypeDefinition patchedDiagramType = diagramType.transform(builder -> builder.fieldDefinitions(patchedFields));
+                registry.remove(diagramType);
+                registry.add(patchedDiagramType);
+            }
+        });
+
+        List<ObjectTypeExtensionDefinition> diagramExtensions = registry.objectTypeExtensions().getOrDefault(DIAGRAM_DESCRIPTION, List.of());
+        for (ObjectTypeExtensionDefinition extension : List.copyOf(diagramExtensions)) {
+            List<FieldDefinition> patchedFields = relaxDiagramDescriptionFields(extension.getFieldDefinitions());
+            if (!patchedFields.equals(extension.getFieldDefinitions())) {
+                ObjectTypeExtensionDefinition patchedExtension = extension.transformExtension(builder -> builder.fieldDefinitions(patchedFields));
+                registry.remove(DIAGRAM_DESCRIPTION, extension);
+                registry.add(patchedExtension);
+            }
+        }
+    }
+
+    private List<FieldDefinition> relaxDiagramDescriptionFields(List<FieldDefinition> fields) {
+        return fields.stream()
+                .map(field -> {
+                    if ((NODE_DESCRIPTIONS.equals(field.getName()) || DROP_NODE_COMPATIBILITY.equals(field.getName()))
+                            && field.getType() instanceof NonNullType nonNullType) {
+                        return field.transform(builder -> builder.type(nonNullType.getType()));
+                    }
+                    return field;
+                })
+                .toList();
     }
 }
