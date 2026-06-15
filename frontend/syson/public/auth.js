@@ -369,14 +369,16 @@
         bar.id = 'syson-user-bar';
       }
 
-      // Always use fixed positioning on the left side to avoid overlapping
-      // native SysON controls on the right side of the nav bar.
+      // Always force these layout properties on every mount/update; the SPA may
+      // retain #syson-user-bar across route changes and auth.js refreshes.
+      bar.style.position = 'fixed';
+      bar.style.top = '4px';
+      // Original header placement, offset left by exactly 1/15 viewport width.
+      bar.style.left = 'calc(280px - 6.6667vw)';
+      bar.style.right = 'auto';
+      bar.style.zIndex = '10000';
+      bar.style.boxShadow = '0 2px 8px rgba(0,0,0,.15)';
       if (!document.body.contains(bar)) {
-        bar.style.position = 'fixed';
-        bar.style.top = '4px';
-        bar.style.left = '280px';
-        bar.style.zIndex = '10000';
-        bar.style.boxShadow = '0 2px 8px rgba(0,0,0,.15)';
         document.body.appendChild(bar);
       }
 
@@ -1402,37 +1404,30 @@
 
   function injectSaveButton() {
     if (!state.token) return;
-    var injected = false;
     function tryInject() {
-      if (injected) return;
-      var navBar = document.querySelector('header');
-      if (!navBar || navBar.querySelector('#syson-save-btn')) return;
-      injected = true;
+      var existing = document.getElementById('syson-save-btn');
+      if (!isProjectEditorUrl()) {
+        if (existing) existing.remove();
+        return;
+      }
+      var navBar = findEditorHeader();
+      if (!navBar) return;
+      if (existing && navBar.contains(existing)) return;
+      if (existing) existing.remove();
 
       var saveBtn = document.createElement('button');
       saveBtn.id = 'syson-save-btn';
       saveBtn.innerHTML = '💾 Save';
       saveBtn.title = 'Save model — records history to version control';
-      saveBtn.style.cssText = 'position:absolute;right:400px;top:50%;transform:translateY(-50%);padding:4px 12px;font-size:12px;font-weight:600;background:#261e58;color:#e2e8f0;border:1px solid #3b82f6;border-radius:6px;cursor:pointer;white-space:nowrap;z-index:10;display:inline-flex;align-items:center;gap:4px;';
+      saveBtn.style.cssText = 'position:absolute;right:calc(250px + 6.6667vw);top:50%;transform:translateY(-50%);padding:4px 12px;font-size:12px;font-weight:600;background:#261e58;color:#e2e8f0;border:1px solid #3b82f6;border-radius:6px;cursor:pointer;white-space:nowrap;z-index:10;display:inline-flex;align-items:center;gap:4px;';
       saveBtn.addEventListener('mouseenter', function() { this.style.background = '#3b82f6'; this.style.color = '#fff'; });
       saveBtn.addEventListener('mouseleave', function() { this.style.background = '#261e58'; this.style.color = '#e2e8f0'; });
       saveBtn.addEventListener('click', function() { triggerSave(); });
       navBar.style.position = 'relative';
       navBar.appendChild(saveBtn);
     }
-    // Schedule retries FIRST (before observer, which throws if body is null in <head>)
-    setTimeout(tryInject, 300);
-    setTimeout(tryInject, 1000);
-    setTimeout(tryInject, 3000);
-    setTimeout(tryInject, 6000);
-    // Observer for dynamic DOM changes — only if body exists when this runs
-    if (document.body) {
-      try {
-        var observer = new MutationObserver(tryInject);
-        observer.observe(document.body, { childList: true, subtree: true });
-        setTimeout(function() { observer.disconnect(); }, 10000);
-      } catch(e) {}
-    }
+    installEditorChromeRouteGuard(tryInject);
+    [50, 300, 1000, 3000, 6000].forEach(function(delay) { setTimeout(tryInject, delay); });
   }
 
   function triggerSave() {
@@ -1478,18 +1473,18 @@
     function tryInject() {
       var projectId = getProjectIdFromUrl();
       var wrap = document.getElementById('syson-branch-wrap');
-      if (!projectId) {
-        if (wrap) wrap.style.display = 'none';
+      if (!projectId || !isProjectEditorUrl()) {
+        if (wrap) wrap.remove();
         return;
       }
 
-      var navBar = document.querySelector('header');
+      var navBar = findEditorHeader();
       if (!navBar) return;
       if (!wrap || !document.body.contains(wrap)) {
         wrap = document.createElement('div');
         wrap.id = 'syson-branch-wrap';
-        wrap.style.cssText = 'position:absolute;right:250px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:6px;z-index:10;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
-        wrap.innerHTML = '<span id="syson-branch-ind" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#93c5fd;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:4px;white-space:nowrap;">🌿 loading…</span>'
+        wrap.style.cssText = 'position:absolute;right:calc(80px + 6.6667vw);top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:6px;z-index:10;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
+        wrap.innerHTML = '<span id="syson-branch-ind" style="display:none;align-items:center;gap:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#93c5fd;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:4px;white-space:nowrap;">🌿 loading…</span>'
           + '<select id="syson-branch-select" title="Select branch to load and save into" style="max-width:150px;padding:3px 6px;font-size:11px;border:1px solid rgba(59,130,246,0.35);border-radius:4px;background:#0f172a;color:#dbeafe;"></select>'
           + '<button id="syson-branch-apply" title="Load selected branch into SysON and save future changes there" style="padding:3px 8px;font-size:11px;font-weight:700;border:1px solid rgba(34,197,94,0.45);border-radius:4px;background:rgba(34,197,94,0.16);color:#bbf7d0;cursor:pointer;">Apply</button>';
         navBar.style.position = 'relative';
@@ -1510,26 +1505,8 @@
       }
     }
 
-    setTimeout(tryInject, 300);
-    setTimeout(tryInject, 1000);
-    setTimeout(tryInject, 3000);
-    setTimeout(tryInject, 6000);
-    if (document.body) {
-      try {
-        var observer = new MutationObserver(tryInject);
-        observer.observe(document.body, { childList: true, subtree: true });
-      } catch(e) {}
-    }
-    window.addEventListener('popstate', function() { setTimeout(tryInject, 50); });
-    var origPushState = history.pushState;
-    if (!history.__sysonBranchIndicatorPatched) {
-      history.pushState = function() {
-        var ret = origPushState.apply(this, arguments);
-        setTimeout(tryInject, 50);
-        return ret;
-      };
-      history.__sysonBranchIndicatorPatched = true;
-    }
+    installEditorChromeRouteGuard(tryInject);
+    [50, 300, 1000, 3000, 6000].forEach(function(delay) { setTimeout(tryInject, delay); });
   }
 
   function refreshBranchName() {
@@ -1598,9 +1575,11 @@
       try { localStorage.setItem('syson-vc-branch-' + projectId, branchId); } catch(e) {}
       if (btn) { btn.textContent = 'Applied'; }
       if (ind) ind.innerHTML = '🌿 Branch: ' + escapeHtml(result.name || branchId.substring(0,8));
-      // Reload the Sirius workbench so it reads the projected branch blob from
-      // document.content through the normal GraphQL/Sirius loading path.
-      setTimeout(function() { window.location.href = '/projects/' + encodeURIComponent(projectId) + '/edit'; }, 450);
+      // Hard reload so the Sirius workbench fully re-bootstraps, dropping the
+      // old WebSocket subscriptions and Apollo cache. The backend has already
+      // disposed the editing context processor, so this forces a cold load
+      // from document.content with the projected branch content.
+      setTimeout(function() { window.location.reload(); }, 450);
     }).catch(function(err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
       if (ind) ind.innerHTML = '🌿 Error';
@@ -1689,6 +1668,45 @@
   function getProjectIdFromUrl() {
     var match = window.location.pathname.match(/\/projects\/([^/]+)/);
     return match ? match[1] : null;
+  }
+
+  function isProjectEditorUrl() {
+    return /\/projects\/[^/]+\/edit(?:\/|$)/.test(window.location.pathname);
+  }
+
+  function findEditorHeader() {
+    // Keep save/branch controls inside the opened project editor only. Avoid
+    // mounting into the project browser header where no model is open.
+    if (!isProjectEditorUrl()) return null;
+    return document.querySelector('header [class*="toolbar"]')
+        || document.querySelector('[class*="navigationBar"]')
+        || document.querySelector('header');
+  }
+
+  function installEditorChromeRouteGuard(callback) {
+    if (document.body) {
+      try {
+        var observer = new MutationObserver(function() { setTimeout(callback, 50); });
+        observer.observe(document.body, { childList: true, subtree: true });
+      } catch(e) {}
+    }
+    window.addEventListener('popstate', function() { setTimeout(callback, 50); });
+    if (!history.__sysonEditorChromePatched) {
+      var origPushState = history.pushState;
+      var origReplaceState = history.replaceState;
+      history.pushState = function() {
+        var ret = origPushState.apply(this, arguments);
+        setTimeout(function() { window.dispatchEvent(new Event('syson-route-changed')); }, 0);
+        return ret;
+      };
+      history.replaceState = function() {
+        var ret = origReplaceState.apply(this, arguments);
+        setTimeout(function() { window.dispatchEvent(new Event('syson-route-changed')); }, 0);
+        return ret;
+      };
+      history.__sysonEditorChromePatched = true;
+    }
+    window.addEventListener('syson-route-changed', function() { setTimeout(callback, 50); });
   }
 
   function showElementHistory() {

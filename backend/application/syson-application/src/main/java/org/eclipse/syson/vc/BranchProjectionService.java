@@ -6,11 +6,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.eclipse.sirius.components.collaborative.api.IEditingContextEventProcessorRegistry;
 import org.eclipse.syson.history.repository.BranchHeadRepository;
 import org.eclipse.syson.history.service.SysmlCanonicalExtractor;
 import org.eclipse.syson.settings.ProjectSettingService;
 import org.eclipse.syson.vc.entity.BranchEntity;
 import org.eclipse.syson.vc.repository.BranchRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,8 @@ import jakarta.persistence.EntityManager;
 @Transactional
 public class BranchProjectionService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(BranchProjectionService.class);
+
     private final EntityManager entityManager;
 
     private final BranchRepository branchRepository;
@@ -39,18 +44,22 @@ public class BranchProjectionService {
 
     private final ProjectSettingService projectSettingService;
 
+    private final IEditingContextEventProcessorRegistry editingContextEventProcessorRegistry;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public BranchProjectionService(EntityManager entityManager,
                                    BranchRepository branchRepository,
                                    BranchHeadRepository branchHeadRepository,
                                    SysmlCanonicalExtractor sysmlCanonicalExtractor,
-                                   ProjectSettingService projectSettingService) {
+                                   ProjectSettingService projectSettingService,
+                                   IEditingContextEventProcessorRegistry editingContextEventProcessorRegistry) {
         this.entityManager = entityManager;
         this.branchRepository = branchRepository;
         this.branchHeadRepository = branchHeadRepository;
         this.sysmlCanonicalExtractor = sysmlCanonicalExtractor;
         this.projectSettingService = projectSettingService;
+        this.editingContextEventProcessorRegistry = editingContextEventProcessorRegistry;
     }
 
     public ApplyBranchResult applyBranch(UUID projectId, UUID branchId, UUID userId) {
@@ -67,6 +76,7 @@ public class BranchProjectionService {
         }
 
         int appliedDocuments = applyCanonicalProjectionToSiriusDocuments(projectRef, canonicalJson);
+        disposeEditingContextForProject(projectRef);
         setActiveBranch(projectRef, branchId, userId);
         return new ApplyBranchResult(branch.getBranchId(), branch.getName(), appliedDocuments, seeded);
     }
@@ -75,6 +85,37 @@ public class BranchProjectionService {
         // ProjectSettingService stores JSONB values. Keep the existing string-json convention.
         this.projectSettingService.set(projectId, "default_branch_id", "\"" + branchId + "\"",
                 "Active branch for Sirius editor projection and sidecar saves", userId);
+    }
+
+    /**
+     * Disposes the Sirius Web in-memory editing context (EMF ResourceSet) for the
+     * given project so that the next page load / subscription re-reads
+     * {@code document.content} from the database instead of serving stale
+     * in-memory state. This mirrors what {@code ProjectImportService} and
+     * {@code MutationDeleteProjectDataFetcher} do in upstream Sirius Web.
+     */
+    private void disposeEditingContextForProject(String projectId) {
+        try {
+            @SuppressWarnings("unchecked")
+            var result = this.entityManager.createNativeQuery("""
+                    SELECT psd.semantic_data_id
+                    FROM project_semantic_data psd
+                    WHERE psd.project_id = CAST(?1 AS uuid)
+                    LIMIT 1
+                    """)
+                    .setParameter(1, projectId)
+                    .getResultList();
+            if (result.isEmpty()) {
+                LOGGER.warn("No semantic_data found for project {} — skipping editing context disposal", projectId);
+                return;
+            }
+            UUID editingContextId = (UUID) result.get(0);
+            String editingContextIdStr = editingContextId.toString();
+            LOGGER.info("Disposing editing context {} for project {} after branch projection", editingContextIdStr, projectId);
+            this.editingContextEventProcessorRegistry.disposeEditingContextEventProcessor(editingContextIdStr);
+        } catch (Exception e) {
+            LOGGER.error("Failed to dispose editing context for project {}", projectId, e);
+        }
     }
 
     public String seedBranchHeadFromCurrentSirius(String projectId, UUID branchId) {
