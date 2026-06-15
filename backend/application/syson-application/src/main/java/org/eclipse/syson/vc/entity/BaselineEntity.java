@@ -18,6 +18,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -68,6 +70,13 @@ public class BaselineEntity {
 
     @Column(name = "created_by")
     private UUID createdBy;
+
+    @Column(name = "branch_id")
+    private UUID branchId;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "canonical_snapshot", columnDefinition = "jsonb")
+    private String canonicalSnapshot;
 
     public BaselineEntity() {
     }
@@ -166,5 +175,21 @@ public class BaselineEntity {
 
     public void setCreatedBy(UUID createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public UUID getBranchId() {
+        return this.branchId;
+    }
+
+    public void setBranchId(UUID branchId) {
+        this.branchId = branchId;
+    }
+
+    public String getCanonicalSnapshot() {
+        return this.canonicalSnapshot;
+    }
+
+    public void setCanonicalSnapshot(String canonicalSnapshot) {
+        this.canonicalSnapshot = canonicalSnapshot;
     }
 }

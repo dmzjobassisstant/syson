@@ -1419,7 +1419,7 @@
       saveBtn.id = 'syson-save-btn';
       saveBtn.innerHTML = '💾 Save';
       saveBtn.title = 'Save model — records history to version control';
-      saveBtn.style.cssText = 'position:absolute;right:calc(250px + 6.6667vw);top:50%;transform:translateY(-50%);padding:4px 12px;font-size:12px;font-weight:600;background:#261e58;color:#e2e8f0;border:1px solid #3b82f6;border-radius:6px;cursor:pointer;white-space:nowrap;z-index:10;display:inline-flex;align-items:center;gap:4px;';
+      saveBtn.style.cssText = 'position:absolute;right:calc(250px + 13.3333vw);top:50%;transform:translateY(-50%);padding:4px 12px;font-size:12px;font-weight:600;background:#261e58;color:#e2e8f0;border:1px solid #3b82f6;border-radius:6px;cursor:pointer;white-space:nowrap;z-index:10;display:inline-flex;align-items:center;gap:4px;';
       saveBtn.addEventListener('mouseenter', function() { this.style.background = '#3b82f6'; this.style.color = '#fff'; });
       saveBtn.addEventListener('mouseleave', function() { this.style.background = '#261e58'; this.style.color = '#e2e8f0'; });
       saveBtn.addEventListener('click', function() { triggerSave(); });
@@ -1483,7 +1483,7 @@
       if (!wrap || !document.body.contains(wrap)) {
         wrap = document.createElement('div');
         wrap.id = 'syson-branch-wrap';
-        wrap.style.cssText = 'position:absolute;right:calc(80px + 6.6667vw);top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:6px;z-index:10;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
+        wrap.style.cssText = 'position:absolute;right:calc(80px + 13.3333vw);top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:6px;z-index:10;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
         wrap.innerHTML = '<span id="syson-branch-ind" style="display:none;align-items:center;gap:4px;padding:3px 8px;font-size:11px;font-weight:600;color:#93c5fd;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:4px;white-space:nowrap;">🌿 loading…</span>'
           + '<select id="syson-branch-select" title="Select branch to load and save into" style="max-width:150px;padding:3px 6px;font-size:11px;border:1px solid rgba(59,130,246,0.35);border-radius:4px;background:#0f172a;color:#dbeafe;"></select>'
           + '<button id="syson-branch-apply" title="Load selected branch into SysON and save future changes there" style="padding:3px 8px;font-size:11px;font-weight:700;border:1px solid rgba(34,197,94,0.45);border-radius:4px;background:rgba(34,197,94,0.16);color:#bbf7d0;cursor:pointer;">Apply</button>';
@@ -1496,6 +1496,7 @@
       }
 
       wrap.style.display = 'inline-flex';
+      injectDiffButton(navBar);
       if (lastProjectId !== projectId || wrap.getAttribute('data-loaded') !== 'true') {
         lastProjectId = projectId;
         refreshBranchName();
@@ -1585,6 +1586,316 @@
       if (ind) ind.innerHTML = '🌿 Error';
       alert('Failed to apply branch: ' + err.message);
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // DIFF VIEWER + MERGE WIZARD
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Injects a "Diff" button next to the branch controls. Clicking it opens
+   * a full-screen modal showing element-level changes with two modes:
+   *   - vs branch point (what changed since branching)
+   *   - vs parent latest (merge delta)
+   * Plus a "Create Merge Request" action for selective merging.
+   */
+  function injectDiffButton(navBar) {
+    if (!navBar) return;
+    var existing = document.getElementById('syson-diff-btn');
+    if (existing) { existing.style.display = ''; return; }
+    var diffBtn = document.createElement('button');
+    diffBtn.id = 'syson-diff-btn';
+    diffBtn.textContent = '⇄ Diff';
+    diffBtn.title = 'Compare branches and merge changes';
+    diffBtn.style.cssText = 'padding:3px 8px;font-size:11px;font-weight:700;border:1px solid rgba(168,85,247,0.45);border-radius:4px;background:rgba(168,85,247,0.16);color:#e9d5ff;cursor:pointer;margin-left:4px;';
+    diffBtn.addEventListener('mouseenter', function() { this.style.background = 'rgba(168,85,247,0.35)'; });
+    diffBtn.addEventListener('mouseleave', function() { this.style.background = 'rgba(168,85,247,0.16)'; });
+    diffBtn.addEventListener('click', function() { openDiffViewer(); });
+    var wrap = document.getElementById('syson-branch-wrap');
+    if (wrap) {
+      wrap.appendChild(diffBtn);
+    } else {
+      navBar.appendChild(diffBtn);
+    }
+  }
+
+  /** Current diff viewer state */
+  var diffViewerState = { open: false, data: null, mode: 'vs-branch-point', selectedIds: new Set() };
+
+  function openDiffViewer() {
+    var projectId = getProjectIdFromUrl();
+    if (!projectId) return;
+    diffViewerState.open = true;
+    diffViewerState.selectedIds = new Set();
+
+    // Create overlay
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-diff-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99998;display:flex;align-items:center;justify-content:center;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
+    overlay.innerHTML = ''
+      + '<div id="syson-diff-modal" style="background:#0f172a;border:1px solid #261e58;border-radius:8px;width:90vw;max-width:1100px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);">'
+      + '  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid rgba(59,130,246,0.2);">'
+      + '    <div style="display:flex;align-items:center;gap:12px;">'
+      + '      <span style="font-size:16px;font-weight:700;color:#e2e8f0;">⇄ Branch Diff</span>'
+      + '      <div style="display:flex;gap:4px;">'
+      + '        <button id="syson-diff-mode-bp" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:4px;cursor:pointer;border:1px solid rgba(168,85,247,0.35);background:rgba(168,85,247,0.15);color:#e9d5ff;">vs Branch Point</button>'
+      + '        <button id="syson-diff-mode-pl" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:4px;cursor:pointer;border:1px solid rgba(59,130,246,0.35);background:transparent;color:#93c5fd;">vs Parent Latest</button>'
+      + '      </div>'
+      + '      <span id="syson-diff-loading" style="font-size:12px;color:#94a3b8;">Loading…</span>'
+      + '    </div>'
+      + '    <button id="syson-diff-close" style="background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer;padding:4px 8px;">×</button>'
+      + '  </div>'
+      + '  <div id="syson-diff-summary" style="padding:8px 20px;display:flex;gap:16px;font-size:12px;border-bottom:1px solid rgba(59,130,246,0.1);">'
+      + '    <span style="color:#94a3b8;">Loading diff data…</span>'
+      + '  </div>'
+      + '  <div id="syson-diff-body" style="flex:1;overflow-y:auto;padding:8px 0;">'
+      + '    <div style="text-align:center;padding:40px;color:#64748b;font-size:13px;">Loading changes…</div>'
+      + '  </div>'
+      + '  <div id="syson-diff-footer" style="padding:10px 20px;border-top:1px solid rgba(59,130,246,0.2);display:flex;justify-content:space-between;align-items:center;">'
+      + '    <span id="syson-diff-selected-count" style="font-size:12px;color:#94a3b8;">0 items selected</span>'
+      + '    <div style="display:flex;gap:8px;">'
+      + '      <button id="syson-diff-select-all" style="padding:5px 12px;font-size:11px;font-weight:600;border-radius:4px;cursor:pointer;border:1px solid rgba(59,130,246,0.35);background:transparent;color:#93c5fd;">Select All Changes</button>'
+      + '      <button id="syson-diff-merge" style="padding:5px 12px;font-size:11px;font-weight:700;border-radius:4px;cursor:pointer;border:1px solid rgba(34,197,94,0.45);background:rgba(34,197,94,0.16);color:#bbf7d0;">Create Merge Request</button>'
+      + '    </div>'
+      + '  </div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    document.getElementById('syson-diff-close').addEventListener('click', closeDiffViewer);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeDiffViewer(); });
+
+    // Mode toggle
+    document.getElementById('syson-diff-mode-bp').addEventListener('click', function() { switchDiffMode('vs-branch-point'); });
+    document.getElementById('syson-diff-mode-pl').addEventListener('click', function() { switchDiffMode('vs-parent-latest'); });
+
+    // Footer actions
+    document.getElementById('syson-diff-select-all').addEventListener('click', selectAllDiffChanges);
+    document.getElementById('syson-diff-merge').addEventListener('click', openMergeWizard);
+
+    // Load data
+    var select = document.getElementById('syson-branch-select');
+    var branchId = (select && select.value) ? select.value : '';
+    loadDiffData(projectId, branchId, diffViewerState.mode);
+  }
+
+  function switchDiffMode(mode) {
+    diffViewerState.mode = mode;
+    diffViewerState.selectedIds = new Set();
+    var bpBtn = document.getElementById('syson-diff-mode-bp');
+    var plBtn = document.getElementById('syson-diff-mode-pl');
+    if (mode === 'vs-branch-point') {
+      bpBtn.style.background = 'rgba(168,85,247,0.15)'; bpBtn.style.color = '#e9d5ff';
+      plBtn.style.background = 'transparent'; plBtn.style.color = '#93c5fd';
+    } else {
+      bpBtn.style.background = 'transparent'; bpBtn.style.color = '#e9d5ff';
+      plBtn.style.background = 'rgba(59,130,246,0.15)'; plBtn.style.color = '#93c5fd';
+    }
+    var projectId = getProjectIdFromUrl();
+    var select = document.getElementById('syson-branch-select');
+    var branchId = (select && select.value) ? select.value : '';
+    loadDiffData(projectId, branchId, mode);
+  }
+
+  function loadDiffData(projectId, branchId, mode) {
+    var loadingEl = document.getElementById('syson-diff-loading');
+    var bodyEl = document.getElementById('syson-diff-body');
+    if (loadingEl) loadingEl.textContent = 'Loading…';
+    if (bodyEl) bodyEl.innerHTML = '<div style="text-align:center;padding:40px;color:#64748b;font-size:13px;">Loading changes…</div>';
+
+    var url = API_BASE + '/api/v1/projects/' + projectId + '/branches/' + branchId + '/diff?mode=' + mode;
+    _origFetch(url, {
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      diffViewerState.data = data;
+      renderDiffResults(data);
+    }).catch(function(err) {
+      if (bodyEl) bodyEl.innerHTML = '<div style="text-align:center;padding:40px;color:#f87171;font-size:13px;">Error: ' + escapeHtml(err.message) + '</div>';
+      if (loadingEl) loadingEl.textContent = 'Error';
+    });
+  }
+
+  function renderDiffResults(data) {
+    var loadingEl = document.getElementById('syson-diff-loading');
+    if (loadingEl) loadingEl.textContent = '';
+    var summaryEl = document.getElementById('syson-diff-summary');
+    var s = data.summary || {};
+    if (summaryEl) {
+      summaryEl.innerHTML = ''
+        + '<span style="color:#4ade80;">+' + (s.added || 0) + ' added</span>'
+        + '<span style="color:#fbbf24;">~' + (s.modified || 0) + ' modified</span>'
+        + '<span style="color:#f87171;">-' + (s.removed || 0) + ' removed</span>'
+        + '<span style="color:#64748b;">' + (s.unchanged || 0) + ' unchanged</span>';
+    }
+    var bodyEl = document.getElementById('syson-diff-body');
+    if (!bodyEl) return;
+    var entries = data.entries || [];
+    if (entries.length === 0) {
+      bodyEl.innerHTML = '<div style="text-align:center;padding:40px;color:#64748b;font-size:13px;">No changes detected</div>';
+      return;
+    }
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+      + '<thead><tr style="position:sticky;top:0;background:#1e293b;z-index:1;">'
+      + '<th style="padding:6px 8px;text-align:left;width:30px;"></th>'
+      + '<th style="padding:6px 8px;text-align:left;width:60px;color:#94a3b8;font-weight:600;">Type</th>'
+      + '<th style="padding:6px 8px;text-align:left;width:70px;color:#94a3b8;font-weight:600;">Status</th>'
+      + '<th style="padding:6px 8px;text-align:left;color:#94a3b8;font-weight:600;">Name</th>'
+      + '<th style="padding:6px 8px;text-align:left;color:#94a3b8;font-weight:600;">Changed Fields</th>'
+      + '<th style="padding:6px 8px;text-align:left;width:110px;color:#94a3b8;font-weight:600;">ID</th>'
+      + '</tr></thead><tbody>';
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      var icon = e.kind === 'added' ? '🟢' : e.kind === 'modified' ? '🟡' : e.kind === 'removed' ? '🔴' : '⚪';
+      var statusColor = e.kind === 'added' ? '#4ade80' : e.kind === 'modified' ? '#fbbf24' : '#f87171';
+      var patchFields = e.patch ? Object.keys(e.patch).join(', ') : '';
+      html += '<tr data-diff-id="' + escapeHtml(e.objectId) + '" style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+        + '<td style="padding:6px 8px;"><input type="checkbox" class="syson-diff-check" data-id="' + escapeHtml(e.objectId) + '" style="cursor:pointer;accent-color:#a855f7;" /></td>'
+        + '<td style="padding:6px 8px;color:#94a3b8;">' + escapeHtml(e.objectType) + '</td>'
+        + '<td style="padding:6px 8px;color:' + statusColor + ';font-weight:600;">' + icon + ' ' + escapeHtml(e.kind) + '</td>'
+        + '<td style="padding:6px 8px;color:#e2e8f0;">' + escapeHtml(e.objectName || '(unnamed)') + '</td>'
+        + '<td style="padding:6px 8px;color:#94a3b8;font-size:11px;">' + escapeHtml(patchFields) + '</td>'
+        + '<td style="padding:6px 8px;color:#475569;font-family:monospace;font-size:10px;">' + escapeHtml(e.objectId.substring(0, 12)) + '…</td>'
+        + '</tr>';
+    }
+    html += '</tbody></table>';
+    bodyEl.innerHTML = html;
+
+    // Wire checkboxes
+    var checkboxes = bodyEl.querySelectorAll('.syson-diff-check');
+    checkboxes.forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        if (this.checked) {
+          diffViewerState.selectedIds.add(this.getAttribute('data-id'));
+        } else {
+          diffViewerState.selectedIds.delete(this.getAttribute('data-id'));
+        }
+        updateSelectedCount();
+      });
+    });
+  }
+
+  function updateSelectedCount() {
+    var el = document.getElementById('syson-diff-selected-count');
+    if (el) el.textContent = diffViewerState.selectedIds.size + ' item' + (diffViewerState.selectedIds.size !== 1 ? 's' : '') + ' selected';
+  }
+
+  function selectAllDiffChanges() {
+    var bodyEl = document.getElementById('syson-diff-body');
+    if (!bodyEl) return;
+    var checkboxes = bodyEl.querySelectorAll('.syson-diff-check');
+    var allChecked = true;
+    checkboxes.forEach(function(cb) { if (!cb.checked) allChecked = false; });
+    checkboxes.forEach(function(cb) {
+      cb.checked = !allChecked;
+      if (!allChecked) {
+        diffViewerState.selectedIds.add(cb.getAttribute('data-id'));
+      } else {
+        diffViewerState.selectedIds.delete(cb.getAttribute('data-id'));
+      }
+    });
+    updateSelectedCount();
+  }
+
+  function closeDiffViewer() {
+    var overlay = document.getElementById('syson-diff-overlay');
+    if (overlay) overlay.remove();
+    diffViewerState.open = false;
+  }
+
+  function openMergeWizard() {
+    var projectId = getProjectIdFromUrl();
+    if (!projectId) return;
+    var select = document.getElementById('syson-branch-select');
+    var sourceBranchId = (select && select.value) ? select.value : '';
+
+    // Close diff viewer
+    closeDiffViewer();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-merge-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99998;display:flex;align-items:center;justify-content:center;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
+    overlay.innerHTML = ''
+      + '<div style="background:#0f172a;border:1px solid #261e58;border-radius:8px;width:500px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);">'
+      + '  <div style="padding:16px 20px;border-bottom:1px solid rgba(59,130,246,0.2);">'
+      + '    <span style="font-size:16px;font-weight:700;color:#e2e8f0;">🔀 Create Merge Request</span>'
+      + '  </div>'
+      + '  <div style="padding:20px;overflow-y:auto;flex:1;">'
+      + '    <div style="margin-bottom:12px;"><label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:4px;">Source branch (merge from)</label><input id="syson-mr-source" type="text" value="' + escapeHtml(sourceBranchId) + '" readonly style="width:100%;padding:8px 10px;font-size:12px;background:#1e293b;border:1px solid rgba(59,130,246,0.2);border-radius:4px;color:#94a3b8;" /></div>'
+      + '    <div style="margin-bottom:12px;"><label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:4px;">Target branch (merge into)</label><select id="syson-mr-target" style="width:100%;padding:8px 10px;font-size:12px;background:#1e293b;border:1px solid rgba(59,130,246,0.2);border-radius:4px;color:#dbeafe;"></select></div>'
+      + '    <div style="margin-bottom:12px;"><label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:4px;">Title</label><input id="syson-mr-title" type="text" placeholder="Merge feature into main" style="width:100%;padding:8px 10px;font-size:12px;background:#1e293b;border:1px solid rgba(59,130,246,0.2);border-radius:4px;color:#dbeafe;" /></div>'
+      + '    <div style="margin-bottom:12px;"><label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:4px;">Description (optional)</label><textarea id="syson-mr-desc" rows="2" placeholder="What changes are being merged?" style="width:100%;padding:8px 10px;font-size:12px;background:#1e293b;border:1px solid rgba(59,130,246,0.2);border-radius:4px;color:#dbeafe;resize:vertical;"></textarea></div>'
+      + '    <div style="margin-bottom:12px;font-size:12px;color:#64748b;">' + diffViewerState.selectedIds.size + ' element(s) will be selectively merged</div>'
+      + '  </div>'
+      + '  <div style="padding:12px 20px;border-top:1px solid rgba(59,130,246,0.2);display:flex;justify-content:flex-end;gap:8px;">'
+      + '    <button id="syson-mr-cancel" style="padding:8px 16px;font-size:12px;font-weight:600;border-radius:4px;cursor:pointer;border:1px solid rgba(148,163,184,0.3);background:transparent;color:#94a3b8;">Cancel</button>'
+      + '    <button id="syson-mr-create" style="padding:8px 16px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;border:1px solid rgba(34,197,94,0.45);background:rgba(34,197,94,0.16);color:#bbf7d0;">Create & Merge</button>'
+      + '  </div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+
+    // Populate target branch dropdown
+    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/branches', {
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) { return r.ok ? r.json() : []; }).then(function(branches) {
+      var targetSel = document.getElementById('syson-mr-target');
+      if (!targetSel) return;
+      targetSel.innerHTML = branches.filter(function(b) { return b.branchId !== sourceBranchId; }).map(function(b) {
+        return '<option value="' + escapeHtml(b.branchId) + '">' + escapeHtml(b.name || b.branchId.substring(0,8)) + '</option>';
+      }).join('');
+    }).catch(function() {});
+
+    document.getElementById('syson-mr-cancel').addEventListener('click', function() { overlay.remove(); });
+    document.getElementById('syson-mr-create').addEventListener('click', function() { executeMergeRequest(projectId, sourceBranchId); });
+  }
+
+  function executeMergeRequest(projectId, sourceBranchId) {
+    var targetSel = document.getElementById('syson-mr-target');
+    var titleInput = document.getElementById('syson-mr-title');
+    var descInput = document.getElementById('syson-mr-desc');
+    if (!targetSel || !targetSel.value) { alert('Please select a target branch'); return; }
+    var targetBranchId = targetSel.value;
+    var title = (titleInput && titleInput.value) ? titleInput.value : 'Merge';
+    var desc = (descInput && descInput.value) ? descInput.value : '';
+
+    // 1. Create the merge request
+    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/merge-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ sourceBranchId: sourceBranchId, targetBranchId: targetBranchId, title: title, description: desc })
+    }).then(function(r) {
+      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'HTTP ' + r.status); });
+      return r.json();
+    }).then(function(mrResult) {
+      var mrId = mrResult.mergeRequestId;
+      // 2. Execute selective merge with selected objects
+      var selectedIds = Array.from(diffViewerState.selectedIds);
+      var mergeBody = selectedIds.length > 0 ? { selectedObjectIds: selectedIds } : {};
+      return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/merge-requests/' + mrId + '/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+        body: JSON.stringify(mergeBody)
+      }).then(function(r) { return r.ok ? r.json() : r.json().then(function(e) { throw new Error(e.error || 'HTTP ' + r.status); }); });
+    }).then(function(mergeResult) {
+      // Close wizard, show success
+      var ov = document.getElementById('syson-merge-overlay');
+      if (ov) ov.remove();
+      // Show toast
+      showDiffToast('✓ Merged ' + (mergeResult.mergedObjects || 0) + ' object(s) into target branch', 'success');
+    }).catch(function(err) {
+      alert('Merge failed: ' + err.message);
+    });
+  }
+
+  function showDiffToast(msg, type) {
+    var toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;font-size:13px;font-family:Roboto,sans-serif;border-radius:6px;z-index:99999;'
+      + (type === 'success' ? 'background:rgba(34,197,94,0.2);border:1px solid rgba(34,197,94,0.4);color:#bbf7d0;' : 'background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;');
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s'; setTimeout(function() { toast.remove(); }, 500); }, 3000);
   }
 
   function injectHistoryButton() {

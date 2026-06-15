@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.eclipse.syson.history.repository.BranchHeadRepository;
 import org.eclipse.syson.vc.dto.BaselineDto;
 import org.eclipse.syson.vc.dto.BranchDto;
 import org.eclipse.syson.vc.dto.ChangeDto;
@@ -63,18 +64,22 @@ public class VersionControlService {
 
     private final BranchProjectionService branchProjectionService;
 
+    private final BranchHeadRepository branchHeadRepository;
+
     public VersionControlService(BranchRepository branchRepository,
                                  CommitRepository commitRepository,
                                  ChangeRepository changeRepository,
                                  BaselineRepository baselineRepository,
                                  jakarta.persistence.EntityManager entityManager,
-                                 BranchProjectionService branchProjectionService) {
+                                 BranchProjectionService branchProjectionService,
+                                 BranchHeadRepository branchHeadRepository) {
         this.branchRepository = branchRepository;
         this.commitRepository = commitRepository;
         this.changeRepository = changeRepository;
         this.baselineRepository = baselineRepository;
         this.entityManager = entityManager;
         this.branchProjectionService = branchProjectionService;
+        this.branchHeadRepository = branchHeadRepository;
     }
 
     // ─── branch operations ────────────────────────────────────────────────
@@ -98,7 +103,74 @@ public class VersionControlService {
         entity.setUpdatedAt(OffsetDateTime.now());
 
         BranchEntity saved = this.branchRepository.save(entity);
+
+        // Auto-create a baseline capturing the parent branch's state at the
+        // branch point. This enables "diff vs branch point" comparisons.
+        if (parentBranchId != null) {
+            createBranchPointBaseline(saved, parentBranchId, tenantId, userId, name);
+        }
+
         return toDto(saved);
+    }
+
+    /**
+     * Creates an automatic draft baseline when a new branch is created,
+     * capturing the parent branch's canonical snapshot at the branch point.
+     */
+    private void createBranchPointBaseline(BranchEntity newBranch, UUID parentBranchId,
+                                           UUID tenantId, UUID userId, String branchName) {
+        try {
+            String parentCanonicalJson = this.branchHeadRepository.getCanonicalJson(
+                    newBranch.getProjectId().toString(), parentBranchId);
+            UUID parentHeadCommitId = null;
+            var parentBranch = this.branchRepository.findById(parentBranchId);
+            if (parentBranch.isPresent()) {
+                parentHeadCommitId = parentBranch.get().getHeadCommitId();
+            }
+
+            // If the parent branch has no commits yet (e.g. seeded but never
+            // saved via the VC system), create a synthetic branch-point commit
+            // so the FK constraint syson_baselines_commit_id_fkey is satisfied.
+            if (parentHeadCommitId == null) {
+                CommitEntity branchPointCommit = new CommitEntity();
+                branchPointCommit.setProjectId(newBranch.getProjectId());
+                branchPointCommit.setBranchId(parentBranchId);
+                long nextNum = this.commitRepository.countByProjectIdAndBranchId(
+                        newBranch.getProjectId(), parentBranchId) + 1;
+                branchPointCommit.setCommitNumber(nextNum);
+                branchPointCommit.setMessage("Branch point: " + branchName);
+                branchPointCommit.setAuthorUserId(userId);
+                branchPointCommit.setSource("branch_creation");
+                branchPointCommit.setStatus("committed");
+                branchPointCommit.setCommittedAt(OffsetDateTime.now());
+                branchPointCommit.setChangeCount(0);
+                branchPointCommit = this.commitRepository.save(branchPointCommit);
+                parentHeadCommitId = branchPointCommit.getCommitId();
+
+                // Update parent branch head_commit_id
+                if (parentBranch.isPresent()) {
+                    parentBranch.get().setHeadCommitId(parentHeadCommitId);
+                    this.branchRepository.save(parentBranch.get());
+                }
+            }
+
+            BaselineEntity baseline = new BaselineEntity();
+            baseline.setProjectId(newBranch.getProjectId());
+            baseline.setTenantId(tenantId);
+            baseline.setBranchId(newBranch.getBranchId());
+            baseline.setBaselineCode("BL-" + branchName.replaceAll("[^a-zA-Z0-9-]", "-").substring(0, Math.min(branchName.length(), 20))
+                    + "-" + java.time.LocalDate.now());
+            baseline.setName("Branch point: " + branchName);
+            baseline.setCommitId(parentHeadCommitId);
+            baseline.setStatus("draft");
+            baseline.setDescription("Auto-created baseline when branch '" + branchName + "' was created");
+            baseline.setCreatedBy(userId);
+            baseline.setCreatedAt(OffsetDateTime.now());
+            baseline.setCanonicalSnapshot(parentCanonicalJson);
+            this.baselineRepository.save(baseline);
+        } catch (Exception e) {
+            // Baseline creation is best-effort; don't fail the branch creation
+        }
     }
 
     /**

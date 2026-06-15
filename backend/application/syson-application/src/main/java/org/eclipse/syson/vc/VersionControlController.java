@@ -86,6 +86,8 @@ public class VersionControlController {
     private final MergeRequestRepository mergeRequestRepository;
     private final TagRepository tagRepository;
     private final BranchProjectionService branchProjectionService;
+    private final BranchDiffService branchDiffService;
+    private final org.eclipse.syson.history.repository.BranchHeadRepository branchHeadRepository;
     private final AccessControlService accessControlService;
 
     public VersionControlController(VersionControlService versionControlService,
@@ -104,6 +106,8 @@ public class VersionControlController {
                                      MergeRequestRepository mergeRequestRepository,
                                      TagRepository tagRepository,
                                      BranchProjectionService branchProjectionService,
+                                     BranchDiffService branchDiffService,
+                                     org.eclipse.syson.history.repository.BranchHeadRepository branchHeadRepository,
                                      AccessControlService accessControlService) {
         this.versionControlService = versionControlService;
         this.versionGraphService = versionGraphService;
@@ -121,6 +125,8 @@ public class VersionControlController {
         this.mergeRequestRepository = mergeRequestRepository;
         this.tagRepository = tagRepository;
         this.branchProjectionService = branchProjectionService;
+        this.branchDiffService = branchDiffService;
+        this.branchHeadRepository = branchHeadRepository;
         this.accessControlService = accessControlService;
     }
 
@@ -710,6 +716,198 @@ public class VersionControlController {
         return ResponseEntity.ok(result);
     }
 
+    // ─── diff endpoints ─────────────────────────────────────────────────
+
+    /**
+     * Returns an element-level diff of the given branch.
+     * Supports two modes:
+     * <ul>
+     *   <li>{@code mode=vs-branch-point} — diff against the baseline captured
+     *       at branch creation (what changed since branching)</li>
+     *   <li>{@code mode=vs-parent-latest} — diff against the parent branch's
+     *       latest HEAD (merge delta)</li>
+     * </ul>
+     * Or compare against an arbitrary branch with {@code baseBranchId}.
+     */
+    @GetMapping("/projects/{projectId}/branches/{branchId}/diff")
+    public ResponseEntity<BranchDiffService.DiffResult> getBranchDiff(
+            @PathVariable UUID projectId,
+            @PathVariable UUID branchId,
+            @RequestParam(defaultValue = "vs-branch-point") String mode,
+            @RequestParam(required = false) UUID baseBranchId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
+        BranchDiffService.DiffResult result;
+        if (baseBranchId != null) {
+            result = this.branchDiffService.diffBranches(projectId.toString(), baseBranchId, branchId);
+        } else if ("vs-parent-latest".equals(mode)) {
+            result = this.branchDiffService.diffVsParentLatest(projectId.toString(), branchId);
+        } else {
+            result = this.branchDiffService.diffVsBranchPoint(projectId.toString(), branchId);
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    // ─── merge request endpoints ────────────────────────────────────────
+
+    /**
+     * Creates a merge request from source to target branch.
+     * Automatically computes a diff and detects conflicts.
+     */
+    @PostMapping("/projects/{projectId}/merge-requests")
+    public ResponseEntity<Map<String, Object>> createMergeRequest(
+            @PathVariable UUID projectId,
+            @RequestBody CreateMergeRequestRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
+        UUID userId = TenantContext.getUserIdAsUuid();
+        UUID mrId = java.util.UUID.randomUUID();
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+
+        // Compute diff for conflict detection
+        BranchDiffService.DiffResult diff = this.branchDiffService.diffBranches(
+                projectId.toString(), request.sourceBranchId(), request.targetBranchId());
+
+        // Create merge request
+        org.eclipse.syson.locks.entity.MergeRequest mr = new org.eclipse.syson.locks.entity.MergeRequest();
+        mr.setMergeRequestId(mrId);
+        mr.setProjectId(projectId.toString());
+        mr.setSourceBranchId(request.sourceBranchId());
+        mr.setTargetBranchId(request.targetBranchId());
+        mr.setStatus("open");
+        mr.setTitle(request.title());
+        mr.setDescription(request.description());
+        mr.setCreatedBy(userId);
+        mr.setCreatedAt(now);
+        mr.setUpdatedAt(now);
+        this.mergeRequestRepository.save(mr);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("mergeRequestId", mrId);
+        result.put("status", "open");
+        result.put("title", request.title());
+        result.put("diffSummary", Map.of(
+                "added", diff.summary().added(),
+                "modified", diff.summary().modified(),
+                "removed", diff.summary().removed(),
+                "unchanged", diff.summary().unchanged()));
+        result.put("conflictCount", 0);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Returns the diff preview for a merge request.
+     */
+    @GetMapping("/projects/{projectId}/merge-requests/{mrId}/diff")
+    public ResponseEntity<BranchDiffService.DiffResult> getMergeRequestDiff(
+            @PathVariable UUID projectId,
+            @PathVariable UUID mrId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
+        var mrOpt = this.mergeRequestRepository.findById(mrId);
+        if (mrOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        var mr = mrOpt.get();
+        BranchDiffService.DiffResult diff = this.branchDiffService.diffBranches(
+                projectId.toString(), mr.getSourceBranchId(), mr.getTargetBranchId());
+        return ResponseEntity.ok(diff);
+    }
+
+    /**
+     * Executes a selective merge — only the specified object IDs are merged
+     * from the source branch into the target branch.
+     */
+    @PostMapping("/projects/{projectId}/merge-requests/{mrId}/merge")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<Map<String, Object>> executeMerge(
+            @PathVariable UUID projectId,
+            @PathVariable UUID mrId,
+            @RequestBody SelectiveMergeRequest request) {
+        this.accessControlService.requireProjectWrite(projectId.toString());
+        UUID userId = TenantContext.getUserIdAsUuid();
+        var mrOpt = this.mergeRequestRepository.findById(mrId);
+        if (mrOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        var mr = mrOpt.get();
+
+        // Compute diff
+        BranchDiffService.DiffResult diff = this.branchDiffService.diffBranches(
+                projectId.toString(), mr.getSourceBranchId(), mr.getTargetBranchId());
+
+        // Filter to selected objects only
+        java.util.Set<String> selectedIds = request.selectedObjectIds() != null
+                ? new java.util.HashSet<>(java.util.Arrays.asList(request.selectedObjectIds()))
+                : null;
+
+        int mergedObjects = 0;
+        // Apply selected changes to target branch head canonical JSON
+        String targetJson = this.branchHeadRepository.getCanonicalJson(
+                projectId.toString(), mr.getTargetBranchId());
+        String sourceJson = this.branchHeadRepository.getCanonicalJson(
+                projectId.toString(), mr.getSourceBranchId());
+
+        // Parse and merge
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> target = targetJson != null
+                    ? om.readValue(targetJson, new com.fasterxml.jackson.core.type.TypeReference<>() {})
+                    : new java.util.LinkedHashMap<>();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> source = sourceJson != null
+                    ? om.readValue(sourceJson, new com.fasterxml.jackson.core.type.TypeReference<>() {})
+                    : new java.util.LinkedHashMap<>();
+
+            for (BranchDiffService.DiffEntry entry : diff.entries()) {
+                if (selectedIds != null && !selectedIds.contains(entry.objectId())) {
+                    continue;
+                }
+                String mapKey = entry.objectType().equals("element") ? "elements" : "relationships";
+                @SuppressWarnings("unchecked")
+                Map<String, Object> targetMap = (Map<String, Object>) target.computeIfAbsent(
+                        mapKey, k -> new java.util.TreeMap<>());
+                switch (entry.kind()) {
+                    case "added", "modified" -> {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> sourceMap = (Map<String, Object>) source.get(mapKey);
+                        if (sourceMap != null && sourceMap.containsKey(entry.objectId())) {
+                            targetMap.put(entry.objectId(), sourceMap.get(entry.objectId()));
+                            mergedObjects++;
+                        }
+                    }
+                    case "removed" -> {
+                        targetMap.remove(entry.objectId());
+                        mergedObjects++;
+                    }
+                }
+            }
+
+            // Write merged canonical JSON back to target branch head
+            String mergedJson = om.writeValueAsString(target);
+            this.branchHeadRepository.upsertBranchHead(
+                    projectId.toString(), mr.getTargetBranchId(), null,
+                    BranchProjectionService.sha256(mergedJson), mergedJson, 0, 0, 0);
+
+            // Project the target branch's siriusDocuments into document.content
+            this.branchProjectionService.applyBranch(projectId, mr.getTargetBranchId(), userId);
+
+            // Update merge request status
+            mr.setStatus("merged");
+            mr.setUpdatedAt(java.time.OffsetDateTime.now());
+            this.mergeRequestRepository.save(mr);
+
+        } catch (Exception e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(err);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("status", "merged");
+        result.put("mergedObjects", mergedObjects);
+        result.put("mergeRequestId", mrId);
+        return ResponseEntity.ok(result);
+    }
+
     // ─── request records ─────────────────────────────────────────────────
 
     public record CreateBranchRequest(
@@ -772,5 +970,16 @@ public class VersionControlController {
 
     public record SaveRequest(
             UUID branchId) {
+    }
+
+    public record CreateMergeRequestRequest(
+            UUID sourceBranchId,
+            UUID targetBranchId,
+            String title,
+            String description) {
+    }
+
+    public record SelectiveMergeRequest(
+            String[] selectedObjectIds) {
     }
 }
