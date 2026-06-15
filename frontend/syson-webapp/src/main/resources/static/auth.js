@@ -481,9 +481,12 @@
         '<div class="dd-divider"></div>' +
         '<button class="dd-logout" data-action="logout">Sign out</button>' +
         '</div></div>' +
-        '<button id="syson-save-btn-ub" title="Save model — records history to version control">Save</button>';
+        '<button id="syson-save-btn-ub" title="Save model — records history to version control">Save</button>' +
+        '<button id="syson-chat-btn" title="Open LLM Chat" style="border:1px solid #3b82f6;border-radius:4px;background:#261e58;color:#e2e8f0;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Roboto,\'Helvetica Neue\',Arial,sans-serif;line-height:1;white-space:nowrap;margin-left:4px;">Chat</button>';
       bar.style.display = 'flex';
       document.getElementById('syson-save-btn-ub').addEventListener('click', triggerSave);
+      var chatBtn = document.getElementById('syson-chat-btn');
+      if (chatBtn) chatBtn.addEventListener('click', openChatModal);
       var menuBtn = document.getElementById('syson-menu-trigger');
       var menuWrapper = document.getElementById('syson-menu-wrapper');
       var menuDD = document.getElementById('syson-menu-dd');
@@ -2673,4 +2676,536 @@
     blockApp();
     showLogin('');
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LLM CHAT UI — modal, conversation history, message bubbles, change approval
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const CHAT_STYLE = {
+    primary: '#261e58',
+    bg: '#f5f5f5',
+    white: '#ffffff',
+    text: '#333333',
+    lightText: '#666666',
+    radius: '4px',
+    font: 'Roboto, sans-serif',
+    shadow: '0 4px 12px rgba(0,0,0,0.15)'
+  };
+
+  var _chatState = {
+    open: false,
+    conversations: [],
+    activeConversationId: null,
+    messages: [],
+    mode: 'generate',
+    projectId: null
+  };
+
+  function chatGenerate(projectId, prompt, loadAsLibrary) {
+    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ prompt: prompt, loadAsLibrary: loadAsLibrary || false })
+    }).then(function(r) { return r.json(); });
+  }
+
+  function chatModify(projectId, prompt, branchId) {
+    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/modify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ prompt: prompt, branchId: branchId || null })
+    }).then(function(r) { return r.json(); });
+  }
+
+  function chatExecute(projectId, changes, branchId) {
+    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ changes: changes, branchId: branchId || null })
+    }).then(function(r) { return r.json(); });
+  }
+
+  function chatConversations(projectId) {
+    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/conversations', {
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) { return r.json(); });
+  }
+
+  function validateSysml(source, fileId) {
+    return _origFetch(API_BASE + '/api/v1/sysml/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ source: source, fileId: fileId || 'model.sysml' })
+    }).then(function(r) { return r.json(); });
+  }
+
+  function openChatModal() {
+    var projectId = getProjectIdFromUrl();
+    if (!projectId) {
+      alert('Open a project first to use LLM Chat.');
+      return;
+    }
+    _chatState.projectId = projectId;
+
+    var existing = document.getElementById('syson-chat-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-chat-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100003;display:flex;font-family:' + CHAT_STYLE.font + ';';
+
+    var backdrop = document.createElement('div');
+    backdrop.id = 'syson-chat-backdrop';
+    backdrop.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.6);';
+
+    var sidebar = document.createElement('div');
+    sidebar.id = 'syson-chat-sidebar';
+    sidebar.style.cssText = 'position:relative;width:300px;min-width:300px;background:' + CHAT_STYLE.bg + ';display:flex;flex-direction:column;border-right:1px solid #ddd;z-index:1;';
+
+    sidebar.innerHTML =
+      '<div style="padding:14px 16px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="font-size:1rem;font-weight:700;color:' + CHAT_STYLE.text + ';">Conversations</span>' +
+        '<button id="syson-chat-new-btn" style="padding:5px 12px;font-size:0.75rem;font-weight:600;border-radius:' + CHAT_STYLE.radius + ';border:none;background:' + CHAT_STYLE.primary + ';color:#fff;cursor:pointer;">New Chat</button>' +
+      '</div>' +
+      '<div id="syson-chat-conv-list" style="flex:1;overflow-y:auto;padding:8px 0;">' +
+        '<div style="text-align:center;padding:20px;color:' + CHAT_STYLE.lightText + ';font-size:0.8rem;">Loading conversations…</div>' +
+      '</div>';
+
+    var chatArea = document.createElement('div');
+    chatArea.id = 'syson-chat-area';
+    chatArea.style.cssText = 'position:relative;flex:1;display:flex;flex-direction:column;background:' + CHAT_STYLE.white + ';z-index:1;';
+
+    var headerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #e0e0e0;background:#fafafa;">' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<span style="font-size:0.95rem;font-weight:700;color:' + CHAT_STYLE.text + ';">LLM Chat</span>' +
+          '<span style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';background:#f0f0f0;padding:3px 8px;border-radius:99px;">Project: ' + escapeHtml((projectId || '').substring(0, 8)) + '\u2026</span>' +
+        '</div>' +
+        '<button id="syson-chat-close" style="background:none;border:none;font-size:1.4rem;color:' + CHAT_STYLE.lightText + ';cursor:pointer;line-height:1;padding:4px 8px;">\u00d7</button>' +
+      '</div>';
+
+    var messagesHTML =
+      '<div id="syson-chat-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;">' +
+        '<div style="text-align:center;color:' + CHAT_STYLE.lightText + ';font-size:0.85rem;padding:40px 20px;">' +
+          '<div style="font-size:2rem;margin-bottom:8px;">\ud83d\udcac</div>' +
+          '<div>Ask the LLM to generate or modify SysML elements.</div>' +
+          '<div style="margin-top:6px;font-size:0.75rem;color:#999;">Use the input below to describe what you want.</div>' +
+        '</div>' +
+      '</div>';
+
+    var inputHTML =
+      '<div style="border-top:1px solid #e0e0e0;padding:12px 16px;background:#fafafa;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<textarea id="syson-chat-input" rows="2" placeholder="Describe what you want to generate or modify\u2026" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.85rem;resize:none;outline:none;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();document.getElementById(\'syson-chat-send\').click();}"></textarea>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+            '<label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;color:' + CHAT_STYLE.lightText + ';cursor:pointer;">' +
+              '<input type="checkbox" id="syson-chat-load-library" style="margin:0;cursor:pointer;" /> Load as Library' +
+            '</label>' +
+            '<div style="display:inline-flex;border:1px solid #ddd;border-radius:99px;overflow:hidden;">' +
+              '<button type="button" id="syson-chat-mode-generate" style="border:0;padding:5px 12px;font-size:0.72rem;font-weight:700;cursor:pointer;background:' + CHAT_STYLE.primary + ';color:#fff;">Generate New</button>' +
+              '<button type="button" id="syson-chat-mode-modify" style="border:0;padding:5px 12px;font-size:0.72rem;font-weight:700;cursor:pointer;background:transparent;color:' + CHAT_STYLE.lightText + ';">Modify Existing</button>' +
+            '</div>' +
+          '</div>' +
+          '<button id="syson-chat-send" style="padding:8px 18px;font-size:0.8rem;font-weight:700;border:none;border-radius:' + CHAT_STYLE.radius + ';background:' + CHAT_STYLE.primary + ';color:#fff;cursor:pointer;">Send</button>' +
+        '</div>' +
+      '</div>';
+
+    chatArea.innerHTML = headerHTML + messagesHTML + inputHTML;
+
+    overlay.appendChild(backdrop);
+    overlay.appendChild(sidebar);
+    overlay.appendChild(chatArea);
+    document.body.appendChild(overlay);
+
+    document.getElementById('syson-chat-close').addEventListener('click', closeChatModal);
+    backdrop.addEventListener('click', closeChatModal);
+    document.getElementById('syson-chat-new-btn').addEventListener('click', newChatConversation);
+
+    var modeGen = document.getElementById('syson-chat-mode-generate');
+    var modeMod = document.getElementById('syson-chat-mode-modify');
+    modeGen.addEventListener('click', function() {
+      _chatState.mode = 'generate';
+      modeGen.style.background = CHAT_STYLE.primary; modeGen.style.color = '#fff';
+      modeMod.style.background = 'transparent'; modeMod.style.color = CHAT_STYLE.lightText;
+    });
+    modeMod.addEventListener('click', function() {
+      _chatState.mode = 'modify';
+      modeMod.style.background = CHAT_STYLE.primary; modeMod.style.color = '#fff';
+      modeGen.style.background = 'transparent'; modeGen.style.color = CHAT_STYLE.lightText;
+    });
+
+    document.getElementById('syson-chat-send').addEventListener('click', sendChatMessage);
+    document.getElementById('syson-chat-input').focus();
+
+    loadChatConversations(projectId);
+  }
+
+  function closeChatModal() {
+    var overlay = document.getElementById('syson-chat-overlay');
+    if (overlay) overlay.remove();
+    _chatState.open = false;
+    _chatState.conversations = [];
+    _chatState.activeConversationId = null;
+    _chatState.messages = [];
+  }
+
+  function loadChatConversations(projectId) {
+    var list = document.getElementById('syson-chat-conv-list');
+    if (!list) return;
+
+    chatConversations(projectId).then(function(convs) {
+      _chatState.conversations = convs || [];
+      renderConversationList(convs || []);
+    }).catch(function(err) {
+      if (list) list.innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;font-size:0.8rem;">Failed to load: ' + escapeHtml(err.message) + '</div>';
+    });
+  }
+
+  function renderConversationList(conversations) {
+    var list = document.getElementById('syson-chat-conv-list');
+    if (!list) return;
+    if (!conversations.length) {
+      list.innerHTML = '<div style="text-align:center;padding:20px;color:' + CHAT_STYLE.lightText + ';font-size:0.8rem;">No conversations yet.</div>';
+      return;
+    }
+    list.innerHTML = conversations.map(function(conv) {
+      var isActive = conv.id === _chatState.activeConversationId;
+      var bg = isActive ? 'rgba(38,30,88,0.08)' : 'transparent';
+      var fw = isActive ? '700' : '400';
+      var preview = (conv.lastMessage || '').substring(0, 50);
+      return '<div class="syson-chat-conv-item" data-conv-id="' + escapeHtml(conv.id) + '" style="padding:10px 16px;cursor:pointer;background:' + bg + ';border-bottom:1px solid #eee;font-weight:' + fw + ';">' +
+        '<div style="font-size:0.82rem;color:' + CHAT_STYLE.text + ';">' + escapeHtml(conv.title || 'Chat ' + (conv.id || '').substring(0, 6)) + '</div>' +
+        '<div style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(preview) + '</div>' +
+        '</div>';
+    }).join('');
+    var items = list.querySelectorAll('.syson-chat-conv-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].addEventListener('click', function() {
+        var convId = this.getAttribute('data-conv-id');
+        loadConversation(_chatState.projectId, convId);
+      });
+    }
+  }
+
+  function newChatConversation() {
+    _chatState.activeConversationId = null;
+    _chatState.messages = [];
+    var messages = document.getElementById('syson-chat-messages');
+    if (messages) {
+      messages.innerHTML =
+        '<div style="text-align:center;color:' + CHAT_STYLE.lightText + ';font-size:0.85rem;padding:40px 20px;">' +
+          '<div style="font-size:2rem;margin-bottom:8px;">\ud83d\udcac</div>' +
+          '<div>New conversation started. Describe what you want to build.</div>' +
+        '</div>';
+    }
+    var input = document.getElementById('syson-chat-input');
+    if (input) { input.value = ''; input.focus(); }
+    renderConversationList(_chatState.conversations);
+  }
+
+  function loadConversation(projectId, convId) {
+    _chatState.activeConversationId = convId;
+    _chatState.messages = [];
+    var messages = document.getElementById('syson-chat-messages');
+    if (messages) {
+      messages.innerHTML = '<div style="text-align:center;padding:20px;color:' + CHAT_STYLE.lightText + ';font-size:0.8rem;">Loading messages\u2026</div>';
+    }
+    renderConversationList(_chatState.conversations);
+
+    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/conversations/' + convId, {
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) { return r.json(); })
+      .then(function(data) {
+        _chatState.messages = data.messages || [];
+        renderChatMessages(_chatState.messages);
+      })
+      .catch(function(err) {
+        if (messages) messages.innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;font-size:0.8rem;">Failed: ' + escapeHtml(err.message) + '</div>';
+      });
+  }
+
+  function renderChatMessages(msgs) {
+    var container = document.getElementById('syson-chat-messages');
+    if (!container) return;
+    if (!msgs || !msgs.length) {
+      container.innerHTML =
+        '<div style="text-align:center;color:' + CHAT_STYLE.lightText + ';font-size:0.85rem;padding:40px 20px;">' +
+          '<div>No messages in this conversation.</div>' +
+        '</div>';
+      return;
+    }
+    container.innerHTML = msgs.map(function(m) {
+      return renderChatBubble(m);
+    }).join('');
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function renderChatBubble(msg) {
+    var isUser = msg.role === 'user';
+    var align = isUser ? 'flex-end' : 'flex-start';
+    var bg = isUser ? CHAT_STYLE.primary : '#e0e0e0';
+    var color = isUser ? '#ffffff' : CHAT_STYLE.text;
+    var maxW = '75%';
+    var content = escapeHtml(msg.content || '').replace(/\n/g, '<br>');
+
+    var validationHTML = '';
+    if (msg.validationErrors && msg.validationErrors.length) {
+      validationHTML = '<div style="margin-top:8px;padding:6px 8px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:3px;">' +
+        '<div style="font-size:0.7rem;font-weight:700;color:#e74c3c;margin-bottom:4px;">Validation Errors:</div>' +
+        msg.validationErrors.map(function(e) {
+          return '<div style="font-size:0.7rem;color:#c0392b;">\u26a0 ' + escapeHtml(e.message || e) + '</div>';
+        }).join('') +
+        '</div>';
+    }
+
+    var changesHTML = '';
+    if (msg.proposedChanges && msg.proposedChanges.length) {
+      var changesJson = JSON.stringify(msg.proposedChanges).replace(/"/g, '&quot;');
+      changesHTML = '<div style="margin-top:8px;">' +
+        '<div style="font-size:0.7rem;font-weight:700;color:' + CHAT_STYLE.lightText + ';margin-bottom:4px;">Proposed Changes (' + msg.proposedChanges.length + '):</div>' +
+        msg.proposedChanges.map(function(ch) {
+          var opIcon = ch.operation === 'CREATE' ? '[+]' : ch.operation === 'UPDATE' ? '[~]' : ch.operation === 'DELETE' ? '[-]' : ch.operation === 'RELATIONSHIP' ? '[\u2192]' : '[?]';
+          return '<div style="font-size:0.7rem;color:' + CHAT_STYLE.text + ';padding:2px 0;">' + opIcon + ' ' + escapeHtml(ch.elementName || ch.name || '') + ' (' + escapeHtml(ch.elementType || ch.type || '') + ')</div>';
+        }).join('') +
+        '<button onclick="showChangeApproval(' + changesJson + ', function(approved) { executeApprovedChanges(approved); })" style="margin-top:6px;padding:4px 10px;font-size:0.7rem;font-weight:700;border:1px solid ' + CHAT_STYLE.primary + ';border-radius:3px;background:transparent;color:' + CHAT_STYLE.primary + ';cursor:pointer;">Review &amp; Approve Changes</button>' +
+        '</div>';
+    }
+
+    return '<div style="display:flex;justify-content:' + align + ';">' +
+      '<div style="max-width:' + maxW + ';padding:10px 14px;border-radius:12px;background:' + bg + ';color:' + color + ';font-size:0.85rem;line-height:1.45;word-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,0.08);">' +
+        content + validationHTML + changesHTML +
+        (msg.createdAt ? '<div style="font-size:0.65rem;opacity:0.6;margin-top:4px;text-align:' + (isUser ? 'right' : 'left') + ';">' + escapeHtml(msg.createdAt) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function addChatMessage(role, content, extra) {
+    var msg = { role: role, content: content };
+    if (extra) {
+      for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) msg[k] = extra[k]; }
+    }
+    _chatState.messages.push(msg);
+    renderChatMessages(_chatState.messages);
+  }
+
+  function sendChatMessage() {
+    var input = document.getElementById('syson-chat-input');
+    if (!input) return;
+    var prompt = input.value.trim();
+    if (!prompt) return;
+
+    var loadAsLibrary = document.getElementById('syson-chat-load-library') ? document.getElementById('syson-chat-load-library').checked : false;
+    var projectId = _chatState.projectId;
+    var mode = _chatState.mode;
+
+    input.value = '';
+    addChatMessage('user', prompt);
+    addChatMessage('assistant', '\u23f3 Thinking\u2026', { isLoading: true });
+
+    var sendBtn = document.getElementById('syson-chat-send');
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending\u2026'; }
+
+    function finishSend() {
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
+      var msgs = _chatState.messages;
+      if (msgs.length && msgs[msgs.length - 1].isLoading) {
+        msgs.pop();
+        renderChatMessages(msgs);
+      }
+    }
+
+    var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || '';
+
+    if (mode === 'generate') {
+      chatGenerate(projectId, prompt, loadAsLibrary).then(function(result) {
+        finishSend();
+        var content = result.content || result.text || result.message || JSON.stringify(result);
+        if (result.source || result.sysml) {
+          var source = result.source || result.sysml;
+          validateSysml(source, null).then(function(validation) {
+            var extra = {};
+            if (validation && validation.errors && validation.errors.length) {
+              extra.validationErrors = validation.errors;
+            }
+            addChatMessage('assistant', content, extra);
+          }).catch(function() {
+            addChatMessage('assistant', content);
+          });
+        } else {
+          addChatMessage('assistant', content);
+        }
+        loadChatConversations(projectId);
+      }).catch(function(err) {
+        finishSend();
+        addChatMessage('assistant', '\u274c Error: ' + escapeHtml(err.message));
+      });
+    } else {
+      chatModify(projectId, prompt, branchId).then(function(result) {
+        finishSend();
+        var content = result.content || result.text || result.message || JSON.stringify(result);
+        var extra = {};
+        if (result.changes && result.changes.length) {
+          extra.proposedChanges = result.changes;
+        }
+        addChatMessage('assistant', content, extra);
+        loadChatConversations(projectId);
+      }).catch(function(err) {
+        finishSend();
+        addChatMessage('assistant', '\u274c Error: ' + escapeHtml(err.message));
+      });
+    }
+  }
+
+  // ═══ Change Approval Panel ═══
+
+  var _changeApprovalState = { changes: [], onSubmit: null, selectedAll: true };
+
+  function showChangeApproval(changes, onSubmit) {
+    var existing = document.getElementById('syson-change-approval-overlay');
+    if (existing) existing.remove();
+
+    _changeApprovalState.changes = changes || [];
+    _changeApprovalState.onSubmit = onSubmit;
+    _changeApprovalState.selectedAll = true;
+
+    var selected = {};
+    for (var i = 0; i < _changeApprovalState.changes.length; i++) {
+      selected[i] = true;
+    }
+
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-change-approval-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:center;justify-content:center;font-family:' + CHAT_STYLE.font + ';';
+
+    var backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.55);';
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'position:relative;background:' + CHAT_STYLE.white + ';border-radius:8px;width:min(700px,90vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3);z-index:1;';
+
+    var headerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #e0e0e0;">' +
+        '<span style="font-size:1rem;font-weight:700;color:' + CHAT_STYLE.text + ';">Review Changes</span>' +
+        '<button id="syson-ca-close" style="background:none;border:none;font-size:1.4rem;color:' + CHAT_STYLE.lightText + ';cursor:pointer;line-height:1;">\u00d7</button>' +
+      '</div>';
+
+    var summaryHTML =
+      '<div style="padding:10px 18px;display:flex;gap:16px;font-size:0.78rem;border-bottom:1px solid #f0f0f0;">' +
+        '<span style="color:' + CHAT_STYLE.lightText + ';">' + _changeApprovalState.changes.length + ' change(s) proposed</span>' +
+        '<button id="syson-ca-select-all" style="background:none;border:none;color:' + CHAT_STYLE.primary + ';font-size:0.72rem;font-weight:700;cursor:pointer;padding:0;">Deselect All</button>' +
+      '</div>';
+
+    var listHTML = '<div id="syson-ca-change-list" style="flex:1;overflow-y:auto;padding:8px 18px;">';
+    for (var ci = 0; ci < _changeApprovalState.changes.length; ci++) {
+      var ch = _changeApprovalState.changes[ci];
+      var opIcon = ch.operation === 'CREATE' ? '[+]' : ch.operation === 'UPDATE' ? '[~]' : ch.operation === 'DELETE' ? '[-]' : ch.operation === 'RELATIONSHIP' ? '[\u2192]' : '[?]';
+      var opColor =
+        ch.operation === 'CREATE' ? '#4ade80' :
+        ch.operation === 'UPDATE' ? '#fbbf24' :
+        ch.operation === 'DELETE' ? '#f87171' :
+        ch.operation === 'RELATIONSHIP' ? '#a855f7' : '#94a3b8';
+      listHTML +=
+        '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f5f5f5;">' +
+          '<input type="checkbox" class="syson-ca-check" data-index="' + ci + '" checked style="cursor:pointer;accent-color:' + CHAT_STYLE.primary + ';" />' +
+          '<span style="font-weight:700;color:' + opColor + ';font-size:0.8rem;min-width:36px;">' + opIcon + '</span>' +
+          '<span style="color:' + CHAT_STYLE.text + ';font-size:0.82rem;font-weight:500;">' + escapeHtml(ch.elementName || ch.name || '(unnamed)') + '</span>' +
+          '<span style="color:' + CHAT_STYLE.lightText + ';font-size:0.7rem;">' + escapeHtml(ch.elementType || ch.type || '') + '</span>' +
+          '<span style="color:#999;font-size:0.7rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(ch.description || '') + '</span>' +
+        '</div>';
+    }
+    listHTML += '</div>';
+
+    var footerHTML =
+      '<div style="padding:12px 18px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">' +
+        '<span id="syson-ca-selected-count" style="font-size:0.75rem;color:' + CHAT_STYLE.lightText + ';">' + _changeApprovalState.changes.length + ' item(s) selected</span>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button id="syson-ca-cancel" style="padding:8px 16px;font-size:0.78rem;font-weight:600;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';background:transparent;color:' + CHAT_STYLE.lightText + ';cursor:pointer;">Cancel</button>' +
+          '<button id="syson-ca-execute" style="padding:8px 18px;font-size:0.78rem;font-weight:700;border:none;border-radius:' + CHAT_STYLE.radius + ';background:' + CHAT_STYLE.primary + ';color:#fff;cursor:pointer;">Execute Approved Changes</button>' +
+        '</div>' +
+      '</div>';
+
+    var progressHTML = '<div id="syson-ca-progress" style="display:none;padding:10px 18px;border-top:1px solid #e0e0e0;text-align:center;font-size:0.78rem;color:' + CHAT_STYLE.lightText + ';"></div>';
+
+    panel.innerHTML = headerHTML + summaryHTML + listHTML + footerHTML + progressHTML;
+    overlay.appendChild(backdrop);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    document.getElementById('syson-ca-close').addEventListener('click', function() { overlay.remove(); });
+    backdrop.addEventListener('click', function() { overlay.remove(); });
+    document.getElementById('syson-ca-cancel').addEventListener('click', function() { overlay.remove(); });
+
+    var selectAllBtn = document.getElementById('syson-ca-select-all');
+    selectAllBtn.addEventListener('click', function() {
+      _changeApprovalState.selectedAll = !_changeApprovalState.selectedAll;
+      var checks = overlay.querySelectorAll('.syson-ca-check');
+      for (var j = 0; j < checks.length; j++) {
+        checks[j].checked = _changeApprovalState.selectedAll;
+        selected[j] = _changeApprovalState.selectedAll;
+      }
+      selectAllBtn.textContent = _changeApprovalState.selectedAll ? 'Deselect All' : 'Select All';
+      updateCAApprovalCount(overlay);
+    });
+
+    var checks = overlay.querySelectorAll('.syson-ca-check');
+    for (var ci2 = 0; ci2 < checks.length; ci2++) {
+      checks[ci2].addEventListener('change', (function(idx) {
+        return function() {
+          selected[idx] = this.checked;
+          updateCAApprovalCount(overlay);
+        };
+      })(ci2));
+    }
+
+    document.getElementById('syson-ca-execute').addEventListener('click', function() {
+      var approved = [];
+      for (var ai = 0; ai < _changeApprovalState.changes.length; ai++) {
+        if (selected[ai]) approved.push(_changeApprovalState.changes[ai]);
+      }
+      if (!approved.length) {
+        alert('No changes selected for execution.');
+        return;
+      }
+
+      var progDiv = document.getElementById('syson-ca-progress');
+      var execBtn = document.getElementById('syson-ca-execute');
+      if (progDiv) { progDiv.style.display = 'block'; progDiv.textContent = 'Executing ' + approved.length + ' change(s)\u2026'; }
+      if (execBtn) { execBtn.disabled = true; execBtn.style.opacity = '0.6'; }
+
+      var branchId = localStorage.getItem('syson-vc-branch-' + _chatState.projectId) || '';
+
+      chatExecute(_chatState.projectId, approved, branchId).then(function(result) {
+        if (progDiv) {
+          progDiv.style.color = '#4ade80';
+          progDiv.textContent = '\u2713 Successfully executed ' + approved.length + ' change(s).';
+        }
+        if (execBtn) { execBtn.style.display = 'none'; }
+        setTimeout(function() { overlay.remove(); }, 1500);
+        if (_changeApprovalState.onSubmit) {
+          _changeApprovalState.onSubmit(approved);
+        }
+      }).catch(function(err) {
+        if (progDiv) {
+          progDiv.style.color = '#e74c3c';
+          progDiv.textContent = '\u2717 Execution failed: ' + escapeHtml(err.message);
+        }
+        if (execBtn) { execBtn.disabled = false; execBtn.style.opacity = '1'; }
+      });
+    });
+  }
+
+  function updateCAApprovalCount(overlay) {
+    var count = overlay.querySelectorAll('.syson-ca-check:checked').length;
+    var el = document.getElementById('syson-ca-selected-count');
+    if (el) el.textContent = count + ' item(s) selected';
+  }
+
+  function executeApprovedChanges(approved) {
+    showChangeApproval(approved, function(executed) {
+      addChatMessage('assistant', '\u2713 ' + executed.length + ' change(s) executed successfully.');
+    });
+  }
+
 })();
