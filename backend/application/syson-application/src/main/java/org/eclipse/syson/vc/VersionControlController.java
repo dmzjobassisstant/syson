@@ -231,6 +231,18 @@ public class VersionControlController {
     // ─── baselines ───────────────────────────────────────────────────────
 
     /**
+     * Lists all baselines for a project, newest first.
+     * Used by branch-point baseline and merge tooling that is not anchored
+     * to a single branch route.
+     */
+    @GetMapping("/projects/{projectId}/baselines")
+    public ResponseEntity<List<BaselineDto>> getProjectBaselines(
+            @PathVariable UUID projectId) {
+        this.accessControlService.requireProjectRead(projectId.toString());
+        return ResponseEntity.ok(this.versionControlService.getBaselines(projectId));
+    }
+
+    /**
      * Lists all baselines anchored to a commit.
      */
     @GetMapping("/projects/{projectId}/branches/{branchId}/baselines")

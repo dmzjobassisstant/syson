@@ -348,6 +348,16 @@ public class VersionControlService {
                 .toList();
     }
 
+    /**
+     * Lists all baselines for a project, newest first.
+     */
+    public List<BaselineDto> getBaselines(UUID projectId) {
+        return this.baselineRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
+                .stream()
+                .map(this::toDto)
+                .toList();
+    }
+
     // ─── save pipeline (explicit save button) ───────────────────────────────
 
     /**
