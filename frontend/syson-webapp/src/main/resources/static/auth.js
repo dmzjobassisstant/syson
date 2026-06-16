@@ -2098,12 +2098,25 @@
   }
 
   function getProjectIdFromUrl() {
+    // 1. Path-based routing: /projects/{id}/edit
     var match = window.location.pathname.match(/\/projects\/([^/]+)/);
-    return match ? match[1] : null;
+    if (match) return match[1];
+    // 2. Query-param routing: ?projectId={id} (SysON default)
+    var qs = new URLSearchParams(window.location.search);
+    var qpid = qs.get('projectId');
+    if (qpid) return qpid;
+    // 3. Hash-based routing: #/projects/{id}/...
+    var hashMatch = (window.location.hash || '').match(/projects\/([^/&?]+)/);
+    if (hashMatch) return hashMatch[1];
+    return null;
   }
 
   function isProjectEditorUrl() {
-    return /\/projects\/[^/]+\/edit(?:\/|$)/.test(window.location.pathname);
+    // Path-based: /projects/{id}/edit
+    if (/\/projects\/[^/]+\/edit(?:\/|$)/.test(window.location.pathname)) return true;
+    // Query-param: ?projectId={id} (SysON default)
+    if (new URLSearchParams(window.location.search).get('projectId')) return true;
+    return false;
   }
 
   function findEditorHeader() {
@@ -2141,6 +2154,37 @@
     window.addEventListener('syson-route-changed', function() { setTimeout(callback, 50); });
   }
 
+  /**
+   * Authenticated fetch with automatic 401 recovery.
+   * If the initial request returns 401, tries to refresh the token
+   * and retries once. Falls back to showing the login overlay.
+   */
+  function authedFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    if (state.token) opts.headers['Authorization'] = 'Bearer ' + state.token;
+    return _origFetch(url, opts).then(function(resp) {
+      if (resp.status === 401 && state.token) {
+        // Token might be expired — try silent refresh
+        return refreshToken().then(function() {
+          // Retry with fresh token
+          opts.headers['Authorization'] = 'Bearer ' + state.token;
+          return _origFetch(url, opts);
+        }).catch(function() {
+          showLoginOverlay();
+          throw new Error('Session expired — please log in again.');
+        });
+      }
+      return resp;
+    });
+  }
+
+  function showLoginOverlay() {
+    var overlay = document.getElementById('syson-auth-overlay');
+    if (overlay) { overlay.style.display = 'flex'; }
+    else { location.reload(); }
+  }
+
   function showElementHistory() {
     var projectId = getProjectIdFromUrl();
     var elementId = getElementIdFromPanel();
@@ -2148,11 +2192,11 @@
       alert('Cannot determine project or element ID. Open a project and select an element first.');
       return;
     }
-    // Fetch element history
+    // Fetch element history (with 401 auto-recovery)
     var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || getBranchIdFromUrl() || '';
     var url = '/api/v1/user/projects/' + projectId + '/elements/' + encodeURIComponent(elementId) + '/history'
       + (branchId ? '?branchId=' + encodeURIComponent(branchId) : '');
-    _origFetch(url, { headers: { 'Authorization': 'Bearer ' + state.token } }).then(function(resp) {
+    authedFetch(url).then(function(resp) {
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       return resp.json();
     }).then(function(data) {
@@ -2464,8 +2508,7 @@
     var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || getBranchIdFromUrl() || '';
     var url = '/api/v1/user/projects/' + projectId + '/elements/' + encodeURIComponent(stableId) + '/history'
       + (branchId ? '?branchId=' + encodeURIComponent(branchId) : '');
-    _origFetch(url,
-      { headers: { 'Authorization': 'Bearer ' + state.token } })
+    authedFetch(url)
       .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function(data) { renderHistoryOverlay(data, projectId, stableId); })
       .catch(function(err) { alert('Failed to load history: ' + err.message); });
