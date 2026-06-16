@@ -1989,44 +1989,41 @@
 
   function injectHistoryButton() {
     if (!state.token) return;
-    // Watch for the properties panel to appear
+
+    // Strategy: inject a History button into the Explorer panel header,
+    // so it works regardless of whether the Details panel has content.
     var observer = new MutationObserver(function(mutations) {
-      // Look for the properties panel — it has a header with the element type name
-      var propsPanel = document.querySelector('[data-testid="properties"], .properties-panel, [class*="PropertiesView"], [class*="properties-view"]');
-      if (!propsPanel) {
-        // Try alternative: look for the details/properties section in the right panel
-        var panels = document.querySelectorAll('[class*="panel"], [class*="Panel"]');
-        for (var i = 0; i < panels.length; i++) {
-          var text = panels[i].textContent || '';
-          if (text.indexOf('Properties') !== -1 && text.indexOf('Declared Name') !== -1) {
-            propsPanel = panels[i];
-            break;
-          }
-        }
+      // Don't add twice
+      if (document.getElementById('syson-history-btn')) return;
+
+      // Look for the Explorer view header
+      var explorerView = document.querySelector('[data-testid="view-Explorer"]');
+      if (!explorerView) return;
+
+      // Find or create a toolbar row at the top of the Explorer
+      var toolbar = explorerView.querySelector('[class*="toolbar"], [class*="Toolbar"], [class*="header"], [class*="Header"]');
+      if (!toolbar) {
+        // Create a mini toolbar
+        toolbar = document.createElement('div');
+        toolbar.style.cssText = 'display:flex;justify-content:flex-end;padding:4px 8px;border-bottom:1px solid #333;';
+        explorerView.insertBefore(toolbar, explorerView.firstChild);
       }
-      if (!propsPanel) return;
-      // Don't add duplicate
-      if (propsPanel.querySelector('#syson-history-btn')) return;
-      // Find the header area
-      var header = propsPanel.querySelector('h3, h4, [class*="header"], [class*="Header"]');
-      if (!header) header = propsPanel.firstElementChild;
-      if (!header) return;
-      // Create history button
+
       var btn = document.createElement('button');
       btn.id = 'syson-history-btn';
-      btn.textContent = 'History';
-      btn.title = 'View element change history';
-      btn.style.cssText = 'margin-left:8px;padding:2px 8px;font-size:11px;background:#261e58;color:#fff;border:none;border-radius:3px;cursor:pointer;vertical-align:middle;';
+      btn.textContent = '📜 History';
+      btn.title = 'View change history for the selected element';
+      btn.style.cssText = 'padding:2px 8px;font-size:11px;background:#261e58;color:#fff;border:1px solid #3a2f6b;border-radius:3px;cursor:pointer;vertical-align:middle;';
       btn.addEventListener('click', function() { showElementHistory(); });
-      header.appendChild(btn);
+      toolbar.appendChild(btn);
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
   function getElementIdFromPanel() {
-    // 1. Check URL search params (?objectId=...)
+    // 1. Check URL search params (?selection=..., ?objectId=...)
     var params = new URLSearchParams(window.location.search);
-    var fromParam = params.get('objectId') || params.get('elementId') || params.get('selectedObjectId');
+    var fromParam = params.get('selection') || params.get('objectId') || params.get('elementId') || params.get('selectedObjectId');
     if (fromParam) return fromParam;
 
     // 2. Check URL hash params (#...&objectId=...)
@@ -2080,6 +2077,7 @@
         // Check for element selection ID
         var sid = mp.selectedObjectId || mp.objectId || mp.semanticElementId
                || mp.elementId || mp.editingContextId
+               || mp['item.id'] || mp['selectedTreeItem.id']
                || (mp.selection && mp.selection.entries && mp.selection.entries[0] && mp.selection.entries[0].id)
                || (sp && (sp.selectedObjectId || sp.objectId || sp.elementId));
         if (sid && typeof sid === 'string' && sid.length > 10 && sid.indexOf('-') > 0) return sid;
