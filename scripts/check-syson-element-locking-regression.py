@@ -13,7 +13,7 @@ PASS_COUNT = 0
 FAIL_COUNT = 0
 
 def get_token():
-    data = json.dumps({"email": "admin", "password": "admin"}).encode()
+    data = json.dumps({"email": os.environ.get("SYSON_TEST_USER", "regression-admin"), "password": os.environ.get("SYSON_TEST_PASSWORD", "RegressionAdmin2026!")}).encode()
     req = urllib.request.Request(BASE + "/api/auth/login", data,
         {"Content-Type": "application/json"}, method="POST")
     resp = urllib.request.urlopen(req, timeout=10)

@@ -18,8 +18,8 @@ import subprocess
 import sys
 
 BASE_URL = os.environ.get("BASE_URL", "https://syson.damuza-consulting.com")
-ADMIN_USER = os.environ.get("SYSON_TEST_USER", "admin")
-ADMIN_PASSWORD = os.environ.get("SYSON_TEST_PASSWORD", "admin")
+ADMIN_USER = os.environ.get("SYSON_TEST_USER", "regression-admin")
+ADMIN_PASSWORD = os.environ.get("SYSON_TEST_PASSWORD", "RegressionAdmin2026!")
 
 PASS = 0
 FAIL = 0

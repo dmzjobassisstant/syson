@@ -3,10 +3,15 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-https://syson.damuza-consulting.com}"
 REPO_DIR="${REPO_DIR:-/root/syson-fork}"
+CREDENTIALS_FILE="${SYSON_TEST_CREDENTIALS_FILE:-$REPO_DIR/scripts/.syson-test-credentials}"
+if [[ -f "$CREDENTIALS_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CREDENTIALS_FILE"
+fi
 SRC_AUTH="$REPO_DIR/frontend/syson/public/auth.js"
 LIVE_AUTH="/var/www/syson/auth.js"
-USER_NAME="${SYSON_TEST_USER:-admin}"
-PASSWORD="${SYSON_TEST_PASSWORD:-admin}"
+USER_NAME="${SYSON_TEST_USER:-regression-admin}"
+PASSWORD="${SYSON_TEST_PASSWORD:-RegressionAdmin2026!}"
 
 fail() {
   echo "FAIL: $*" >&2

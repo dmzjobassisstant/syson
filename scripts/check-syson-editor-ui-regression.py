@@ -23,8 +23,8 @@ except ImportError:
 
 BASE_URL = "https://syson.damuza-consulting.com"
 OUTPUT_DIR = "/tmp/syson-editor-ui-regression"
-ADMIN_USER = "admin"
-ADMIN_PASS = "admin"
+ADMIN_USER = os.environ.get("SYSON_TEST_USER", "regression-admin")
+ADMIN_PASS = os.environ.get("SYSON_TEST_PASSWORD", "RegressionAdmin2026!")
 
 # Test results collector
 results = []

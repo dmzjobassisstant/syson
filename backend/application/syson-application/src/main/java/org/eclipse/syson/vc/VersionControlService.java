@@ -262,8 +262,8 @@ public class VersionControlService {
             ce.setCreatedBy(userId);
             ce.setBranchId(branchId);
             ce.setProjectRef(projectId.toString());
-            ce.setStableObjectId(dto.objectId() != null ? dto.objectId().toString() : null);
-            ce.setChangedFields("[]");
+            ce.setStableObjectId(dto.stableObjectId() != null ? dto.stableObjectId() : (dto.objectId() != null ? dto.objectId().toString() : null));
+            ce.setChangedFields(dto.changedFieldsJson() != null ? dto.changedFieldsJson() : "[]");
             ce.setExtractorVersion("v1");
 
             // Per-change hash: SHA-256(objectType:objectId:operation:patch)
@@ -489,7 +489,9 @@ public class VersionControlService {
                 e.getBeforeObject(),
                 e.getAfterObject(),
                 e.getCreatedAt(),
-                e.getCreatedBy()
+                e.getCreatedBy(),
+                e.getStableObjectId(),
+                e.getChangedFields()
         );
     }
 

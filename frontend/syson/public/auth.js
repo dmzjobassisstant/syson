@@ -482,17 +482,62 @@
         '<button class="dd-logout" data-action="logout">Sign out</button>' +
         '</div></div>' +
         '<button id="syson-save-btn-ub" title="Save model — records history to version control">Save</button>' +
-        '<button id="syson-chat-btn" title="Open LLM Chat" style="border:1px solid #3b82f6;border-radius:4px;background:#261e58;color:#e2e8f0;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Roboto,\'Helvetica Neue\',Arial,sans-serif;line-height:1;white-space:nowrap;margin-left:4px;">Chat</button>';
+        '<div id="syson-branch-menu-wrapper" style="position:relative;display:none;">' +
+        '<button id="syson-branch-menu-btn" title="Config. Context — select branch, apply, diff, merge">Config. Context</button>' +
+        '<div id="syson-branch-dd" class="syson-branch-dropdown" style="top:100%;right:0;">' +
+        '<div class="bd-search"><input id="syson-branch-search" type="text" placeholder="Search branches…" /></div>' +
+        '<div id="syson-branch-list" class="bd-list"></div>' +
+        '<div id="syson-branch-info" style="padding:6px 12px;font-size:10px;color:#475569;border-top:1px solid rgba(59,130,246,0.1);"></div>' +
+        '<div class="bd-actions">' +
+        '<button id="syson-bd-apply" class="bd-btn-apply">Apply</button>' +
+        '<button id="syson-bd-diff-bp" class="bd-btn-diff">Diff vs Branch Point</button>' +
+        '<button id="syson-bd-diff-parent" class="bd-btn-diff-main">Diff vs Parent</button>' +
+        '</div></div></div>' +
+        '<button id="syson-chat-btn" title="Open LLM Chat" style="border:1px solid #3b82f6;border-radius:4px;background:#261e58;color:#e2e8f0;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Roboto,\'Helvetica Neue\',Arial,sans-serif;line-height:1;white-space:nowrap;">Chat</button>' +
+        '<button id="syson-test-btn" title="Sirius Web Protocol Test Harness" style="border:1px solid #10b981;border-radius:4px;background:#065f46;color:#d1fae5;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Roboto,\'Helvetica Neue\',Arial,sans-serif;line-height:1;white-space:nowrap;">🧪 Test</button>';
       bar.style.display = 'flex';
       document.getElementById('syson-save-btn-ub').addEventListener('click', triggerSave);
       var chatBtn = document.getElementById('syson-chat-btn');
       if (chatBtn) chatBtn.addEventListener('click', openChatModal);
+      var testBtn = document.getElementById('syson-test-btn');
+      if (testBtn) testBtn.addEventListener('click', openTestHarness);
       var menuBtn = document.getElementById('syson-menu-trigger');
       var menuWrapper = document.getElementById('syson-menu-wrapper');
       var menuDD = document.getElementById('syson-menu-dd');
       menuWrapper.addEventListener('click', function(e) { e.stopPropagation(); menuDD.classList.toggle('open'); });
       menuDD.addEventListener('click', function(e) { e.stopPropagation(); var btn = e.target.closest('button'); if (!btn) return; var action = btn.getAttribute('data-action'); if (action === 'dashboard') showDashboard(); else if (action === 'admin') showAdminConsole(); else if (action === 'logout') logout(); menuDD.classList.remove('open'); });
       document.addEventListener('click', function() { menuDD.classList.remove('open'); }, true);
+
+      // ── Branch dropdown listeners ──
+      var branchBtn = document.getElementById('syson-branch-menu-btn');
+      if (branchBtn) {
+        branchBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var dd = document.getElementById('syson-branch-dd');
+          var projectId = getProjectIdFromUrl();
+          if (!projectId || !dd) return;
+          if (dd.classList.contains('open')) { dd.classList.remove('open'); return; }
+          loadBranchesForMenu(projectId);
+          dd.classList.add('open');
+        });
+      }
+      var branchSearch = document.getElementById('syson-branch-search');
+      if (branchSearch) branchSearch.addEventListener('input', function() { filterBranchList(this.value); });
+      var bdApply = document.getElementById('syson-bd-apply');
+      if (bdApply) bdApply.addEventListener('click', function() {
+        var dd = document.getElementById('syson-branch-dd');
+        if (dd) dd.classList.remove('open');
+        applyBranchById(_branchMenuState.activeBranchId);
+      });
+      var bdDiffBp = document.getElementById('syson-bd-diff-bp');
+      if (bdDiffBp) bdDiffBp.addEventListener('click', function() { openDiffViewerFor('vs-branch-point'); });
+      var bdDiffParent = document.getElementById('syson-bd-diff-parent');
+      if (bdDiffParent) bdDiffParent.addEventListener('click', function() { openDiffViewerFor('vs-parent-latest'); });
+      document.addEventListener('click', function(e) {
+        var dd = document.getElementById('syson-branch-dd');
+        var wrapper = document.getElementById('syson-branch-menu-wrapper');
+        if (dd && wrapper && !wrapper.contains(e.target)) dd.classList.remove('open');
+      }, true);
     }
 
     // Initial mount
@@ -1505,75 +1550,22 @@
     if (!state.token) return;
     function tryInject() {
       var projectId = getProjectIdFromUrl();
+      var wrapper = document.getElementById('syson-branch-menu-wrapper');
+      if (!wrapper) return;
+
       if (!projectId || !isProjectEditorUrl()) {
-        var btn = document.getElementById('syson-branch-menu-btn');
-        if (btn) btn.style.display = 'none';
+        wrapper.style.display = 'none';
         return;
       }
-      var navBar = findEditorHeader();
-      if (!navBar) return;
+      wrapper.style.display = 'inline-flex';
 
-      var wrapper = document.getElementById('syson-branch-menu-wrapper');
-      if (!wrapper) {
-        wrapper = document.createElement('div');
-        wrapper.id = 'syson-branch-menu-wrapper';
-        wrapper.style.cssText = 'position:absolute;right:calc(80px + 20vw);top:50%;transform:translateY(-50%);z-index:10;';
-        navBar.style.position = 'relative';
-        navBar.appendChild(wrapper);
-      }
-      if (!navBar.contains(wrapper)) navBar.appendChild(wrapper);
-
-      var btn = document.getElementById('syson-branch-menu-btn');
-      if (!btn) {
-        wrapper.innerHTML = '<div id="syson-branch-menu-trigger" style="position:relative;display:inline-flex;">'
-          + '<button id="syson-branch-menu-btn">Config. Context: …</button>'
-          + '<div id="syson-branch-dd" class="syson-branch-dropdown">'
-          + '<div class="bd-search"><input id="syson-branch-search" type="text" placeholder="Search branches\u2026" /></div>'
-          + '<div id="syson-branch-list" class="bd-list"></div>'
-          + '<div id="syson-branch-info" style="padding:6px 12px;font-size:10px;color:#475569;border-top:1px solid rgba(59,130,246,0.1);"></div>'
-          + '<div class="bd-actions">'
-          + '<button id="syson-bd-apply" class="bd-btn-apply">Apply</button>'
-          + '<button id="syson-bd-diff-bp" class="bd-btn-diff">Diff vs Branch Point</button>'
-          + '<button id="syson-bd-diff-parent" class="bd-btn-diff-main">Diff vs Parent</button>'
-          + '</div></div></div>';
-        btn = document.getElementById('syson-branch-menu-btn');
-
-        btn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          var dd = document.getElementById('syson-branch-dd');
-          if (dd.classList.contains('open')) { dd.classList.remove('open'); return; }
-          loadBranchesForMenu(projectId);
-          dd.classList.add('open');
-        });
-
-        document.addEventListener('click', function(e) {
-          var dd = document.getElementById('syson-branch-dd');
-          var trig = document.getElementById('syson-branch-menu-trigger');
-          if (dd && trig && !trig.contains(e.target)) dd.classList.remove('open');
-        }, true);
-
-        var searchInput = document.getElementById('syson-branch-search');
-        searchInput.addEventListener('input', function() { filterBranchList(this.value); });
-
-        document.getElementById('syson-bd-apply').addEventListener('click', function() {
-          var dd = document.getElementById('syson-branch-dd');
-          dd.classList.remove('open');
-          applyBranchById(_branchMenuState.activeBranchId);
-        });
-        document.getElementById('syson-bd-diff-bp').addEventListener('click', function() {
-          openDiffViewerFor('vs-branch-point');
-        });
-        document.getElementById('syson-bd-diff-parent').addEventListener('click', function() {
-          openDiffViewerFor('vs-parent-latest');
-        });
-      }
-
-      btn.style.display = 'inline-flex';
       if (_branchMenuState.projectId !== projectId) {
         _branchMenuState.projectId = projectId;
         _branchMenuState.branches = [];
         _branchMenuState.activeBranchId = localStorage.getItem('syson-vc-branch-' + projectId) || '';
         loadBranchesForMenu(projectId);
+      } else {
+        updateBranchButton();
       }
     }
     installEditorChromeRouteGuard(tryInject);
@@ -2675,6 +2667,459 @@
     // Not authenticated — show login and block app load
     blockApp();
     showLogin('');
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TEST HARNESS — Sirius Web Protocol command panel for element/relationship/view
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  var _testState = {
+    open: false,
+    log: [],
+    projectId: null,
+    editingContextId: null,
+    representationId: null,
+    lastLlmResponse: null,
+    lastSysmlText: null,
+    lastChanges: []
+  };
+
+  function openTestHarness() {
+    var pj = getProjectIdFromUrl();
+    if (!pj) { alert('Open a project first.'); return; }
+    _testState.projectId = pj;
+    _testState.editingContextId = localStorage.getItem('syson-ecid-' + pj) || '';
+    _testState.representationId = localStorage.getItem('syson-repid-' + pj) || '';
+
+    var existing = document.getElementById('syson-test-overlay');
+    if (existing) { existing.remove(); return; }
+
+    var ov = document.createElement('div');
+    ov.id = 'syson-test-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:200000;display:flex;flex-direction:column;background:#0f172a;color:#e2e8f0;font-family:Roboto,Helvetica Neue,Arial,sans-serif;';
+    ov.innerHTML = ''
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#1e293b;border-bottom:1px solid #334155;">'
+      + '<span style="font-weight:700;font-size:0.95rem;">🧪 Sirius Web Test Harness</span>'
+      + '<div>'
+      + '<select id="th-command-preset" style="margin-right:8px;padding:4px;font-size:0.75rem;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:3px;">'
+      + '<option value="">—— Presets ——</option>'
+      + '<optgroup label="LLM End-to-End">'
+      + '<option value="llmE2E">LLM E2E — prompt → system wrapper → LLM → unpack → SysML/commands</option>'
+      + '</optgroup>'
+      + '<optgroup label="Elements: Add">'
+      + '<option value="insertSysML">insertTextualSysMLv2 — Create from .sysml text</option>'
+      + '<option value="createChild">createChild — Create child element</option>'
+      + '</optgroup>'
+      + '<optgroup label="Elements: Modify">'
+      + '<option value="renameTreeItem">renameTreeItem — Rename element</option>'
+      + '</optgroup>'
+      + '<optgroup label="Elements: Remove">'
+      + '<option value="deleteTreeItem">deleteTreeItem — Delete element</option>'
+      + '<option value="deleteFromDiagram">deleteFromDiagram — Remove from diagram</option>'
+      + '</optgroup>'
+      + '<optgroup label="Relationships">'
+      + '<option value="createEdge">invokeSingleClickOnTwoDiagramElementsTool — Create edge</option>'
+      + '<option value="reconnectEdge">reconnectEdge — Change edge ends</option>'
+      + '</optgroup>'
+      + '<optgroup label="Views / Diagrams">'
+      + '<option value="createRepresentation">createRepresentation — New diagram</option>'
+      + '<option value="deleteRepresentation">deleteRepresentation — Remove diagram</option>'
+      + '<option value="listRepresentations">List all representations</option>'
+      + '</optgroup>'
+      + '<optgroup label="Read Model">'
+      + '<option value="getObject">editingContext.object() — Inspect element</option>'
+      + '<option value="explorerDescriptions">explorerDescriptions — Read tree</option>'
+      + '<option value="queryBased">queryBasedObject — Query with expression</option>'
+      + '<option value="serializeModel">Serialize model to .sysml text</option>'
+      + '</optgroup>'
+      + '</select>'
+      + '<button id="th-close" style="border:1px solid #ef4444;border-radius:3px;background:transparent;color:#fca5a5;padding:4px 10px;font-size:0.75rem;cursor:pointer;">✕</button>'
+      + '</div>'
+      + '</div>'
+      + '<div style="display:flex;flex:1;overflow:hidden;">'
+      // Left: command editor
+      + '<div style="width:50%;display:flex;flex-direction:column;border-right:1px solid #334155;">'
+      + '<div style="padding:8px 12px;font-size:0.7rem;color:#64748b;border-bottom:1px solid #1e293b;">GRAPHQL REQUEST</div>'
+      + '<textarea id="th-query" style="flex:1;background:#0f172a;color:#e2e8f0;border:none;padding:12px;font-family:monospace;font-size:0.8rem;resize:none;" placeholder="GraphQL mutation/query..."></textarea>'
+      + '<div style="padding:8px 12px;display:flex;gap:8px;border-top:1px solid #334155;">'
+      + '<input id="th-opname" placeholder="Operation name" style="flex:1;padding:4px 8px;font-size:0.7rem;background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:3px;">'
+      + '<button id="th-send" style="padding:4px 16px;background:#10b981;color:#fff;border:none;border-radius:3px;font-size:0.75rem;font-weight:600;cursor:pointer;">▶ Execute</button>'
+      + '</div>'
+      + '<div style="padding:6px 12px;font-size:0.65rem;color:#64748b;background:#1e293b;">'
+      + 'Context: <b id="th-ctx">projectId=' + _testState.projectId + ' ecId=' + (_testState.editingContextId || '?') + ' repId=' + (_testState.representationId || '?') + '</b>'
+      + '</div>'
+      + '<div style="padding:8px 12px;background:#111827;border-top:1px solid #334155;display:flex;flex-direction:column;gap:6px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+      + '<span style="font-size:0.72rem;font-weight:700;color:#93c5fd;">LLM E2E Pipeline</span>'
+      + '<button id="th-llm-run" style="padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:3px;font-size:0.7rem;font-weight:700;cursor:pointer;">Run E2E</button>'
+      + '</div>'
+      + '<textarea id="th-llm-prompt" rows="2" placeholder="Example: Create a reusable SysML library for a drone propulsion subsystem with motor, ESC, propeller, battery interfaces, requirements." style="padding:6px 8px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:3px;font-family:monospace;font-size:0.7rem;resize:vertical;"></textarea>'
+      + '<div style="display:grid;grid-template-columns:1.6fr 1fr 0.8fr;gap:6px;">'
+      + '<input id="th-llm-endpoint" placeholder="OpenAI-compatible endpoint override (optional)" style="padding:4px 7px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:3px;font-size:0.68rem;">'
+      + '<input id="th-llm-key" placeholder="API key override (optional)" type="password" style="padding:4px 7px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:3px;font-size:0.68rem;">'
+      + '<input id="th-llm-model" value="glm-5.2" placeholder="model" style="padding:4px 7px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:3px;font-size:0.68rem;">'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;">'
+      + '<input id="th-llm-ec" value="' + (_testState.editingContextId || '') + '" placeholder="editingContextId / semantic_data UUID" style="padding:4px 7px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:3px;font-size:0.68rem;">'
+      + '<input id="th-llm-root" placeholder="root objectId (XMI id from document.content[0].id)" style="padding:4px 7px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:3px;font-size:0.68rem;">'
+      + '<label style="font-size:0.65rem;color:#cbd5e1;white-space:nowrap;"><input id="th-llm-autoinsert" type="checkbox"> auto insert SysML</label>'
+      + '</div>'
+      + '<div style="font-size:0.62rem;color:#64748b;line-height:1.35;">Uses <code>/chat/process</code>: backend wraps your request with the SysON system prompt, calls the LLM endpoint, parses XML, then returns <code>sysmlText</code> or sequential <code>changes</code>. If SysML is returned, the harness prepares/optionally executes <code>insertTextualSysMLv2</code>.</div>'
+      + '</div>'
+      + '</div>'
+      // Right: response + log
+      + '<div style="width:50%;display:flex;flex-direction:column;">'
+      + '<div style="padding:8px 12px;font-size:0.7rem;color:#64748b;border-bottom:1px solid #1e293b;">RESPONSE</div>'
+      + '<div id="th-response" style="flex:1;overflow:auto;padding:12px;font-family:monospace;font-size:0.75rem;white-space:pre-wrap;color:#94a3b8;">'
+      + '<span style="color:#64748b;">Select a preset and click Execute, or paste GraphQL directly…</span>'
+      + '</div>'
+      + '<div style="padding:8px 12px;font-size:0.7rem;color:#64748b;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;">COMMAND LOG</div>'
+      + '<div id="th-log" style="height:180px;overflow:auto;padding:8px 12px;font-family:monospace;font-size:0.65rem;color:#475569;"></div>'
+      + '</div>'
+      + '</div>';
+
+    document.body.appendChild(ov);
+
+    // Close
+    document.getElementById('th-close').addEventListener('click', function() {
+      ov.remove(); _testState.open = false;
+    });
+
+    // Preset selector
+    document.getElementById('th-command-preset').addEventListener('change', function() {
+      var v = this.value;
+      if (!v) return;
+      if (v === 'llmE2E') {
+        document.getElementById('th-llm-prompt').focus();
+        document.getElementById('th-response').innerHTML = '<span style="color:#93c5fd;">LLM E2E selected. Enter prompt + optional endpoint/key, then click Run E2E.</span>';
+        return;
+      }
+      var q = getPresetQuery(v);
+      document.getElementById('th-query').value = q.query;
+      document.getElementById('th-opname').value = q.opName || v;
+      document.getElementById('th-response').innerHTML = '<span style="color:#64748b;">Preset loaded. Review variables and click Execute.</span>';
+    });
+
+    // Execute
+    document.getElementById('th-send').addEventListener('click', function() {
+      executeTestCommand();
+    });
+    document.getElementById('th-llm-run').addEventListener('click', function() {
+      executeLlmE2E();
+    });
+
+    // Ctrl+Enter to execute
+    document.getElementById('th-query').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        executeTestCommand();
+      }
+    });
+
+    _testState.open = true;
+
+    // ── Auto-resolve editingContextId for this project ──
+    (function resolveEditingContext() {
+      var p = _testState.projectId;
+      _origFetch('/api/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+        body: JSON.stringify({
+          query: 'query ResolveEC($pid: ID!) { viewer { project(projectId: $pid) { currentEditingContext { id } } } }',
+          variables: { pid: p }
+        })
+      }).then(function(r) { return r.json(); })
+        .then(function(json) {
+          var ecId = (json.data && json.data.viewer && json.data.viewer.project && json.data.viewer.project.currentEditingContext && json.data.viewer.project.currentEditingContext.id) || '';
+          if (ecId) {
+            _testState.editingContextId = ecId;
+            localStorage.setItem('syson-ecid-' + p, ecId);
+            var ctxEl = document.getElementById('th-ctx');
+            if (ctxEl) ctxEl.innerHTML = 'projectId=' + p + ' ecId=' + ecId + ' repId=' + (_testState.representationId || '?');
+            addLogEntry('\u2713 editingContextId resolved: ' + ecId.substring(0,12) + '\u2026', '#22c55e');
+          } else {
+            addLogEntry('\u26a0 Could not resolve editingContextId \u2014 mutations will fail', '#f59e0b');
+          }
+        }).catch(function(err) {
+          addLogEntry('\u26a0 editingContextId resolution failed: ' + (err.message || String(err)), '#f59e0b');
+        });
+    })();
+  }
+
+  function getPresetQuery(preset) {
+    var p = _testState.projectId;
+    var ec = _testState.editingContextId || p;
+    var r = _testState.representationId || '';
+    var templates = {
+      insertSysML: {
+        query: 'mutation {\\n  insertTextualSysMLv2(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    editingContextId: "' + ec + '",\\n    objectId: "ROOT_ELEMENT_ID",\\n    textualContent: "part def Example { attribute mass : Real; }"\\n  }) { __typename ... on SuccessPayload { id } ... on ErrorPayload { message } }\\n}',
+        opName: 'insertSysML'
+      },
+      createChild: {
+        query: 'mutation {\\n  createChild(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    editingContextId: "' + ec + '",\\n    objectId: "PARENT_ELEMENT_ID",\\n    childCreationDescriptionId: "TOOL_ID"\\n  }) { __typename ... on CreateChildSuccessPayload { object { id label kind } } ... on ErrorPayload { message } }\\n}',
+        opName: 'createChild'
+      },
+      renameTreeItem: {
+        query: 'mutation {\\n  renameTreeItem(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    editingContextId: "' + ec + '",\\n    representationId: "' + r + '",\\n    treeItemId: "ELEMENT_TREE_ITEM_ID",\\n    newLabel: "New Name"\\n  }) { __typename ... on SuccessPayload { id } ... on ErrorPayload { message } }\\n}',
+        opName: 'renameTreeItem'
+      },
+      deleteTreeItem: {
+        query: 'mutation {\\n  deleteTreeItem(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    editingContextId: "' + ec + '",\\n    representationId: "' + r + '",\\n    treeItemId: "ELEMENT_TREE_ITEM_ID"\\n  }) { __typename ... on SuccessPayload { id } ... on ErrorPayload { message } }\\n}',
+        opName: 'deleteTreeItem'
+      },
+      deleteFromDiagram: {
+        query: 'mutation {\\n  deleteFromDiagram(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    editingContextId: "' + ec + '",\\n    representationId: "' + r + '",\\n    nodeIds: ["NODE_ID"],\\n    edgeIds: []\\n  }) { __typename ... on SuccessPayload { id } ... on ErrorPayload { message } }\\n}',
+        opName: 'deleteFromDiagram'
+      },
+      createEdge: {
+        query: 'mutation {\\n  invokeSingleClickOnTwoDiagramElementsTool(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    editingContextId: "' + ec + '",\\n    representationId: "' + r + '",\\n    toolId: "TOOL_ID",\\n    diagramSourceElementId: "SOURCE_NODE_ID",\\n    diagramTargetElementId: "TARGET_NODE_ID",\\n    sourcePositionX: 0.0, sourcePositionY: 0.0,\\n    targetPositionX: 100.0, targetPositionY: 100.0\\n  }) { __typename ... on SuccessPayload { id } ... on ErrorPayload { message } }\\n}',
+        opName: 'createEdge'
+      },
+      reconnectEdge: {
+        query: 'mutation {\\n  reconnectEdge(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    editingContextId: "' + ec + '",\\n    representationId: "' + r + '",\\n    edgeId: "EDGE_ID",\\n    newEdgeEndId: "NODE_ID",\\n    reconnectEdgeKind: SOURCE\\n  }) { __typename ... on SuccessPayload { id } ... on ErrorPayload { message } }\\n}',
+        opName: 'reconnectEdge'
+      },
+      createRepresentation: {
+        query: 'mutation {\\n  createRepresentation(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    editingContextId: "' + ec + '",\\n    objectId: "ELEMENT_ID",\\n    representationDescriptionId: "DESCRIPTION_ID",\\n    representationName: "New Diagram"\\n  }) { __typename ... on CreateRepresentationSuccessPayload { representation { id label kind } } ... on ErrorPayload { message } }\\n}',
+        opName: 'createRepresentation'
+      },
+      deleteRepresentation: {
+        query: 'mutation {\\n  deleteRepresentation(input: {\\n    id: "' + crypto.randomUUID() + '",\\n    representationId: "REPRESENTATION_ID"\\n  }) { __typename ... on SuccessPayload { id } ... on ErrorPayload { message } }\\n}',
+        opName: 'deleteRepresentation'
+      },
+      listRepresentations: {
+        query: 'query getReps($ecId: ID!) {\\n  viewer { editingContext(editingContextId: $ecId) {\\n    representations(first: 20) { edges { node { id label kind } } }\\n  }}\\n}',
+        opName: 'listRepresentations'
+      },
+      getObject: {
+        query: 'query getObj($ecId: ID!, $objId: ID!) {\\n  viewer { editingContext(editingContextId: $ecId) {\\n    object(objectId: $objId) { id label kind }\\n  }}\\n}',
+        opName: 'getObject'
+      },
+      explorerDescriptions: {
+        query: 'query explorer($ecId: ID!) {\\n  viewer { editingContext(editingContextId: $ecId) {\\n    id\\n    explorerDescriptions { id label }\\n  }}\\n}',
+        opName: 'explorerDescriptions'
+      },
+      queryBased: {
+        query: 'query qb($ecId: ID!) {\\n  viewer { editingContext(editingContextId: $ecId) {\\n    queryBasedObject(query: "aql:self.eAllContents()", variableName: "self") { id label kind }\\n  }}\\n}',
+        opName: 'queryBased'
+      },
+      serializeModel: {
+        query: 'query serialize($ecId: ID!) {\\n  viewer { editingContext(editingContextId: $ecId) {\\n    queryBasedString(query: "aql:self.sysmlText()") \\n  }}\\n}',
+        opName: 'serializeModel'
+      }
+    };
+    return templates[preset] || { query: '# Unknown preset: ' + preset };
+  }
+
+
+  function executeLlmE2E() {
+    var p = _testState.projectId;
+    var promptEl = document.getElementById('th-llm-prompt');
+    var promptText = (promptEl && promptEl.value || '').trim();
+    if (!promptText) {
+      alert('Enter an LLM test prompt first.');
+      return;
+    }
+    var endpoint = (document.getElementById('th-llm-endpoint').value || '').trim();
+    var apiKey = (document.getElementById('th-llm-key').value || '').trim();
+    var model = (document.getElementById('th-llm-model').value || 'glm-5.2').trim();
+    var ec = (document.getElementById('th-llm-ec').value || _testState.editingContextId || '').trim();
+    var root = (document.getElementById('th-llm-root').value || '').trim();
+    var autoInsert = !!document.getElementById('th-llm-autoinsert').checked;
+
+    addLogEntry('▶ LLM E2E: wrapping prompt with SysON system prompt', '#60a5fa');
+    document.getElementById('th-response').innerHTML = '<span style="color:#fbbf24;">Running LLM E2E pipeline…</span>';
+
+    var req = {
+      prompt: promptText,
+      conversationId: null,
+      branchId: null,
+      apiEndpoint: endpoint || null,
+      apiKey: apiKey || null,
+      model: model || null
+    };
+
+    _origFetch('/api/v1/projects/' + encodeURIComponent(p) + '/chat/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify(req)
+    }).then(function(res) {
+      return res.text().then(function(text) {
+        var json = null;
+        try { json = JSON.parse(text); } catch (e) { json = { raw: text }; }
+        if (!res.ok) {
+          throw new Error('HTTP ' + res.status + ': ' + text.substring(0, 800));
+        }
+        return json;
+      });
+    }).then(function(json) {
+      _testState.lastLlmResponse = json;
+      _testState.lastSysmlText = json.sysmlText || null;
+      _testState.lastChanges = json.changes || [];
+      addLogEntry('✓ LLM response unpacked: sysml=' + (!!json.sysmlText) + ', changes=' + (_testState.lastChanges.length || 0), '#10b981');
+
+      var report = {
+        stage: 'LLM_E2E_COMPLETE',
+        endpoint: '/api/v1/projects/' + p + '/chat/process',
+        model: model,
+        backendBehavior: 'ChatService.processPrompt builds the SysON system prompt + current model snapshot, calls LlmClientService, then ChatStructuredOutputParser extracts sysmlText or changes.',
+        chatResponse: json
+      };
+      document.getElementById('th-response').innerHTML = '<pre style="margin:0;white-space:pre-wrap;">' + escapeHtml(JSON.stringify(report, null, 2)) + '</pre>';
+
+      if (json.sysmlText) {
+        addLogEntry('✓ SysML text returned (' + json.sysmlText.length + ' chars)', '#22c55e');
+        prepareInsertMutationFromSysml(json.sysmlText, ec, root);
+        if (autoInsert) {
+          if (!ec || !root) {
+            addLogEntry('✗ Auto-insert needs editingContextId and root objectId', '#ef4444');
+          } else {
+            insertSysmlFromLlm(json.sysmlText, ec, root);
+          }
+        }
+      } else if (_testState.lastChanges.length) {
+        prepareExecuteChangesPayload(json.conversationId, _testState.lastChanges);
+        addLogEntry('✓ Sequential command list prepared in editor', '#22c55e');
+      } else {
+        addLogEntry('⚠ LLM returned feedback only; no sysmlText or changes', '#f59e0b');
+      }
+    }).catch(function(err) {
+      document.getElementById('th-response').innerHTML = '<span style="color:#ef4444;">LLM E2E failed: ' + escapeHtml(err.message || String(err)) + '</span>';
+      addLogEntry('✗ LLM E2E failed: ' + (err.message || String(err)), '#ef4444');
+    });
+  }
+
+  function prepareInsertMutationFromSysml(sysmlText, ec, root) {
+    ec = ec || 'EDITING_CONTEXT_ID_SEMANTIC_DATA_UUID';
+    root = root || 'ROOT_OBJECT_XMI_ID';
+    var escaped = JSON.stringify(sysmlText);
+    var mutation = 'mutation InsertLLMGeneratedSysML {\n'
+      + '  insertTextualSysMLv2(input: {\n'
+      + '    id: "' + crypto.randomUUID() + '",\n'
+      + '    editingContextId: "' + ec + '",\n'
+      + '    objectId: "' + root + '",\n'
+      + '    textualContent: ' + escaped + '\n'
+      + '  }) {\n'
+      + '    __typename\n'
+      + '    ... on SuccessPayload { id messages { level body } }\n'
+      + '    ... on ErrorPayload { message messages { level body } }\n'
+      + '  }\n'
+      + '}';
+    document.getElementById('th-query').value = mutation;
+    document.getElementById('th-opname').value = 'InsertLLMGeneratedSysML';
+    addLogEntry('→ insertTextualSysMLv2 mutation prepared in editor', '#38bdf8');
+  }
+
+  function insertSysmlFromLlm(sysmlText, ec, root) {
+    addLogEntry('▶ Auto-inserting LLM SysML through Sirius Web mutation', '#60a5fa');
+    var mutation = 'mutation InsertLLMGeneratedSysML($input: InsertTextualSysMLv2Input!) { insertTextualSysMLv2(input: $input) { __typename ... on SuccessPayload { id messages { level body } } ... on ErrorPayload { message messages { level body } } } }';
+    var variables = { input: { id: crypto.randomUUID(), editingContextId: ec, objectId: root, textualContent: sysmlText } };
+    _origFetch('/api/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ query: mutation, variables: variables, operationName: 'InsertLLMGeneratedSysML' })
+    }).then(function(res) { return res.json(); })
+    .then(function(json) {
+      var payload = json.data && json.data.insertTextualSysMLv2;
+      if (json.errors || !payload || payload.__typename !== 'SuccessPayload') {
+        addLogEntry('✗ Auto-insert failed', '#ef4444');
+      } else {
+        addLogEntry('✓ Auto-insert succeeded via insertTextualSysMLv2', '#10b981');
+      }
+      document.getElementById('th-response').innerHTML = '<pre style="margin:0;white-space:pre-wrap;">' + escapeHtml(JSON.stringify(json, null, 2)) + '</pre>';
+    }).catch(function(err) {
+      addLogEntry('✗ Auto-insert exception: ' + (err.message || String(err)), '#ef4444');
+    });
+  }
+
+  function prepareExecuteChangesPayload(conversationId, changes) {
+    var p = _testState.projectId;
+    var payload = {
+      conversationId: conversationId,
+      branchId: null,
+      changes: changes
+    };
+    var example = 'POST /api/v1/projects/' + p + '/chat/execute\n\n' + JSON.stringify(payload, null, 2);
+    document.getElementById('th-query').value = example;
+    document.getElementById('th-opname').value = 'ExecuteSequentialLlmCommands';
+  }
+
+  function executeTestCommand() {
+    var queryEl = document.getElementById('th-query');
+    var query = queryEl.value.trim();
+    if (!query) return;
+
+    var opName = document.getElementById('th-opname').value.trim();
+    var p = _testState.projectId;
+    var ec = _testState.editingContextId || p;
+
+    // Build variables from query introspection
+    var variables = {};
+    if (query.includes('$ecId')) {
+      variables['ecId'] = ec;
+    }
+    if (query.includes('$objId')) {
+      variables['objId'] = prompt('Enter objectId:', '') || '';
+    }
+
+    // Only include operationName if the query has a named operation
+    var hasNamedOp = /^(mutation|query|subscription)\s+(\w+)/.test(query);
+    var body = JSON.stringify({
+      query: query,
+      variables: variables,
+      operationName: hasNamedOp ? (opName || undefined) : undefined
+    });
+
+    addLogEntry('\u25b6 ' + (opName || 'Execute'), '#3b82f6');
+    document.getElementById('th-response').innerHTML = '<span style="color:#fbbf24;">Executing\u2026</span>';
+
+    _origFetch('/api/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: body
+    }).then(function(res) { return res.json(); })
+    .then(function(json) {
+      var respEl = document.getElementById('th-response');
+      var pretty = JSON.stringify(json, null, 2);
+      respEl.innerHTML = '<pre style="margin:0;white-space:pre-wrap;">' + escapeHtml(pretty) + '</pre>';
+      if (json.errors) {
+        addLogEntry('✗ Errors: ' + json.errors.length, '#ef4444');
+        json.errors.forEach(function(e) { addLogEntry('  ' + e.message, '#f87171'); });
+      } else {
+        addLogEntry('✓ Success', '#10b981');
+      }
+      // Also update EC ID from response if available
+      if (json.data && json.data.viewer && json.data.viewer.editingContext) {
+        var ec = json.data.viewer.editingContext.id;
+        if (ec) {
+          _testState.editingContextId = ec;
+          localStorage.setItem('syson-ecid-' + p, ec);
+          document.getElementById('th-ctx').innerHTML = 'projectId=' + p + ' ecId=' + ec + ' repId=' + (_testState.representationId || '?');
+        }
+      }
+    }).catch(function(err) {
+      document.getElementById('th-response').innerHTML = '<span style="color:#ef4444;">Error: ' + escapeHtml(err.message || String(err)) + '</span>';
+      addLogEntry('✗ ' + (err.message || String(err)), '#ef4444');
+    });
+  }
+
+  function addLogEntry(msg, color) {
+    color = color || '#475569';
+    _testState.log.push({ msg: msg, color: color, ts: new Date().toISOString().substr(11, 12) });
+    var logEl = document.getElementById('th-log');
+    if (!logEl) return;
+    var entry = document.createElement('div');
+    entry.style.cssText = 'color:' + color + ';padding:1px 0;';
+    entry.textContent = _testState.log[_testState.log.length - 1].ts + ' ' + msg;
+    logEl.appendChild(entry);
+    logEl.scrollTop = logEl.scrollHeight;
+    // Keep max 100 entries
+    while (_testState.log.length > 100) { _testState.log.shift(); if (logEl.firstChild) logEl.removeChild(logEl.firstChild); }
+  }
+
+  function escapeHtml(text) {
+    var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

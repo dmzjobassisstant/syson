@@ -34,5 +34,7 @@ public record ChangeDto(
         String beforeObject,
         String afterObject,
         OffsetDateTime createdAt,
-        UUID createdBy) {
+        UUID createdBy,
+        String stableObjectId,
+        String changedFieldsJson) {
 }

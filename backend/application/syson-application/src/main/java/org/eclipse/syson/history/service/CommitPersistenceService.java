@@ -45,22 +45,40 @@ public class CommitPersistenceService {
     public CommitDto persistCommit(UUID projectId, UUID branchId, UUID userId,
                                    String message, List<SysmlModelDiffService.ObjectDiff> diffs) {
         List<ChangeDto> changes = diffs.stream()
-                .map(d -> new ChangeDto(
-                        null,                                    // changeId - auto-generated
-                        projectId,                               // projectId
-                        null,                                    // commitId - set by VC service
-                        0,                                       // changeSeq - set by VC service
-                        "element",                               // objectType category for syson_changes
-                        stableIdToUuid(d.stableId()),            // objectId (UUID)
-                        d.operation(),                           // operation
-                        d.beforeHash(),                          // beforeHash
-                        d.afterHash(),                           // afterHash
-                        d.patch(),                               // patch
-                        d.beforeObject(),                        // beforeObject
-                        d.afterObject(),                         // afterObject
-                        null,                                    // createdAt - set by VC service
-                        userId                                   // createdBy
-                ))
+                .map(d -> {
+                    // Serialize changedFields list to JSON array string
+                    String changedFieldsJson;
+                    if (d.changedFields() == null || d.changedFields().isEmpty()) {
+                        changedFieldsJson = "[]";
+                    } else {
+                        StringBuilder sb = new StringBuilder("[");
+                        for (int i = 0; i < d.changedFields().size(); i++) {
+                            if (i > 0) sb.append(",");
+                            sb.append("\"").append(d.changedFields().get(i)
+                                    .replace("\\", "\\\\")
+                                    .replace("\"", "\\\"")).append("\"");
+                        }
+                        sb.append("]");
+                        changedFieldsJson = sb.toString();
+                    }
+                    return new ChangeDto(
+                            null,                                    // changeId - auto-generated
+                            projectId,                               // projectId
+                            null,                                    // commitId - set by VC service
+                            0,                                       // changeSeq - set by VC service
+                            "element",                               // objectType category for syson_changes
+                            stableIdToUuid(d.stableId()),            // objectId (UUID)
+                            d.operation(),                           // operation
+                            d.beforeHash(),                          // beforeHash
+                            d.afterHash(),                           // afterHash
+                            d.patch(),                               // patch
+                            d.beforeObject(),                        // beforeObject
+                            d.afterObject(),                         // afterObject
+                            null,                                    // createdAt - set by VC service
+                            userId,                                  // createdBy
+                            d.stableId(),                            // stableObjectId
+                            changedFieldsJson);                      // changedFields as JSON array
+                })
                 .toList();
 
         return this.versionControlService.createCommit(projectId, branchId, userId, message, changes);

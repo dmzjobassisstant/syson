@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-https://syson.damuza-consulting.com}"
-ADMIN_USER="${SYSON_TEST_USER:-admin}"
-ADMIN_PASSWORD="${SYSON_TEST_PASSWORD:-admin}"
+BASE_URL="${BASE_URL:-http://localhost:8080}"
+REPO_DIR="${REPO_DIR:-/root/syson-fork}"
+CREDENTIALS_FILE="${SYSON_TEST_CREDENTIALS_FILE:-$REPO_DIR/scripts/.syson-test-credentials}"
+if [[ -f "$CREDENTIALS_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CREDENTIALS_FILE"
+fi
+ADMIN_USER="${SYSON_TEST_USER:-regression-admin}"
+ADMIN_PASSWORD="${SYSON_TEST_PASSWORD:-RegressionAdmin2026!}"
 TMP_DIR=$(mktemp -d)
+
 RESPONSE_FILE="$TMP_DIR/response.body"
 HEADER_FILE="$TMP_DIR/response.headers"
 cleanup() { rm -rf "$TMP_DIR"; }
