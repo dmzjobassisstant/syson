@@ -1129,3 +1129,38 @@ Auth/interceptor:
 - createProject request normalizer for `natures: []`
 
 This is the baseline contract future agents must preserve.
+
+---
+
+## Element Creation Mutations (added 2026-06-21)
+
+### createChild — `CreateChildInput`
+
+| Field | Required | Auto-discoverable | Description |
+|---|---|---|---|
+| `id` | ✅ | 🟢 Yes (UUID) | Client mutation ID |
+| `editingContextId` | ✅ | 🟢 Yes | semantic_data UUID from `get_context()` |
+| `objectId` | ✅ | 🔵 From catalog | Parent element's XMI id |
+| `childCreationDescriptionId` | ✅ | 🔵 From tools query | Tool ID: `SysMLv2EditService-<Entity>` |
+
+**Discovery query** for `childCreationDescriptionId`:
+```graphql
+childCreationDescriptions(kind: "siriusComponents://?domain=sysml&entity=Package") {
+  id label
+}
+```
+Returns 84 tools for Package, 55 for PartDefinition, etc.
+
+**Payload**: `CreateChildSuccessPayload { object { id label kind } }` or `ErrorPayload { message }`
+
+**Element kind** on created objects: `siriusComponents://semantic?domain=sysml&entity=<Entity>`
+
+### createRootObject — `CreateRootObjectInput`
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | ✅ | Client mutation UUID |
+| `editingContextId` | ✅ | semantic_data UUID |
+| `documentId` | ✅ | Document UUID from `get_context()` |
+| `domainId` | ✅ | Domain ID (e.g., `"sysmlv2"`) |
+| `rootObjectCreationDescriptionId` | ✅ | From `rootObjectCreationDescriptions(domainId:, suggested:)` |

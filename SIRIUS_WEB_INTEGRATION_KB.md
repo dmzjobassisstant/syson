@@ -514,3 +514,95 @@ When the user sends a screenshot with a Sirius snackbar:
 7. Build/deploy the smallest layer needed.
 8. Verify with direct GraphQL JSON and a fresh browser screenshot.
 9. Update this KB and `syson-development` skill if a new Sirius drift pattern is discovered.
+
+---
+
+## 11. createChild Mutation — Full Contract (discovered 2026-06-21)
+
+### Symptom
+A user manually constructed a `createChild` GraphQL mutation and received:
+```
+token recognition error at: '\\'' at line 1 column 11
+```
+
+### Root causes
+1. **Literal `\n` characters**: The user pasted a mutation containing the two-character sequence `\n` instead of actual newlines. The GraphQL parser sees the backslash at column 11 and fails. This is a paste/encoding artifact, not a real protocol error.
+2. **Placeholder values**: The user didn't know what to put for `objectId` and `childCreationDescriptionId`, so they used placeholder strings.
+
+### Resolution
+**Never construct mutations by hand.** Use the test harness `create-child` command which auto-discovers all required parameters.
+
+### The `createChild` contract
+
+**Input type**: `CreateChildInput!`
+
+| Field | Type | Source | Description |
+|---|---|---|---|
+| `id` | `ID!` | 🟢 AUTO | Client mutation UUID — generate with `uuid.uuid4()` |
+| `editingContextId` | `ID!` | 🟢 AUTO | The semantic_data UUID (NOT the project UUID). Discover via `get_context()` |
+| `objectId` | `ID!` | 🔵 USER | The XMI id of the parent element. Discover via `catalog` command |
+| `childCreationDescriptionId` | `ID!` | 🔵 USER | The tool ID from `childCreationDescriptions` query |
+
+**Payload union**: `CreateChildPayload = CreateChildSuccessPayload | ErrorPayload`
+
+```graphql
+mutation CreateChild($input: CreateChildInput!) {
+  createChild(input: $input) {
+    __typename
+    ... on CreateChildSuccessPayload {
+      object { id label kind }
+    }
+    ... on ErrorPayload { message }
+  }
+}
+```
+
+### Discovering `childCreationDescriptionId` values
+
+The `childCreationDescriptions` field on `EditingContext` takes a `kind` argument (NOT `containerId` — some old schema dumps show the wrong name).
+
+**Kind format** (URL-encoded):
+```
+siriusComponents://?domain=sysml&entity=<EClassName>
+```
+
+Common entity names: `Package`, `PartDefinition`, `PartUsage`, `Namespace`, `ActionDefinition`, `RequirementDefinition`, etc.
+
+**Example query**:
+```graphql
+query ChildTools($ecId: ID!, $kind: ID!) {
+  viewer {
+    editingContext(editingContextId: $ecId) {
+      childCreationDescriptions(kind: $kind) {
+        id
+        label
+      }
+    }
+  }
+}
+```
+
+Returns IDs in format: `SysMLv2EditService-<EClassName>` (e.g., `SysMLv2EditService-PartDefinition`).
+
+### Harness commands
+
+```bash
+# List available child creation tools for a parent type
+python3 scripts/syson-protocol-harness.py tools -p <project-id> --kind Package
+
+# List tools for a specific parent element (auto-resolves kind from eClass)
+python3 scripts/syson-protocol-harness.py tools -p <project-id> --parent "CoolingFanAssembly"
+
+# Show the message anatomy (USER vs AUTO params) without executing
+python3 scripts/syson-protocol-harness.py create-child -p <pid> --parent <name> --type PartDefinition --explain
+
+# Create a child element (live mutation)
+python3 scripts/syson-protocol-harness.py create-child -p <pid> --parent <name> --type PartDefinition
+```
+
+### Element kind values
+The `kind` field on created elements follows a different URL scheme:
+```
+siriusComponents://semantic?domain=sysml&entity=<EClassName>
+```
+Note: `semantic` in the path (vs no path segment for the kind query argument).
