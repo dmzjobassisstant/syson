@@ -1,6 +1,7 @@
 
 extend type Mutation {
   insertTextualSysMLv2(input: InsertTextualSysMLv2Input!): InsertTextualSysMLv2Payload!
+  updateElement(input: UpdateElementInput!): UpdateElementPayload!
 }
 
 input InsertTextualSysMLv2Input {
@@ -11,3 +12,20 @@ input InsertTextualSysMLv2Input {
 }
 
 union InsertTextualSysMLv2Payload = ErrorPayload | SuccessPayload
+
+input UpdateElementInput {
+  id: ID!
+  editingContextId: ID!
+  elementId: ID!
+  newLabel: String
+  newShortName: String
+  newBody: String
+  properties: [KeyValueInput!]
+}
+
+input KeyValueInput {
+  key: String!
+  value: String!
+}
+
+union UpdateElementPayload = ErrorPayload | SuccessPayload
