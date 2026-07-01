@@ -2,13 +2,26 @@
 
 ## Overview
 
-Direct element modification via GraphQL `updateElement` mutation. This is an `IEditingContextEventHandler` — always active, no WebSocket subscription required.
+Direct element modification via GraphQL mutations. All use the `IEditingContextEventHandler` pattern — always active, no WebSocket subscription required.
+
+### Critical: Editing Context ID ≠ Project ID
+
+The `editingContextId` is **not** the project UUID. It is the internal editing context ID returned by `viewer.project.currentEditingContext.id`. Using the project ID will silently fail with `ErrorPayload`.
+
+To get the editing context ID:
+```graphql
+query {
+  viewer {
+    project(projectId: "<project-uuid>") {
+      currentEditingContext { id }
+    }
+  }
+}
+```
 
 ## Mutations
 
 ### updateElement — Rename / Set Properties
-
-Renames an element or updates its properties directly. Works without a tree subscription.
 
 ```graphql
 mutation {
@@ -16,97 +29,140 @@ mutation {
     id: "<request-uuid>",
     editingContextId: "<editing-context-id>",
     elementId: "<element-id>",
-    newLabel: "Switchgear"
+    newLabel: "Switchgear",
+    newShortName: "sw",
+    newBody: "Optional documentation text"
   }) {
     __typename
     ... on SuccessPayload { id }
-    ... on ErrorPayload { message }
+    ... on ErrorPayload { messages { body level } }
   }
 }
 ```
-
-### Parameters
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | `ID!` | Yes | Request UUID (any UUID) |
-| `editingContextId` | `ID!` | Yes | Editing context ID (from `currentEditingContext`) |
-| `elementId` | `ID!` | Yes | Element ID to modify (from REST API `elementId` field or GraphQL `object().id`) |
-| `newLabel` | `String` | No | New name (sets `declaredName`) |
-| `newShortName` | `String` | No | New short name (sets `declaredShortName`, empty string clears it) |
-| `newBody` | `String` | No | Description/documentation text (creates/updates a Comment) |
-| `properties` | `[KeyValueInput!]` | No | Arbitrary key-value pairs (supports `name` and `shortName` keys) |
+| `id` | `ID!` | Yes | Request UUID |
+| `editingContextId` | `ID!` | Yes | Editing context ID (not project ID) |
+| `elementId` | `ID!` | Yes | Target element ID |
+| `newLabel` | `String` | No | New declared name |
+| `newShortName` | `String` | No | New short name (empty string clears it) |
+| `newBody` | `String` | No | New documentation/body text |
+| `properties` | `[KeyValueInput!]` | No | Arbitrary key-value pairs (name, shortName) |
 
-### Response
+### deleteElement — Delete Element
 
-Returns `SuccessPayload` (with the request `id`) or `ErrorPayload` (with `message`).
-
-## curl Examples
-
-### Rename an element
-
-```bash
-curl -X POST https://syson.damuza-consulting.com/api/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"query":"mutation{updateElement(input:{id:\"<uuid>\",editingContextId:\"<ec>\",elementId:\"<eid>\",newLabel:\"Switchgear\"}){__typename ...on SuccessPayload{id} ...on ErrorPayload{message}}}"}'
-```
-
-### Set body/description
-
-```bash
-curl -X POST https://syson.damuza-consulting.com/api/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"query":"mutation{updateElement(input:{id:\"<uuid>\",editingContextId:\"<ec>\",elementId:\"<eid>\",newBody:\"This is the main power distribution unit.\"}){__typename ...on SuccessPayload{id} ...on ErrorPayload{message}}}"}'
-```
-
-### Combined update (name + short name + body)
+Deletes an element and its containing Membership using `DeleteService.deleteFromModel()`.
 
 ```graphql
 mutation {
-  updateElement(input: {
-    id: "abc-123",
-    editingContextId: "ec-456",
-    elementId: "elem-789",
-    newLabel: "Switchgear",
-    newShortName: "SWG",
-    newBody: "Main power distribution"
+  deleteElement(input: {
+    id: "<request-uuid>",
+    editingContextId: "<editing-context-id>",
+    elementId: "<element-id>"
   }) {
     __typename
     ... on SuccessPayload { id }
-    ... on ErrorPayload { message }
+    ... on ErrorPayload { messages { body level } }
   }
 }
 ```
 
-## How It Works
+### addChildElement — Create Typed Child
 
-The `updateElement` mutation implements `IEditingContextEventHandler` (not `IRepresentationEventHandler`). This means:
+Creates a new element of the specified type under a parent element. Auto-creates `OwningMembership` and initializes defaults via `ElementInitializerSwitch`.
 
-- **Always active**: The editing context event processor is always running while the backend is up
-- **No WebSocket needed**: Unlike `renameTreeItem`, no tree/form subscription needs to be open
-- **Direct model modification**: Changes are applied to the EMF model immediately and persisted
-- **Visible in SysON**: After a page refresh or tree reload, changes appear in the SysON explorer
+```graphql
+mutation {
+  addChildElement(input: {
+    id: "<request-uuid>",
+    editingContextId: "<editing-context-id>",
+    parentElementId: "<parent-element-id>",
+    elementType: "PartUsage",
+    name: "MyNewPart"
+  }) {
+    __typename
+    ... on SuccessPayload { id }
+    ... on ErrorPayload { messages { body level } }
+  }
+}
+```
 
-### Why renameTreeItem times out but updateElement doesn't
+**Supported element types:** `Package`, `PartUsage`, `PartDefinition`, `AttributeUsage`, `AttributeDefinition`, `FlowConnectionUsage`, `RequirementUsage`, `RequirementDefinition`, `Comment`, `Dependency`, and any other SysML metamodel class name.
 
-`renameTreeItem` implements `IRepresentationEventHandler` — it requires a representation event processor that only exists when a client has an active `explorerEvent` WebSocket subscription. Without it, the backend logs `"No representation event processor found"` and times out after 5 seconds.
+### manageRelationship — Add/Remove Relationships
 
-`updateElement` implements `IEditingContextEventHandler` — it uses the editing context event processor which is always alive.
+Creates or removes relationships between elements.
 
-## Other Working Mutations
+```graphql
+mutation {
+  manageRelationship(input: {
+    id: "<request-uuid>",
+    editingContextId: "<editing-context-id>",
+    relationshipType: "Dependency",
+    sourceElementId: "<source-element-id>",
+    targetElementIds: ["<target-element-id>"],
+    action: "ADD"
+  }) {
+    __typename
+    ... on SuccessPayload { messages { body level } }
+    ... on ErrorPayload { messages { body level } }
+  }
+}
+```
 
-### Create elements (direct, always works)
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `relationshipType` | `String!` | Yes | `Dependency`, `Subclassification`, or `Specialization` |
+| `sourceElementId` | `ID!` | Yes | Source element (client for Dependency, specific for Subclassification) |
+| `targetElementIds` | `[ID!]!` | Yes | Target elements (suppliers for Dependency, generals for Subclassification) |
+| `action` | `String!` | Yes | `ADD` or `REMOVE` |
 
-- `createRootObject` — creates a root element in a document
-- `createChild` — creates a child element under a parent
-- `createDocument` — creates a new document
-- `insertTextualSysMLv2` — inserts SysMLv2 text into a container element
+**Relationship semantics:**
+- **Dependency:** source depends on targets (source=client, targets=suppliers)
+- **Subclassification:** source is a subclass of targets (requires both to be `Type`)
+- **Specialization:** generic specialization (requires both to be `Type`)
 
-### Read elements
+## Architecture
 
-- `GET /api/rest/projects/{id}/commits/{id}/elements` — returns all elements with full hierarchy
-- `GET /api/rest/projects/{id}/commits/{id}/elements/{elementId}` — single element
-- `GET /api/v1/projects/{id}/branches/{branchId}/elements` — element DTOs from sidecar persistence
-- GraphQL `object(objectId: "...")` — single element via GraphQL
+All four mutations use `IEditingContextEventHandler` (not `IRepresentationEventHandler`):
+
+| Pattern | Handler Interface | Requires WS Subscription | Examples |
+|---------|------------------|------------------------|----------|
+| **Direct** | `IEditingContextEventHandler` | No | `createChild`, `createRootObject`, `insertTextualSysMLv2`, **`updateElement`**, **`deleteElement`**, **`addChildElement`**, **`manageRelationship`** |
+| **Collaborative** | `IRepresentationEventHandler` | Yes | `renameTreeItem`, `deleteTreeItem`, `editLabel` |
+
+Changes are persisted automatically by the Sirius Web collaborative framework when `ChangeDescription(ChangeKind.SEMANTIC_CHANGE, ...)` is emitted.
+
+## curl Examples
+
+```bash
+# Login
+TOKEN=$(curl -s -X POST https://syson.bowtie-modeler.com/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin","password":"admin"}' | jq -r .token)
+
+# Rename an element
+curl -s https://syson.bowtie-modeler.com/api/graphql \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"mutation($input: UpdateElementInput!) { updateElement(input: $input) { __typename } }", "variables": {"input": {"id": "'$(uuidgen)'", "editingContextId": "<EC_ID>", "elementId": "<ELEMENT_ID>", "newLabel": "NewName"}}}'
+
+# Delete an element
+curl -s https://syson.bowtie-modeler.com/api/graphql \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"mutation($input: DeleteElementInput!) { deleteElement(input: $input) { __typename } }", "variables": {"input": {"id": "'$(uuidgen)'", "editingContextId": "<EC_ID>", "elementId": "<ELEMENT_ID>"}}}'
+
+# Add a child PartUsage
+curl -s https://syson.bowtie-modeler.com/api/graphql \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"mutation($input: AddChildElementInput!) { addChildElement(input: $input) { __typename } }", "variables": {"input": {"id": "'$(uuidgen)'", "editingContextId": "<EC_ID>", "parentElementId": "<PARENT_ID>", "elementType": "PartUsage", "name": "MyPart"}}}'
+
+# Add a Dependency relationship
+curl -s https://syson.bowtie-modeler.com/api/graphql \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"mutation($input: ManageRelationshipInput!) { manageRelationship(input: $input) { __typename } }", "variables": {"input": {"id": "'$(uuidgen)'", "editingContextId": "<EC_ID>", "relationshipType": "Dependency", "sourceElementId": "<SOURCE_ID>", "targetElementIds": ["<TARGET_ID>"], "action": "ADD"}}}'
+```
