@@ -2,6 +2,9 @@
 extend type Mutation {
   insertTextualSysMLv2(input: InsertTextualSysMLv2Input!): InsertTextualSysMLv2Payload!
   updateElement(input: UpdateElementInput!): UpdateElementPayload!
+  deleteElement(input: DeleteElementInput!): DeleteElementPayload!
+  addChildElement(input: AddChildElementInput!): AddChildElementPayload!
+  manageRelationship(input: ManageRelationshipInput!): ManageRelationshipPayload!
 }
 
 input InsertTextualSysMLv2Input {
@@ -29,3 +32,32 @@ input KeyValueInput {
 }
 
 union UpdateElementPayload = ErrorPayload | SuccessPayload
+
+input DeleteElementInput {
+  id: ID!
+  editingContextId: ID!
+  elementId: ID!
+}
+
+union DeleteElementPayload = ErrorPayload | SuccessPayload
+
+input AddChildElementInput {
+  id: ID!
+  editingContextId: ID!
+  parentElementId: ID!
+  elementType: String!
+  name: String
+}
+
+union AddChildElementPayload = ErrorPayload | SuccessPayload
+
+input ManageRelationshipInput {
+  id: ID!
+  editingContextId: ID!
+  relationshipType: String!
+  sourceElementId: ID!
+  targetElementIds: [ID!]!
+  action: String!
+}
+
+union ManageRelationshipPayload = ErrorPayload | SuccessPayload
