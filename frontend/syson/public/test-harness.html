@@ -44,12 +44,17 @@ textarea.code-editor{width:100%;min-height:160px;background:var(--code-bg);borde
 .tree-node{padding:3px 6px;cursor:pointer;display:flex;align-items:center;gap:4px;border-radius:4px;margin:1px 0}
 .tree-node:hover{background:var(--hover)}
 .tree-node.selected{background:#dbeafe;border-left:3px solid var(--accent)}
-.tree-node .chevron{width:14px;text-align:center;font-size:10px;color:var(--muted);flex-shrink:0}
+.tree-node .chevron{width:14px;text-align:center;font-size:10px;color:var(--muted);flex-shrink:0;cursor:pointer}
 .tree-node .label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tree-node .kind{font-size:10px;color:var(--muted);background:#f1f5f9;padding:1px 4px;border-radius:3px}
 .tree-children{margin-left:16px}
 .tree-empty{padding:12px;text-align:center;color:var(--muted);font-size:12px}
 .tree-loading{padding:12px;text-align:center;color:var(--accent);font-size:12px}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:8px;padding:20px;min-width:400px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+.modal h3{font-size:14px;margin-bottom:12px}
+.modal .form-group{margin-bottom:10px}
+.modal .btn-group{justify-content:flex-end;margin-top:14px}
 </style>
 </head>
 <body>
@@ -91,6 +96,8 @@ textarea.code-editor{width:100%;min-height:160px;background:var(--code-bg);borde
         <div class="tree-empty">Connect and select a project to load the tree</div>
       </div>
       <div class="btn-group" id="elementActions" style="display:none">
+        <button class="btn btn-secondary" onclick="showRenameModal()">Rename</button>
+        <button class="btn btn-secondary" onclick="addChildModal()">Add Child</button>
         <button class="btn btn-secondary" onclick="populateCreateRootFromSelected()">Use as Doc</button>
         <button class="btn btn-danger" onclick="deleteSelected()">Delete</button>
       </div>
@@ -100,7 +107,7 @@ textarea.code-editor{width:100%;min-height:160px;background:var(--code-bg);borde
   <!-- Right: Mutations -->
   <div>
     <div class="card" style="margin-bottom:12px">
-      <h2>Create Element</h2>
+      <h2>Create / Modify Element</h2>
       <div class="form-group">
         <label>SysML Element Type (84 types)</label>
         <select id="rootType" onchange="updateRootMutation()"></select>
@@ -108,6 +115,7 @@ textarea.code-editor{width:100%;min-height:160px;background:var(--code-bg);borde
       <div class="btn-group">
         <button class="btn btn-execute" onclick="executeRootCreate()">Create Root Object</button>
         <button class="btn btn-secondary" onclick="renameSelected()">Rename Selected</button>
+        <button class="btn btn-secondary" onclick="editSelected()">Edit / Set Attributes</button>
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
@@ -117,6 +125,10 @@ textarea.code-editor{width:100%;min-height:160px;background:var(--code-bg);borde
         <button class="tab" onclick="setTab('createChild')">createChild</button>
         <button class="tab" onclick="setTab('createDocument')">createDocument</button>
         <button class="tab" onclick="setTab('renameTreeItem')">renameTreeItem</button>
+        <button class="tab" onclick="setTab('insertTextual')">insertTextual</button>
+        <button class="tab" onclick="setTab('updateElement')">updateElement</button>
+        <button class="tab" onclick="setTab('addChildElement')">addChildElement</button>
+        <button class="tab" onclick="setTab('manageRelationship')">Relationship</button>
         <button class="tab" onclick="setTab('raw')">Raw</button>
       </div>
       <textarea id="mutationEditor" class="code-editor" spellcheck="false"></textarea>
@@ -134,17 +146,71 @@ textarea.code-editor{width:100%;min-height:160px;background:var(--code-bg);borde
   </div>
 </div>
 </div>
-<script>
-const ROOT_TYPES=[["SysMLv2EditService-Package","Package"],["SysMLv2EditService-PartDefinition","Part Definition"],["SysMLv2EditService-PartUsage","Part"],["SysMLv2EditService-RequirementDefinition","Requirement Definition"],["SysMLv2EditService-RequirementUsage","Requirement"],["SysMLv2EditService-InterfaceDefinition","Interface Definition"],["SysMLv2EditService-InterfaceUsage","Interface"],["SysMLv2EditService-PortDefinition","Port Definition"],["SysMLv2EditService-PortUsage","Port"],["SysMLv2EditService-AttributeDefinition","Attribute Definition"],["SysMLv2EditService-AttributeUsage","Attribute"],["SysMLv2EditService-ItemDefinition","Item Definition"],["SysMLv2EditService-ItemUsage","Item"],["SysMLv2EditService-ActionDefinition","Action Definition"],["SysMLv2EditService-ActionUsage","Action"],["SysMLv2EditService-StateDefinition","State Definition"],["SysMLv2EditService-StateUsage","State"],["SysMLv2EditService-ConstraintDefinition","Constraint Definition"],["SysMLv2EditService-ConstraintUsage","Constraint"],["SysMLv2EditService-ConnectionDefinition","Connection Definition"],["SysMLv2EditService-ConnectionUsage","Connection"],["SysMLv2EditService-AllocationDefinition","Allocation Definition"],["SysMLv2EditService-AllocationUsage","Allocation"],["SysMLv2EditService-CaseDefinition","Case Definition"],["SysMLv2EditService-CaseUsage","Case"],["SysMLv2EditService-UseCaseDefinition","Use Case Definition"],["SysMLv2EditService-UseCaseUsage","Use Case"],["SysMLv2EditService-FlowConnectionDefinition","Flow Connection Definition"],["SysMLv2EditService-FlowConnectionUsage","Flow Connection"],["SysMLv2EditService-MetadataDefinition","Metadata Definition"],["SysMLv2EditService-MetadataUsage","Metadata"],["SysMLv2EditService-OccurrenceDefinition","Occurrence Definition"],["SysMLv2EditService-OccurrenceUsage","Occurrence"],["SysMLv2EditService-CalculationDefinition","Calculation Definition"],["SysMLv2EditService-CalculationUsage","Calculation"],["SysMLv2EditService-ConcernDefinition","Concern Definition"],["SysMLv2EditService-ConcernUsage","Concern"],["SysMLv2EditService-EnumerationDefinition","Enumeration Definition"],["SysMLv2EditService-EnumerationUsage","Enumeration"],["SysMLv2EditService-RenderingDefinition","Rendering Definition"],["SysMLv2EditService-RenderingUsage","Rendering"],["SysMLv2EditService-ViewDefinition","View Definition"],["SysMLv2EditService-ViewUsage","View"],["SysMLv2EditService-ViewpointDefinition","Viewpoint Definition"],["SysMLv2EditService-ViewpointUsage","Viewpoint"],["SysMLv2EditService-VerificationCaseDefinition","Verification Case Definition"],["SysMLv2EditService-VerificationCaseUsage","Verification Case"],["SysMLv2EditService-AnalysisCaseDefinition","Analysis Case Definition"],["SysMLv2EditService-AnalysisCaseUsage","Analysis Case"],["SysMLv2EditService-Comment","Comment"],["SysMLv2EditService-Dependency","Dependency"],["SysMLv2EditService-Documentation","Documentation"],["SysMLv2EditService-Definition","Definition"],["SysMLv2EditService-Usage","Usage"],["SysMLv2EditService-LibraryPackage","Library Package"],["SysMLv2EditService-AcceptActionUsage","Accept Action"],["SysMLv2EditService-AssertConstraintUsage","Assert Constraint"],["SysMLv2EditService-AssignmentActionUsage","Assignment Action"],["SysMLv2EditService-BindingConnectorAsUsage","Binding Connector As Usage"],["SysMLv2EditService-ConjugatedPortDefinition","Conjugated Port Definition"],["SysMLv2EditService-DecisionNode","Decision Node"],["SysMLv2EditService-EventOccurrenceUsage","Event Occurrence"],["SysMLv2EditService-ExhibitStateUsage","Exhibit State"],["SysMLv2EditService-ForLoopActionUsage","For Loop Action"],["SysMLv2EditService-ForkNode","Fork Node"],["SysMLv2EditService-IfActionUsage","If Action"],["SysMLv2EditService-IncludeUseCaseUsage","Include Use Case"],["SysMLv2EditService-JoinNode","Join Node"],["SysMLv2EditService-MergeNode","Merge Node"],["SysMLv2EditService-PerformActionUsage","Perform Action"],["SysMLv2EditService-ReferenceUsage","Reference"],["SysMLv2EditService-SatisfyRequirementUsage","Satisfy Requirement"],["SysMLv2EditService-SendActionUsage","Send Action"],["SysMLv2EditService-SuccessionAsUsage","Succession As Usage"],["SysMLv2EditService-SuccessionFlowConnectionUsage","Succession Flow Connection"],["SysMLv2EditService-TerminateActionUsage","Terminate Action"],["SysMLv2EditService-TextualRepresentation","Textual Representation"],["SysMLv2EditService-TransitionUsage","Transition"],["SysMLv2EditService-WhileLoopActionUsage","While Loop Action"],["SysMLv2EditService-MembershipExpose","Membership Expose"],["SysMLv2EditService-MembershipImport","Membership Import"],["SysMLv2EditService-NamespaceExpose","Namespace Expose"],["SysMLv2EditService-NamespaceImport","Namespace Import"],["SysMLv2EditService-OwningMembership","Owning Membership"]];
 
-let state={token:null,baseUrl:'',projects:[],editingContextId:null,docs:[],currentTab:'createRootObject',domain:'http://www.eclipse.org/syson/sysml',selectedElement:null,treeData:[],expandedNodes:new Set(),explorerDescId:null,createdElements:[]};
+<!-- Rename Modal -->
+<div class="modal-overlay" id="renameModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <h3>Rename Element</h3>
+    <div class="form-group"><label>New Name</label><input id="renameInput"></div>
+    <div class="info" id="renameInfo"></div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="document.getElementById('renameModal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="doRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <h3>Edit Element via Textual SysML</h3>
+    <p class="info" style="margin-bottom:8px">Insert SysMLv2 text into the selected element's parent. Use this to add attributes, modify names, set values, etc.</p>
+    <div class="form-group"><label>Target Element</label><input id="editTarget" disabled></div>
+    <div class="form-group"><label>SysMLv2 Text (inserted into parent)</label>
+      <textarea id="editText" rows="6" style="width:100%;font-family:monospace;font-size:11px" placeholder="e.g. part MyPart { attribute speed = 100; }"></textarea>
+    </div>
+    <div class="info">This uses insertTextualSysMLv2 to insert text into the parent element. The text is parsed and applied as new content.</div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="doEdit()">Apply Text</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ROOT_TYPES=[["SysMLv2EditService-Package","Package"],["SysMLv2EditService-PartDefinition","Part Definition"],["SysMLv2EditService-PartUsage","Part"],["SysMLv2EditService-RequirementDefinition","Requirement Definition"],["SysMLv2EditService-RequirementUsage","Requirement"],["SysMLv2EditService-InterfaceDefinition","Interface Definition"],["SysMLv2EditService-InterfaceUsage","Interface"],["SysMLv2EditService-PortDefinition","Port Definition"],["SysMLv2EditService-PortUsage","Port"],["SysMLv2EditService-AttributeDefinition","Attribute Definition"],["SysMLv2EditService-AttributeUsage","Attribute"],["SysMLv2EditService-ItemDefinition","Item Definition"],["SysMLv2EditService-ItemUsage","Item"],["SysMLv2EditService-ActionDefinition","Action Definition"],["SysMLv2EditService-ActionUsage","Action"],["SysMLv2EditService-StateDefinition","State Definition"],["SysMLv2EditService-StateUsage","State"],["SysMLv2EditService-ConstraintDefinition","Constraint Definition"],["SysMLv2EditService-ConstraintUsage","Constraint"],["SysMLv2EditService-ConnectionDefinition","Connection Definition"],["SysMLv2EditService-ConnectionUsage","Connection"],["SysMLv2EditService-AllocationDefinition","Allocation Definition"],["SysMLv2EditService-AllocationUsage","Allocation"],["SysMLv2EditService-CaseDefinition","Case Definition"],["SysMLv2EditService-CaseUsage","Case"],["SysMLv2EditService-UseCaseDefinition","Use Case Definition"],["SysMLv2EditService-UseCaseUsage","Use Case"],["SysMLv2EditService-FlowConnectionDefinition","Flow Connection Definition"],["SysMLv2EditService-FlowConnectionUsage","Flow Connection"],["SysMLv2EditService-MetadataDefinition","Metadata Definition"],["SysMLv2EditService-MetadataUsage","Metadata"],["SysMLv2EditService-OccurrenceDefinition","Occurrence Definition"],["SysMLv2EditService-OccurrenceUsage","Occurrence"],["SysMLv2EditService-CalculationDefinition","Calculation Definition"],["SysMLv2EditService-CalculationUsage","Calculation"],["SysMLv2EditService-ConcernDefinition","Concern Definition"],["SysMLv2EditService-ConcernUsage","Concern"],["SysMLv2EditService-ViewpointDefinition","Viewpoint Definition"],["SysMLv2EditService-ViewpointUsage","Viewpoint"],["SysMLv2EditService-ViewDefinition","View Definition"],["SysMLv2EditService-ViewUsage","View"],["SysMLv2EditService-RenderingDefinition","Rendering Definition"],["SysMLv2EditService-RenderingUsage","Rendering"],["SysMLv2EditService-EnumerationDefinition","Enumeration Definition"],["SysMLv2EditService-EnumerationUsage","Enumeration"],["SysMLv2EditService-ActorDefinition","Actor Definition"],["SysMLv2EditService-ActorUsage","Actor"],["SysMLv2EditService-ObjectiveFunction","Objective Function"],["SysMLv2EditService-Constraint","Constraint"],["SysMLv2EditService-Document","Document"],["SysMLv2EditService-Comment","Comment"],["SysMLv2EditService-Dependency","Dependency"],["SysMLv2EditService-Usage","Usage"],["SysMLv2EditService-Definition","Definition"],["SysMLv2EditService-PerformActionUsage","Perform Action"],["SysMLv2EditService-SatisfyRequirementUsage","Satisfy Requirement"],["SysMLv2EditService-AssignmentActionUsage","Assignment Action"],["SysMLv2EditService-AttributeUsage","Attribute Usage"]];
+
+let state={
+  token:null,
+  baseUrl:'',
+  projects:[],
+  projectId:null,
+  editingContextId:null,
+  docs:[],
+  currentTab:'createRootObject',
+  domain:'http://www.eclipse.org/syson/sysml',
+  selectedElement:null,
+  treeData:[],
+  expandedNodes:new Set(),
+  explorerDescId:null,
+  allElements:[],     // all elements from REST API
+  elementMap:{},      // @id -> element
+  restTreeData:[]     // tree built from REST hierarchy
+};
 
 function init(){const sel=document.getElementById('rootType');ROOT_TYPES.forEach(([id,label])=>{sel.innerHTML+=`<option value="${id}">${label}</option>`});updateRootMutation()}
 init();
 
 async function api(path,opts={}){const h={'Content-Type':'application/json',...opts.headers};if(state.token)h['Authorization']=`Bearer ${state.token}`;const r=await fetch(state.baseUrl+path,{...opts,headers:h});const t=await r.text();try{return JSON.parse(t)}catch{return t}}
 async function gql(query){return api('/api/graphql',{method:'POST',body:JSON.stringify({query})})}
-function showResponse(data){const d=document.getElementById('response');const err=data.errors||(typeof data==='object'&&data.error);d.innerHTML=`<div class="response ${err?'error':'success'}">${JSON.stringify(data,null,2)}</div>`}
+async function gqlClean(query){
+  // Execute GraphQL and return data or error
+  try{
+    const r=await gql(query);
+    return r;
+  }catch(e){return{errors:[{message:e.message}]}}
+}
+function showResponse(data){const d=document.getElementById('response');const err=data.errors||(typeof data==='object'&&data.data&&Object.values(data.data).some(v=>v&&v.__typename==='ErrorPayload'));const ok=data&&!err;d.innerHTML=`<div class="response ${err?'error':'success'}">${JSON.stringify(data,null,2)}</div>`}
 function uuid(){return crypto.randomUUID()}
 
 async function connect(){
@@ -174,11 +240,11 @@ async function loadProjects(){
 async function onProjectSelect(){
   const pid=document.getElementById('projectSelect').value;
   if(!pid)return;
+  state.projectId=pid;
   const r=await gql(`query{viewer{project(projectId:"${pid}"){currentEditingContext{id}}}}`);
   const ec=r?.data?.viewer?.project?.currentEditingContext;
   if(ec){
     state.editingContextId=ec.id;
-    state.createdElements=[];  // reset tracked elements when switching projects
     // Get explorer description
     const r2=await gql(`query{viewer{editingContext(editingContextId:"${ec.id}"){explorerDescriptions{id label}}}}`);
     const eds=r2?.data?.viewer?.editingContext?.explorerDescriptions||[];
@@ -213,6 +279,7 @@ function updateRootMutation(){
     rootObjectCreationDescriptionId: "${typeId}"
   }) {
     __typename
+    ... on CreateRootObjectSuccessPayload { object { id label kind } }
     ... on ErrorPayload { message }
   }
 }`;
@@ -223,96 +290,81 @@ async function executeRootCreate(){
   if(!docId){const r=await createDocument();if(!r)return}
   const typeId=document.getElementById('rootType').value;
   const id=uuid();
-  const r=await gql(`mutation{createRootObject(input:{id:"${id}",editingContextId:"${state.editingContextId}",documentId:"${docId||state.docs[state.docs.length-1]?.id}",domainId:"${state.domain}",rootObjectCreationDescriptionId:"${typeId}"}){__typename ...on ErrorPayload{message}}}`);
+  const r=await gql(`mutation{createRootObject(input:{id:"${id}",editingContextId:"${state.editingContextId}",documentId:"${docId||state.docs[state.docs.length-1]?.id}",domainId:"${state.domain}",rootObjectCreationDescriptionId:"${typeId}"}){__typename ...on CreateRootObjectSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
   showResponse(r);
-  if(r?.data?.createRootObject?.__typename!=='ErrorPayload')await loadTree();
+  if(r?.data?.createRootObject?.object)await loadTree();
 }
 
-// === Tree loading ===
-// Sirius Web's WebSocket subscription only emits tree data on CHANGE events,
-// not on initial subscription. It connects, sends 'ka' (keepalive), then
-// 'complete' with no data. So we skip the WS entirely and build the tree
-// from REST queries: representations (diagrams) + tracked created elements.
+// === Tree loading via REST API ===
+// The REST endpoint /api/rest/projects/{pid}/commits/{pid}/elements returns ALL elements
+// with full containment hierarchy. We build the tree from owner/owned relationships.
 async function loadTree(){
-  if(!state.editingContextId)return;
+  if(!state.editingContextId||!state.projectId)return;
   const tc=document.getElementById('treeContainer');
-  tc.innerHTML='<div class="tree-loading">Loading tree...</div>';
-  state.treeData=[];
-  await fetchDocuments();
-}
-
-// Fetch all documents AND model elements in the editing context
-async function fetchDocuments(){
+  tc.innerHTML='<div class="tree-loading">Loading tree from REST API...</div>';
+  
   try{
-    // Fetch representations (diagrams)
-    const r=await gql(`query{viewer{editingContext(editingContextId:"${state.editingContextId}"){representations{edges{node{id label kind}}}}}}`);
-    const reps=r?.data?.viewer?.editingContext?.representations?.edges||[];
-    const treeItems=[];
-
-    // Add representations as tree nodes
-    reps.forEach(e=>{
-      const n=e.node;
-      treeItems.push({id:n.id,label:n.label,kind:(n.kind||'').replace('siriusComponents://representation?type=',''),hasChildren:false,children:[]});
+    const r=await api(`/api/rest/projects/${state.projectId}/commits/${state.projectId}/elements`);
+    if(!Array.isArray(r))throw new Error('REST API returned non-array: '+JSON.stringify(r).slice(0,200));
+    
+    state.allElements=r;
+    
+    // Build element map by @id
+    state.elementMap={};
+    r.forEach(e=>{state.elementMap[e['@id']]={...e,children:[],hasChildren:false}});
+    
+    // Build parent-child tree from owner relationship
+    const roots=[];
+    r.forEach(e=>{
+      const ownerRef=e.owner;
+      const ownerId=ownerRef?.['@id'];
+      if(ownerId&&state.elementMap[ownerId]){
+        state.elementMap[ownerId].children.push(state.elementMap[e['@id']]);
+        state.elementMap[ownerId].hasChildren=true;
+      }else{
+        // No owner or owner not in our set = root element
+        roots.push(state.elementMap[e['@id']]);
+      }
     });
-
-    // Fetch created elements via REST object() query and build a tree
-    if(state.createdElements&&state.createdElements.length>0){
-      // Verify each element exists and get its real label
-      const verified=[];
-      for(const el of state.createdElements){
-        try{
-          const r2=await gql(`query{viewer{editingContext(editingContextId:"${state.editingContextId}"){object(objectId:"${el.id}"){id kind label}}}}`);
-          const obj=r2?.data?.viewer?.editingContext?.object;
-          if(obj){
-            const kindShort=(obj.kind||'').replace('siriusComponents://semantic?domain=sysml&entity=','');
-            verified.push({...el,label:obj.label,kind:kindShort});
-          }
-        }catch(e2){}
-      }
-
-      // Build a tree structure from verified elements
-      if(verified.length>0){
-        const byId={};
-        verified.forEach(el=>{byId[el.id]={...el,children:[],hasChildren:false}});
-        const roots=[];
-        verified.forEach(el=>{
-          if(el.parentId&&byId[el.parentId]){
-            byId[el.parentId].children.push(byId[el.id]);
-            byId[el.parentId].hasChildren=true;
-          }else{
-            roots.push(byId[el.id]);
-          }
-        });
-        // Replace treeData with our element tree (merge with representations)
-        const combinedTree=[...roots,...treeItems.filter(t=>!roots.some(r=>r.id===t.id))];
-        state.treeData=combinedTree;
-        renderTree();
-        return;
-      }
+    
+    // Filter: only show meaningful elements (skip OwningMembership, FeatureMembership, etc.)
+    const HIDDEN_TYPES=new Set(['OwningMembership','FeatureMembership','Membership','NamespaceImport','Import',
+      'FeatureTyping','Subsetting','Subclassification','Redefinition','FeatureValue','FeatureChaining',
+      'FeatureChainExpression','OperatorExpression','LiteralInteger','LiteralString','LiteralInfinity',
+      'FeatureReferenceExpression','ParameterMembership','EndFeatureMembership','MultiplicityRange',
+      'ReferenceSubsetting','NullExpression','MembershipExpose','TransitionFeatureMembership',
+      'ConjugatedPortTyping','PortConjugation','ReturnParameterMembership','ElementFilterMembership',
+      'VariantMembership','FeatureMembership','SubjectMembership','ActorMembership','ObjectiveMembership',
+      'StakeholderMembership','RequirementConstraintMembership','ResultExpressionMembership',
+      'ViewRenderingMembership','FramedConcernMembership'
+    ]);
+    
+    function filterChildren(nodes){
+      return nodes.filter(n=>{
+        n.children=filterChildren(n.children||[]);
+        return!HIDDEN_TYPES.has(n['@type']);
+      });
     }
-
-    // Only use fallback if we have no tree data at all from WS
-    if(state.treeData.length===0){
-      state.treeData=treeItems;
-    }
-    // Always update the doc list from representations
+    
+    const filteredRoots=filterChildren(roots);
+    state.treeData=filteredRoots;
     renderTree();
-  }catch(e){console.error('fetchDocuments error',e)}
+  }catch(e){
+    tc.innerHTML=`<div class="tree-empty">Error loading tree: ${e.message}</div>`;
+    console.error('loadTree error',e);
+  }
 }
 
 function renderTree(){
   const tc=document.getElementById('treeContainer');
   const count=countNodes(state.treeData);
   document.getElementById('treeCount').textContent=`${count} nodes`;
-
-  if(state.treeData.length===0){
-    tc.innerHTML='<div class="tree-empty">Tree is empty. Create a document and root objects.</div>';
-    return;
-  }
-  tc.innerHTML=renderNodes(state.treeData,0);
-  // Attach click handlers
+  if(state.treeData.length===0){tc.innerHTML='<div class="tree-empty">Tree is empty. Create a document and root objects.</div>';return}
+  tc.innerHTML=renderNodes(state.treeData,0,state.expandedNodes);
   tc.querySelectorAll('[data-node-id]').forEach(el=>{
-    el.onclick=(e)=>{e.stopPropagation();selectTreeNode(el.dataset.nodeId,el.dataset.label,el.dataset.kind)};
+    el.onclick=(e)=>{e.stopPropagation();selectTreeNode(el.dataset.nodeId)};
+    const chev=el.querySelector('.chevron');
+    if(chev){chev.onclick=(e)=>{e.stopPropagation();toggleExpand(el.dataset.nodeId)}}
   });
 }
 
@@ -322,51 +374,145 @@ function countNodes(nodes){
   return n;
 }
 
-function getLabel(node){
-  if(typeof node.label==='string')return node.label;
-  if(node.label?.styledStringFragments)return node.label.styledStringFragments.map(f=>f.text||'').join('');
-  return '(unnamed)';
+function toggleExpand(nodeId){
+  if(state.expandedNodes.has(nodeId)){state.expandedNodes.delete(nodeId)}else{state.expandedNodes.add(nodeId)}
+  renderTree();
 }
 
-function renderNodes(nodes,depth){
+function getLabel(node){
+  return node.declaredName||node.name||node['@type']||'(unnamed)';
+}
+
+function renderNodes(nodes,depth,expanded){
   return nodes.map(node=>{
     const label=getLabel(node);
-    const kind=node.kind||'';
-    const hasChildren=node.hasChildren||(node.children&&node.children.length>0);
+    const kind=node['@type']||'';
     const children=node.children||[];
-    const indent='  '.repeat(depth);
-    return `<div class="tree-node" data-node-id="${node.id}" data-label="${label.replace(/"/g,'&quot;')}" data-kind="${kind}">
-      <span class="chevron">${hasChildren?'▸':'○'}</span>
-      <span class="label">${label||'(unnamed)'}</span>
-      ${kind?`<span class="kind">${kind.replace('siriusComponents://','')}</span>`:''}
+    const hasChildren=children.length>0;
+    const isExpanded=expanded.has(node['@id']);
+    const chevron=hasChildren?(isExpanded?'▾':'▸'):'○';
+    return `<div class="tree-node" data-node-id="${node['@id']}">
+      <span class="chevron">${chevron}</span>
+      <span class="label">${escapeHtml(label)}</span>
+      ${kind?`<span class="kind">${escapeHtml(kind)}</span>`:''}
     </div>
-    ${hasChildren&&children.length>0?`<div class="tree-children">${renderNodes(children,depth+1)}</div>`:''}`;
+    ${hasChildren&&isExpanded?`<div class="tree-children">${renderNodes(children,depth+1,expanded)}</div>`:''}`;
   }).join('');
 }
 
-function selectTreeNode(id,label,kind){
-  state.selectedElement={id,label,kind};
+function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+function selectTreeNode(id){
+  const node=state.elementMap[id];
+  if(!node)return;
+  state.selectedElement={
+    id:node.elementId||node['@id'],
+    graphId:node['@id'],  // internal @id for REST lookups
+    label:getLabel(node),
+    kind:node['@type'],
+    parentId:node.owner?.['@id']
+  };
   document.querySelectorAll('.tree-node').forEach(n=>n.classList.remove('selected'));
   document.querySelector(`[data-node-id="${id}"]`)?.classList.add('selected');
   document.getElementById('elementActions').style.display='flex';
-  // Auto-populate createChild mutation with selected element as parent
+  // Auto-expand to show children and switch to createChild tab
+  state.expandedNodes.add(id);
+  renderTree();
   setTab('createChild');
-  document.getElementById('response').innerHTML=`<div class="response info">Selected: ${label}<br>ID: ${id}<br>Kind: ${kind}<br><br>Mutation auto-populated for createChild (this element as parent).</div>`;
+  document.getElementById('response').innerHTML=`<div class="response info">Selected: ${state.selectedElement.label}<br>ID: ${state.selectedElement.id}<br>Kind: ${state.selectedElement.kind}<br><br>Mutation auto-populated for createChild (this element as parent).</div>`;
 }
 
+// === Rename via WebSocket subscription ===
+// renameTreeItem requires an active representation event processor (WS tree subscription).
+// We open a short-lived WS subscription, then fire the rename mutation, then close.
 async function renameSelected(){
   if(!state.selectedElement)return showResponse({error:'Select an element first'});
-  const newName=prompt('Enter new name:',state.selectedElement.label);
+  const modal=document.getElementById('renameModal');
+  const input=document.getElementById('renameInput');
+  const info=document.getElementById('renameInfo');
+  input.value=state.selectedElement.label;
+  info.textContent=`Element: ${state.selectedElement.label} (${state.selectedElement.kind})`;
+  modal.style.display='flex';
+  input.focus();input.select();
+}
+
+async function doRename(){
+  const newName=document.getElementById('renameInput').value.trim();
   if(!newName)return;
-  
-  // renameTreeItem requires a live tree subscription (WebSocket) which we don't have.
-  // It always times out with "The request has been interrupted due to a timeout".
-  // Instead, use insertTextualSysMLv2 to insert a renamed element, then update tracking.
+  document.getElementById('renameModal').style.display='none';
   
   const sel=state.selectedElement;
   const ec=state.editingContextId;
   
-  // Determine SysML keyword from element kind
+  // Use the new updateElement mutation (IEditingContextEventHandler, direct, no WS needed)
+  document.getElementById('response').innerHTML='<div class="response info">Renaming via updateElement...</div>';
+  
+  const updateId=uuid();
+  const r=await gql(`mutation{updateElement(input:{id:"${updateId}",editingContextId:"${ec}",elementId:"${sel.id}",newLabel:${JSON.stringify(newName)}}){__typename ...on SuccessPayload{id} ...on ErrorPayload{message}}}`);
+  
+  if(r?.data?.updateElement?.__typename==='SuccessPayload'){
+    await loadTree();
+    showResponse({info:`Renamed to "${newName}" via updateElement. Element ID: ${sel.id}`});
+  }else{
+    showResponse(r);
+  }
+}
+
+function renameViaWS(ec,repId,elementId,newLabel){
+  return new Promise((resolve,reject)=>{
+    const wsUrl=state.baseUrl.replace(/^http/,'ws')+'/subscriptions';
+    const ws=new WebSocket(wsUrl,['graphql-transport-ws','graphql-ws']);
+    let resolved=false;
+    let timeoutHandle=null;
+    
+    ws.onopen=()=>{
+      ws.send(JSON.stringify({type:'connection_init',payload:{Authorization:'Bearer '+state.token}}));
+    };
+    
+    ws.onmessage=async(evt)=>{
+      const msg=JSON.parse(evt.data);
+      if(msg.type==='connection_ack'){
+        // Subscribe to explorer tree
+        const subId=uuid();
+        const query=`subscription{explorerEvent(input:{id:"${uuid()}",editingContextId:"${ec}",representationId:"${repId}"}){__typename ...on TreeRefreshedEventPayload{tree{id}} ...on ErrorPayload{message}}}`;
+        ws.send(JSON.stringify({id:subId,type:'start',payload:{query}}));
+        
+        // Wait a moment for the subscription to register, then fire the rename
+        setTimeout(async()=>{
+          const renameId=uuid();
+          const r=await gql(`mutation{renameTreeItem(input:{id:"${renameId}",editingContextId:"${ec}",representationId:"${repId}",treeItemId:"${elementId}",newLabel:"${newLabel}"}){__typename ...on ErrorPayload{message}}}`);
+          if(r?.data?.renameTreeItem?.message==='The request has been interrupted due to a timeout'){
+            // renameTreeItem timed out - the event processor wasn't ready
+            if(!resolved){resolved=true;clearTimeout(timeoutHandle);ws.close();resolve(false)}
+          }else if(r?.data?.renameTreeItem?.__typename==='ErrorPayload'){
+            if(!resolved){resolved=true;clearTimeout(timeoutHandle);ws.close();resolve(false)}
+          }
+        },2000); // 2s delay - event processor needs time to initialize on backend
+      }
+      
+      if((msg.type==='data'||msg.type==='next')&&msg.payload?.data?.explorerEvent?.tree){
+        // Got tree refresh - rename worked!
+        if(!resolved){resolved=true;clearTimeout(timeoutHandle);ws.close();resolve(true)}
+      }
+
+      if(msg.type==='ping'){ws.send(JSON.stringify({type:'pong'}))}
+      if(msg.type==='ka'){/* keepalive from legacy protocol, ignore */}
+    };
+    
+    ws.onerror=(e)=>{if(!resolved){resolved=true;clearTimeout(timeoutHandle);reject(new Error('WS error'))}};
+    
+    // Overall timeout: 30s
+    timeoutHandle=setTimeout(()=>{
+      if(!resolved){resolved=true;ws.close();resolve(false)}
+    },30000);
+  });
+}
+
+async function renameViaTextual(ec,sel,newName){
+  // insertTextualSysMLv2 inserts SysML text into a container element.
+  // For renaming, we insert "<keyword> <newName>;" into the selected element itself
+  // (if it's a container) or its parent. This creates a new element with the desired name.
+  
   const kindMap={
     'Package':'package','PartUsage':'part','PartDefinition':'part def',
     'RequirementUsage':'requirement','RequirementDefinition':'requirement def',
@@ -380,41 +526,80 @@ async function renameSelected(){
     'StateUsage':'state','StateDefinition':'state def',
     'ConstraintUsage':'constraint','ConstraintDefinition':'constraint def',
     'AllocationUsage':'allocation','AllocationDefinition':'allocation def',
-    'Comment':'comment','Dependency':'dependency'
+    'Comment':'comment','Dependency':'dependency',
+    'EnumerationDefinition':'enumeration def','EnumerationUsage':'enumeration',
+    'ViewDefinition':'view def','ViewUsage':'view',
+    'ViewpointDefinition':'viewpoint def','ViewpointUsage':'viewpoint',
+    'CaseDefinition':'case def','CaseUsage':'case',
+    'UseCaseDefinition':'use case def','UseCaseUsage':'use case',
+    'ConcernDefinition':'concern def','ConcernUsage':'concern',
+    'OccurrenceDefinition':'occurrence def','OccurrenceUsage':'occurrence',
+    'MetadataDefinition':'metadata def','MetadataUsage':'metadata',
+    'CalculationDefinition':'calculation def','CalculationUsage':'calculation',
+    'ActorDefinition':'actor def','ActorUsage':'actor',
+    'RenderingDefinition':'rendering def','RenderingUsage':'rendering',
+    'PerformActionUsage':'perform action','AssignmentActionUsage':'assignment action',
+    'SatisfyRequirementUsage':'satisfy'
   };
   const keyword=kindMap[sel.kind]||'part';
   
-  // Find parent element (where we insert the text)
-  const parentEl=state.createdElements?.find(e=>e.id===sel.parentId);
-  const parentId=parentEl?.id||sel.id;  // fallback to self if no parent tracked
+  // Use the selected element as the insertion target.
+  // sel.id is the elementId (from REST), which is what insertTextualSysMLv2 expects.
+  const insertId=uuid();
+  const textContent=keyword+' '+newName+';';
   
-  const id=uuid();
-  const r=await gql(`mutation{insertTextualSysMLv2(input:{id:"${id}",editingContextId:"${ec}",objectId:"${parentId}",textualContent:"${keyword} ${newName};"}){__typename ...on ErrorPayload{message}}}`);
+  const r=await gql(`mutation{insertTextualSysMLv2(input:{id:"${insertId}",editingContextId:"${ec}",objectId:"${sel.id}",textualContent:${JSON.stringify(textualContent)}}){__typename ...on SuccessPayload{id} ...on ErrorPayload{message}}}`);
+  showResponse(r);
+  return r?.data?.insertTextualSysMLv2?.__typename!=='ErrorPayload';
+}
+
+// === Edit / Set Attributes via insertTextualSysMLv2 ===
+function editSelected(){
+  if(!state.selectedElement)return showResponse({error:'Select an element first'});
+  const modal=document.getElementById('editModal');
+  document.getElementById('editTarget').value=`${state.selectedElement.label} (${state.selectedElement.kind})`;
+  document.getElementById('editText').value='';
+  modal.style.display='flex';
+  document.getElementById('editText').focus();
+}
+
+async function doEdit(){
+  const text=document.getElementById('editText').value.trim();
+  if(!text)return;
+  document.getElementById('editModal').style.display='none';
   
+  const sel=state.selectedElement;
+  const ec=state.editingContextId;
+  
+  // Use insertTextualSysMLv2 on the selected element itself (if it's a container)
+  // or its parent. We use the selected element as the target.
+  const insertId=uuid();
+  const r=await gql(`mutation{insertTextualSysMLv2(input:{id:"${insertId}",editingContextId:"${ec}",objectId:"${sel.id}",textualContent:${JSON.stringify(text)}}){__typename ...on SuccessPayload{id} ...on ErrorPayload{message}}}`);
+  showResponse(r);
   if(r?.data?.insertTextualSysMLv2?.__typename!=='ErrorPayload'){
-    // Success: update label in-place across all local state (don't re-fetch from backend,
-    // which would return the old label since insertTextualSysMLv2 creates a new element,
-    // not a true rename)
-    sel.label=newName;
-    if(state.createdElements){
-      const tracked=state.createdElements.find(e=>e.id===sel.id);
-      if(tracked)tracked.label=newName;
-    }
-    // Update the tree node directly in treeData (recursive)
-    function updateNodeLabel(nodes){
-      for(const n of nodes){
-        if(n.id===sel.id){n.label=newName}
-        if(n.children)updateNodeLabel(n.children)
-      }
-    }
-    updateNodeLabel(state.treeData);
-    renderTree();
-    showResponse({info:`Updated label to "${newName}" in tree. `+
-      `Note: renameTreeItem doesn't work from the harness (needs live WS subscription). `+
-      `This used insertTextualSysMLv2 which also inserted a new "${keyword} ${newName};" into the parent. `+
-      `Open the project in the main SysON app to clean up duplicates.`});
-  }else{
-    showResponse(r);
+    await loadTree();
+  }
+}
+
+// === Add Child Element (direct EMF, no WS needed) ===
+function addChildModal(){
+  if(!state.selectedElement)return showResponse({error:'Select an element first'});
+  const name=prompt('Enter name for new child element:','NewPart');
+  if(!name)return;
+  const type=prompt('Enter element type (PartUsage, Package, AttributeUsage, etc.):','PartUsage');
+  if(!type)return;
+  doAddChild(type,name);
+}
+
+async function doAddChild(elementType,name){
+  const sel=state.selectedElement;
+  const ec=state.editingContextId;
+  const id=uuid();
+  document.getElementById('response').innerHTML='<div class="response info">Creating '+elementType+' "'+name+'"...</div>';
+  const r=await gql(`mutation{addChildElement(input:{id:"${id}",editingContextId:"${ec}",parentElementId:"${sel.id}",elementType:"${elementType}",name:${JSON.stringify(name)}}){__typename ...on SuccessPayload{id} ...on ErrorPayload{messages{body level}}}}`);
+  showResponse(r);
+  if(r?.data?.addChildElement?.__typename!=='ErrorPayload'){
+    await loadTree();
   }
 }
 
@@ -422,19 +607,18 @@ async function deleteSelected(){
   if(!state.selectedElement)return showResponse({error:'Select an element first'});
   if(!confirm(`Delete "${state.selectedElement.label}"?`))return;
   const id=uuid();
-  const repId=state.explorerDescId||'';
-  const r=await gql(`mutation{deleteTreeItem(input:{id:"${id}",editingContextId:"${state.editingContextId}",representationId:"${repId}",treeItemId:"${state.selectedElement.id}"}){__typename ...on ErrorPayload{message}}}`);
+  const r=await gql(`mutation{deleteElement(input:{id:"${id}",editingContextId:"${state.editingContextId}",elementId:"${state.selectedElement.id}"}){__typename ...on SuccessPayload{id} ...on ErrorPayload{message}}}`);
   showResponse(r);
   state.selectedElement=null;
   document.getElementById('elementActions').style.display='none';
-  if(r?.data?.deleteTreeItem?.__typename!=='ErrorPayload')await loadTree();
+  if(r?.data?.deleteElement?.__typename!=='ErrorPayload')await loadTree();
 }
 
 // === Connected Parts Example ===
 async function createConnectedPartsExample(){
   if(!state.editingContextId)return showResponse({error:'Select a project first'});
   const log=[];
-  const addLog=(msg)=>{log.push(msg);showResponse({info:log.join('\n')})};
+  const addLog=(msg)=>{log.push(msg);document.getElementById('response').innerHTML=`<div class="response info">${log.join('\n')}</div>`};
   addLog('Creating connected parts example...');
 
   const ec=state.editingContextId;
@@ -452,45 +636,38 @@ async function createConnectedPartsExample(){
     // 2. Create Package root
     addLog('2. Creating Package (root)...');
     const pkgMuttId=uuid();
-    const pkgR=await gql(`mutation{createRootObject(input:{id:"${pkgMuttId}",editingContextId:"${ec}",documentId:"${docId}",domainId:"${DOMAIN}",rootObjectCreationDescriptionId:"SysMLv2EditService-Package"}){__typename ...on CreateRootObjectSuccessPayload{object{id}} ...on ErrorPayload{message}}}`);
+    const pkgR=await gql(`mutation{createRootObject(input:{id:"${pkgMuttId}",editingContextId:"${ec}",documentId:"${docId}",domainId:"${DOMAIN}",rootObjectCreationDescriptionId:"SysMLv2EditService-Package"}){__typename ...on CreateRootObjectSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
     if(pkgR?.data?.createRootObject?.__typename==='ErrorPayload')throw new Error('Pkg: '+pkgR.data.createRootObject.message);
     const pkgId=pkgR.data.createRootObject.object.id;
-    addLog('   Package created: '+pkgId);
-    // Track created element for tree display
-    state.createdElements=state.createdElements||[];
-    state.createdElements.push({id:pkgId,label:'Package',kind:'Package',parentId:null});
+    addLog('   Package created: '+pkgId+' ('+pkgR.data.createRootObject.object.label+')');
 
     // 3. Create PartUsage "Source"
     addLog('3. Creating PartUsage "source"...');
     const p1MuttId=uuid();
-    const p1R=await gql(`mutation{createChild(input:{id:"${p1MuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-PartUsage"}){__typename ...on CreateChildSuccessPayload{object{id}} ...on ErrorPayload{message}}}`);
+    const p1R=await gql(`mutation{createChild(input:{id:"${p1MuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-PartUsage"}){__typename ...on CreateChildSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
     if(p1R?.data?.createChild?.__typename==='ErrorPayload')throw new Error('Part1: '+p1R.data.createChild.message);
     const part1Id=p1R.data.createChild.object.id;
-    addLog('   PartUsage created: '+part1Id);
-    state.createdElements.push({id:part1Id,label:'source',kind:'PartUsage',parentId:pkgId});
+    addLog('   PartUsage created: '+part1Id+' ('+p1R.data.createChild.object.label+')');
 
     // 4. Create PartUsage "Target"
     addLog('4. Creating PartUsage "target"...');
     const p2MuttId=uuid();
-    const p2R=await gql(`mutation{createChild(input:{id:"${p2MuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-PartUsage"}){__typename ...on CreateChildSuccessPayload{object{id}} ...on ErrorPayload{message}}}`);
+    const p2R=await gql(`mutation{createChild(input:{id:"${p2MuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-PartUsage"}){__typename ...on CreateChildSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
     if(p2R?.data?.createChild?.__typename==='ErrorPayload')throw new Error('Part2: '+p2R.data.createChild.message);
     const part2Id=p2R.data.createChild.object.id;
-    addLog('   PartUsage created: '+part2Id);
-    state.createdElements.push({id:part2Id,label:'target',kind:'PartUsage',parentId:pkgId});
+    addLog('   PartUsage created: '+part2Id+' ('+p2R.data.createChild.object.label+')');
 
     // 5. Create FlowConnectionUsage connecting them
     addLog('5. Creating FlowConnectionUsage...');
     const connMuttId=uuid();
-    const connR=await gql(`mutation{createChild(input:{id:"${connMuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-FlowConnectionUsage"}){__typename ...on CreateChildSuccessPayload{object{id}} ...on ErrorPayload{message}}}`);
+    const connR=await gql(`mutation{createChild(input:{id:"${connMuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-FlowConnectionUsage"}){__typename ...on CreateChildSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
     if(connR?.data?.createChild?.__typename==='ErrorPayload')throw new Error('Connection: '+connR.data.createChild.message);
     const connId=connR.data.createChild.object.id;
-    addLog('   FlowConnectionUsage created: '+connId);
-    state.createdElements.push({id:connId,label:'connection',kind:'FlowConnectionUsage',parentId:pkgId});
+    addLog('   FlowConnectionUsage created: '+connId+' ('+connR.data.createChild.object.label+')');
 
-    addLog('\n✓ Done! Created:\n  Package (root)\n  ├── PartUsage (source)\n  ├── PartUsage (target)\n  └── FlowConnectionUsage (link)');
-    addLog('\nRefresh the tree to see the new elements.');
-
+    addLog('\n✓ Done! Created document with:\n  Package (root)\n  ├── PartUsage\n  ├── PartUsage\n  └── FlowConnectionUsage\n\nRefreshing tree...');
     await loadTree();
+    addLog('\n✓ Tree refreshed! Expand the document to see elements.');
   }catch(e){
     addLog('\n✗ ERROR: '+e.message);
   }
@@ -498,15 +675,10 @@ async function createConnectedPartsExample(){
 
 function populateCreateRootFromSelected(){
   if(!state.selectedElement)return;
-  // Use the selected element as document ID target
   const sel=document.getElementById('docSelect');
-  // Check if it's already in the list
   let found=false;
   for(const opt of sel.options){if(opt.value===state.selectedElement.id){sel.value=state.selectedElement.id;found=true;break}}
-  if(!found){
-    sel.innerHTML+=`<option value="${state.selectedElement.id}">${state.selectedElement.label}</option>`;
-    sel.value=state.selectedElement.id;
-  }
+  if(!found){sel.innerHTML+=`<option value="${state.selectedElement.id}">${state.selectedElement.label}</option>`;sel.value=state.selectedElement.id}
   setTab('createRootObject');
   updateRootMutation();
 }
@@ -514,7 +686,7 @@ function populateCreateRootFromSelected(){
 function setTab(tab){
   state.currentTab=tab;
   document.querySelectorAll('.tab').forEach((t,i)=>{
-    const tabs=['createRootObject','createChild','createDocument','renameTreeItem','raw'];
+    const tabs=['createRootObject','createChild','createDocument','renameTreeItem','insertTextual','updateElement','addChildElement','manageRelationship','raw'];
     t.classList.toggle('active',tabs[i]===tab);
   });
   const ec=state.editingContextId||'EDITING_CONTEXT_ID';
@@ -534,7 +706,7 @@ function setTab(tab){
     childCreationDescriptionId: "${typeId}"
   }) {
     __typename
-    ... on CreateChildSuccessPayload { object { id } }
+    ... on CreateChildSuccessPayload { object { id label kind } }
     ... on ErrorPayload { message }
   }
 }`;
@@ -566,6 +738,67 @@ function setTab(tab){
     ... on ErrorPayload { message }
   }
 }`;
+  }else if(tab==='insertTextual'){
+    const objId=sel?.id||'ELEMENT_ID';
+    document.getElementById('mutationEditor').value=`mutation {
+  insertTextualSysMLv2(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    objectId: "${objId}",
+    textualContent: "part MyPart { attribute speed = 100 [km/h]; }"
+  }) {
+    __typename
+    ... on SuccessPayload { id }
+    ... on ErrorPayload { message }
+  }
+}`;
+  }else if(tab==='updateElement'){
+    const elementId=sel?.id||'ELEMENT_ID';
+    document.getElementById('mutationEditor').value=`mutation {
+  updateElement(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    elementId: "${elementId}",
+    newLabel: "New Name",
+    newShortName: "nn",
+    newBody: "Optional description text"
+  }) {
+    __typename
+    ... on SuccessPayload { id }
+    ... on ErrorPayload { message }
+  }
+}`;
+  }else if(tab==='addChildElement'){
+    const parentId=sel?.id||'SELECT_PARENT_FROM_TREE';
+    document.getElementById('mutationEditor').value=`mutation {
+  addChildElement(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    parentElementId: "${parentId}",
+    elementType: "PartUsage",
+    name: "MyNewPart"
+  }) {
+    __typename
+    ... on SuccessPayload { id }
+    ... on ErrorPayload { messages { body level } }
+  }
+}`;
+  }else if(tab==='manageRelationship'){
+    const sourceId=sel?.id||'SELECT_SOURCE_FROM_TREE';
+    document.getElementById('mutationEditor').value=`mutation {
+  manageRelationship(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    relationshipType: "Dependency",
+    sourceElementId: "${sourceId}",
+    targetElementIds: ["TARGET_ELEMENT_ID"],
+    action: "ADD"
+  }) {
+    __typename
+    ... on SuccessPayload { messages { body level } }
+    ... on ErrorPayload { messages { body level } }
+  }
+}`;
   }else if(tab==='raw'){
     document.getElementById('mutationEditor').value=`query {
   viewer {
@@ -574,7 +807,6 @@ function setTab(tab){
 }`;
   }
 }
-
 async function executeMutation(){
   const q=document.getElementById('mutationEditor').value.trim();
   if(!q)return;
