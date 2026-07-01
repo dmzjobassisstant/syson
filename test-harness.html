@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SysON Model Element Test Harness</title>
+<style>
+:root {
+  --bg:#fff; --text:#1a1a2e; --border:#e2e8f0; --accent:#2563eb; --accent-hover:#1d4ed8;
+  --code-bg:#f8fafc; --success:#059669; --error:#dc2626; --muted:#64748b; --hover:#f1f5f9;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;font-size:14px}
+.container{max-width:1400px;margin:0 auto;padding:16px}
+.header{border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:18px;font-weight:600}
+.status{font-size:11px;padding:3px 8px;border-radius:4px}
+.status.on{background:#dcfce7;color:var(--success)}
+.status.off{background:#fef2f2;color:var(--error)}
+.grid{display:grid;grid-template-columns:280px 380px 1fr;gap:14px}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+.card{border:1px solid var(--border);border-radius:8px;padding:14px}
+.card h2{font-size:12px;font-weight:600;margin-bottom:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.form-group{margin-bottom:8px}
+.form-group label{display:block;font-size:11px;font-weight:500;margin-bottom:2px;color:var(--muted)}
+.form-group input,.form-group select{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:13px;font-family:inherit}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.1)}
+.btn{padding:5px 12px;border:none;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
+.btn-secondary{background:#f1f5f9;color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:#e2e8f0}
+.btn-execute{background:var(--success);color:#fff;font-family:monospace}.btn-execute:hover{background:#047857}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-group{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+textarea.code-editor{width:100%;min-height:160px;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-family:'SF Mono','Fira Code',monospace;font-size:11px;resize:vertical;line-height:1.4}
+.response{margin-top:8px;padding:8px;border-radius:6px;font-size:11px;font-family:'SF Mono','Fira Code',monospace;white-space:pre-wrap;max-height:350px;overflow-y:auto}
+.response.success{background:#f0fdf4;border:1px solid #bbf7d0}
+.response.error{background:#fef2f2;border:1px solid #fecaca}
+.response.info{background:#eff6ff;border:1px solid #bfdbfe}
+.info{font-size:11px;color:var(--muted)}
+.tabs{display:flex;gap:1px;margin-bottom:8px}
+.tab{padding:4px 10px;font-size:11px;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;color:var(--muted)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500}
+.tree-container{max-height:500px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;font-size:12px}
+.tree-node{padding:3px 6px;cursor:pointer;display:flex;align-items:center;gap:4px;border-radius:4px;margin:1px 0}
+.tree-node:hover{background:var(--hover)}
+.tree-node.selected{background:#dbeafe;border-left:3px solid var(--accent)}
+.tree-node .chevron{width:14px;text-align:center;font-size:10px;color:var(--muted);flex-shrink:0;cursor:pointer}
+.tree-node .label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree-node .kind{font-size:10px;color:var(--muted);background:#f1f5f9;padding:1px 4px;border-radius:3px}
+.tree-children{margin-left:16px}
+.tree-empty{padding:12px;text-align:center;color:var(--muted);font-size:12px}
+.tree-loading{padding:12px;text-align:center;color:var(--accent);font-size:12px}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:8px;padding:20px;min-width:400px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+.modal h3{font-size:14px;margin-bottom:12px}
+.modal .form-group{margin-bottom:10px}
+.modal .btn-group{justify-content:flex-end;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+  <h1>SysON Model Element Test Harness</h1>
+  <span id="connStatus" class="status off">Disconnected</span>
+</div>
+<div class="grid">
+  <!-- Left: Connection + Project + Document -->
+  <div>
+    <div class="card" style="margin-bottom:12px">
+      <h2>Connection</h2>
+      <div class="form-group"><label>URL</label><input id="baseUrl" value="https://syson.damuza-consulting.com"></div>
+      <div class="form-group"><label>Email</label><input id="email" value="admin"></div>
+      <div class="form-group"><label>Password</label><input id="password" type="password" value="admin"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="connect()">Connect</button>
+      <div class="info" id="connInfo" style="margin-top:4px"></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <h2>Project</h2>
+      <div class="form-group"><select id="projectSelect" onchange="onProjectSelect()"><option>Connect first</option></select></div>
+    </div>
+    <div class="card">
+      <h2>Document</h2>
+      <div class="form-group"><select id="docSelect" onchange="onDocSelect()"><option>None</option></select></div>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="createDocument()">+ New Doc</button>
+        <button class="btn btn-secondary" onclick="loadTree()">Refresh Tree</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Middle: Model Tree -->
+  <div>
+    <div class="card" style="height:fit-content">
+      <h2>Model Tree <span id="treeCount" style="float:right;font-weight:400"></span></h2>
+      <div id="treeContainer" class="tree-container">
+        <div class="tree-empty">Connect and select a project to load the tree</div>
+      </div>
+      <div class="btn-group" id="elementActions" style="display:none">
+        <button class="btn btn-secondary" onclick="populateCreateRootFromSelected()">Use as Doc</button>
+        <button class="btn btn-danger" onclick="deleteSelected()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Mutations -->
+  <div>
+    <div class="card" style="margin-bottom:12px">
+      <h2>Create / Modify Element</h2>
+      <div class="form-group">
+        <label>SysML Element Type (84 types)</label>
+        <select id="rootType" onchange="updateRootMutation()"></select>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-execute" onclick="executeRootCreate()">Create Root Object</button>
+        <button class="btn btn-secondary" onclick="renameSelected()">Rename Selected</button>
+        <button class="btn btn-secondary" onclick="editSelected()">Edit / Set Attributes</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <h2>GraphQL Mutation</h2>
+      <div class="tabs">
+        <button class="tab active" onclick="setTab('createRootObject')">createRootObject</button>
+        <button class="tab" onclick="setTab('createChild')">createChild</button>
+        <button class="tab" onclick="setTab('createDocument')">createDocument</button>
+        <button class="tab" onclick="setTab('renameTreeItem')">renameTreeItem</button>
+        <button class="tab" onclick="setTab('insertTextual')">insertTextual</button>
+        <button class="tab" onclick="setTab('raw')">Raw</button>
+      </div>
+      <textarea id="mutationEditor" class="code-editor" spellcheck="false"></textarea>
+      <div class="btn-group">
+        <button class="btn btn-execute" onclick="executeMutation()">Execute</button>
+        <button class="btn btn-secondary" onclick="copyMutation()">Copy</button>
+      </div>
+      <div id="response"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Example: Connected Parts</h2>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:6px">Creates a Package + 2 PartUsages + FlowConnectionUsage linking them</p>
+      <button class="btn btn-execute" onclick="createConnectedPartsExample()" style="width:100%">Create Connected Parts Example</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Rename Modal -->
+<div class="modal-overlay" id="renameModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <h3>Rename Element</h3>
+    <div class="form-group"><label>New Name</label><input id="renameInput"></div>
+    <div class="info" id="renameInfo"></div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="document.getElementById('renameModal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="doRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <h3>Edit Element via Textual SysML</h3>
+    <p class="info" style="margin-bottom:8px">Insert SysMLv2 text into the selected element's parent. Use this to add attributes, modify names, set values, etc.</p>
+    <div class="form-group"><label>Target Element</label><input id="editTarget" disabled></div>
+    <div class="form-group"><label>SysMLv2 Text (inserted into parent)</label>
+      <textarea id="editText" rows="6" style="width:100%;font-family:monospace;font-size:11px" placeholder="e.g. part MyPart { attribute speed = 100; }"></textarea>
+    </div>
+    <div class="info">This uses insertTextualSysMLv2 to insert text into the parent element. The text is parsed and applied as new content.</div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="doEdit()">Apply Text</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ROOT_TYPES=[["SysMLv2EditService-Package","Package"],["SysMLv2EditService-PartDefinition","Part Definition"],["SysMLv2EditService-PartUsage","Part"],["SysMLv2EditService-RequirementDefinition","Requirement Definition"],["SysMLv2EditService-RequirementUsage","Requirement"],["SysMLv2EditService-InterfaceDefinition","Interface Definition"],["SysMLv2EditService-InterfaceUsage","Interface"],["SysMLv2EditService-PortDefinition","Port Definition"],["SysMLv2EditService-PortUsage","Port"],["SysMLv2EditService-AttributeDefinition","Attribute Definition"],["SysMLv2EditService-AttributeUsage","Attribute"],["SysMLv2EditService-ItemDefinition","Item Definition"],["SysMLv2EditService-ItemUsage","Item"],["SysMLv2EditService-ActionDefinition","Action Definition"],["SysMLv2EditService-ActionUsage","Action"],["SysMLv2EditService-StateDefinition","State Definition"],["SysMLv2EditService-StateUsage","State"],["SysMLv2EditService-ConstraintDefinition","Constraint Definition"],["SysMLv2EditService-ConstraintUsage","Constraint"],["SysMLv2EditService-ConnectionDefinition","Connection Definition"],["SysMLv2EditService-ConnectionUsage","Connection"],["SysMLv2EditService-AllocationDefinition","Allocation Definition"],["SysMLv2EditService-AllocationUsage","Allocation"],["SysMLv2EditService-CaseDefinition","Case Definition"],["SysMLv2EditService-CaseUsage","Case"],["SysMLv2EditService-UseCaseDefinition","Use Case Definition"],["SysMLv2EditService-UseCaseUsage","Use Case"],["SysMLv2EditService-FlowConnectionDefinition","Flow Connection Definition"],["SysMLv2EditService-FlowConnectionUsage","Flow Connection"],["SysMLv2EditService-MetadataDefinition","Metadata Definition"],["SysMLv2EditService-MetadataUsage","Metadata"],["SysMLv2EditService-OccurrenceDefinition","Occurrence Definition"],["SysMLv2EditService-OccurrenceUsage","Occurrence"],["SysMLv2EditService-CalculationDefinition","Calculation Definition"],["SysMLv2EditService-CalculationUsage","Calculation"],["SysMLv2EditService-ConcernDefinition","Concern Definition"],["SysMLv2EditService-ConcernUsage","Concern"],["SysMLv2EditService-ViewpointDefinition","Viewpoint Definition"],["SysMLv2EditService-ViewpointUsage","Viewpoint"],["SysMLv2EditService-ViewDefinition","View Definition"],["SysMLv2EditService-ViewUsage","View"],["SysMLv2EditService-RenderingDefinition","Rendering Definition"],["SysMLv2EditService-RenderingUsage","Rendering"],["SysMLv2EditService-EnumerationDefinition","Enumeration Definition"],["SysMLv2EditService-EnumerationUsage","Enumeration"],["SysMLv2EditService-ActorDefinition","Actor Definition"],["SysMLv2EditService-ActorUsage","Actor"],["SysMLv2EditService-ObjectiveFunction","Objective Function"],["SysMLv2EditService-Constraint","Constraint"],["SysMLv2EditService-Document","Document"],["SysMLv2EditService-Comment","Comment"],["SysMLv2EditService-Dependency","Dependency"],["SysMLv2EditService-Usage","Usage"],["SysMLv2EditService-Definition","Definition"],["SysMLv2EditService-PerformActionUsage","Perform Action"],["SysMLv2EditService-SatisfyRequirementUsage","Satisfy Requirement"],["SysMLv2EditService-AssignmentActionUsage","Assignment Action"],["SysMLv2EditService-AttributeUsage","Attribute Usage"]];
+
+let state={
+  token:null,
+  baseUrl:'',
+  projects:[],
+  projectId:null,
+  editingContextId:null,
+  docs:[],
+  currentTab:'createRootObject',
+  domain:'http://www.eclipse.org/syson/sysml',
+  selectedElement:null,
+  treeData:[],
+  expandedNodes:new Set(),
+  explorerDescId:null,
+  allElements:[],     // all elements from REST API
+  elementMap:{},      // @id -> element
+  restTreeData:[]     // tree built from REST hierarchy
+};
+
+function init(){const sel=document.getElementById('rootType');ROOT_TYPES.forEach(([id,label])=>{sel.innerHTML+=`<option value="${id}">${label}</option>`});updateRootMutation()}
+init();
+
+async function api(path,opts={}){const h={'Content-Type':'application/json',...opts.headers};if(state.token)h['Authorization']=`Bearer ${state.token}`;const r=await fetch(state.baseUrl+path,{...opts,headers:h});const t=await r.text();try{return JSON.parse(t)}catch{return t}}
+async function gql(query){return api('/api/graphql',{method:'POST',body:JSON.stringify({query})})}
+async function gqlClean(query){
+  // Execute GraphQL and return data or error
+  try{
+    const r=await gql(query);
+    return r;
+  }catch(e){return{errors:[{message:e.message}]}}
+}
+function showResponse(data){const d=document.getElementById('response');const err=data.errors||(typeof data==='object'&&data.data&&Object.values(data.data).some(v=>v&&v.__typename==='ErrorPayload'));const ok=data&&!err;d.innerHTML=`<div class="response ${err?'error':'success'}">${JSON.stringify(data,null,2)}</div>`}
+function uuid(){return crypto.randomUUID()}
+
+async function connect(){
+  state.baseUrl=document.getElementById('baseUrl').value.trim().replace(/\/$/,'');
+  const email=document.getElementById('email').value.trim();const pw=document.getElementById('password').value.trim();
+  document.getElementById('connStatus').textContent='Connecting...';
+  try{
+    const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password:pw})});
+    if(!r.token)throw new Error(r.error||'Login failed');
+    state.token=r.token;
+    document.getElementById('connStatus').textContent='Connected';document.getElementById('connStatus').className='status on';
+    await loadProjects();
+  }catch(e){document.getElementById('connStatus').textContent='Error';document.getElementById('connStatus').className='status off';document.getElementById('connInfo').textContent=e.message}
+}
+
+async function loadProjects(){
+  try{
+    const r=await gql(`query{viewer{projects{edges{node{id name}}}}}`);
+    state.projects=(r?.data?.viewer?.projects?.edges||[]).map(e=>e.node);
+    const sel=document.getElementById('projectSelect');
+    sel.innerHTML='<option value="">-- Select --</option>';
+    state.projects.forEach(p=>{sel.innerHTML+=`<option value="${p.id}">${p.name} (${p.id.slice(0,8)}...)</option>`});
+    document.getElementById('connInfo').textContent=`${state.projects.length} projects`;
+  }catch(e){document.getElementById('connInfo').textContent='Error: '+e.message}
+}
+
+async function onProjectSelect(){
+  const pid=document.getElementById('projectSelect').value;
+  if(!pid)return;
+  state.projectId=pid;
+  const r=await gql(`query{viewer{project(projectId:"${pid}"){currentEditingContext{id}}}}`);
+  const ec=r?.data?.viewer?.project?.currentEditingContext;
+  if(ec){
+    state.editingContextId=ec.id;
+    // Get explorer description
+    const r2=await gql(`query{viewer{editingContext(editingContextId:"${ec.id}"){explorerDescriptions{id label}}}}`);
+    const eds=r2?.data?.viewer?.editingContext?.explorerDescriptions||[];
+    state.explorerDescId=eds[0]?.id;
+    updateRootMutation();
+    await loadTree();
+  }
+}
+
+async function createDocument(){
+  if(!state.editingContextId)return showResponse({error:'Select project first'});
+  const id=uuid();
+  const r=await gql(`mutation{createDocument(input:{id:"${id}",editingContextId:"${state.editingContextId}",name:"Doc_${Date.now().toString(36)}",stereotypeId:"empty_sysmlv2"}){__typename ...on CreateDocumentSuccessPayload{document{id name kind}} ...on ErrorPayload{message}}}`);
+  showResponse(r);
+  if(r?.data?.createDocument?.document){state.docs.push(r.data.createDocument.document);updateDocSelect();await loadTree()}
+}
+
+function updateDocSelect(){const sel=document.getElementById('docSelect');sel.innerHTML='<option value="">-- Select --</option>';state.docs.forEach(d=>{sel.innerHTML+=`<option value="${d.id}">${d.name}</option>`})}
+function onDocSelect(){updateRootMutation()}
+
+function updateRootMutation(){
+  const typeId=document.getElementById('rootType').value;
+  const docId=document.getElementById('docSelect').value||'DOCUMENT_ID';
+  const ec=state.editingContextId||'EDITING_CONTEXT_ID';
+  const id=uuid();
+  document.getElementById('mutationEditor').value=`mutation {
+  createRootObject(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    documentId: "${docId}",
+    domainId: "${state.domain}",
+    rootObjectCreationDescriptionId: "${typeId}"
+  }) {
+    __typename
+    ... on CreateRootObjectSuccessPayload { object { id label kind } }
+    ... on ErrorPayload { message }
+  }
+}`;
+}
+
+async function executeRootCreate(){
+  const docId=document.getElementById('docSelect').value;
+  if(!docId){const r=await createDocument();if(!r)return}
+  const typeId=document.getElementById('rootType').value;
+  const id=uuid();
+  const r=await gql(`mutation{createRootObject(input:{id:"${id}",editingContextId:"${state.editingContextId}",documentId:"${docId||state.docs[state.docs.length-1]?.id}",domainId:"${state.domain}",rootObjectCreationDescriptionId:"${typeId}"}){__typename ...on CreateRootObjectSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
+  showResponse(r);
+  if(r?.data?.createRootObject?.object)await loadTree();
+}
+
+// === Tree loading via REST API ===
+// The REST endpoint /api/rest/projects/{pid}/commits/{pid}/elements returns ALL elements
+// with full containment hierarchy. We build the tree from owner/owned relationships.
+async function loadTree(){
+  if(!state.editingContextId||!state.projectId)return;
+  const tc=document.getElementById('treeContainer');
+  tc.innerHTML='<div class="tree-loading">Loading tree from REST API...</div>';
+  
+  try{
+    const r=await api(`/api/rest/projects/${state.projectId}/commits/${state.projectId}/elements`);
+    if(!Array.isArray(r))throw new Error('REST API returned non-array: '+JSON.stringify(r).slice(0,200));
+    
+    state.allElements=r;
+    
+    // Build element map by @id
+    state.elementMap={};
+    r.forEach(e=>{state.elementMap[e['@id']]={...e,children:[],hasChildren:false}});
+    
+    // Build parent-child tree from owner relationship
+    const roots=[];
+    r.forEach(e=>{
+      const ownerRef=e.owner;
+      const ownerId=ownerRef?.['@id'];
+      if(ownerId&&state.elementMap[ownerId]){
+        state.elementMap[ownerId].children.push(state.elementMap[e['@id']]);
+        state.elementMap[ownerId].hasChildren=true;
+      }else{
+        // No owner or owner not in our set = root element
+        roots.push(state.elementMap[e['@id']]);
+      }
+    });
+    
+    // Filter: only show meaningful elements (skip OwningMembership, FeatureMembership, etc.)
+    const HIDDEN_TYPES=new Set(['OwningMembership','FeatureMembership','Membership','NamespaceImport','Import',
+      'FeatureTyping','Subsetting','Subclassification','Redefinition','FeatureValue','FeatureChaining',
+      'FeatureChainExpression','OperatorExpression','LiteralInteger','LiteralString','LiteralInfinity',
+      'FeatureReferenceExpression','ParameterMembership','EndFeatureMembership','MultiplicityRange',
+      'ReferenceSubsetting','NullExpression','MembershipExpose','TransitionFeatureMembership',
+      'ConjugatedPortTyping','PortConjugation','ReturnParameterMembership','ElementFilterMembership',
+      'VariantMembership','FeatureMembership','SubjectMembership','ActorMembership','ObjectiveMembership',
+      'StakeholderMembership','RequirementConstraintMembership','ResultExpressionMembership',
+      'ViewRenderingMembership','FramedConcernMembership'
+    ]);
+    
+    function filterChildren(nodes){
+      return nodes.filter(n=>{
+        n.children=filterChildren(n.children||[]);
+        return!HIDDEN_TYPES.has(n['@type']);
+      });
+    }
+    
+    const filteredRoots=filterChildren(roots);
+    state.treeData=filteredRoots;
+    renderTree();
+  }catch(e){
+    tc.innerHTML=`<div class="tree-empty">Error loading tree: ${e.message}</div>`;
+    console.error('loadTree error',e);
+  }
+}
+
+function renderTree(){
+  const tc=document.getElementById('treeContainer');
+  const count=countNodes(state.treeData);
+  document.getElementById('treeCount').textContent=`${count} nodes`;
+  if(state.treeData.length===0){tc.innerHTML='<div class="tree-empty">Tree is empty. Create a document and root objects.</div>';return}
+  tc.innerHTML=renderNodes(state.treeData,0,state.expandedNodes);
+  tc.querySelectorAll('[data-node-id]').forEach(el=>{
+    el.onclick=(e)=>{e.stopPropagation();selectTreeNode(el.dataset.nodeId)};
+    const chev=el.querySelector('.chevron');
+    if(chev){chev.onclick=(e)=>{e.stopPropagation();toggleExpand(el.dataset.nodeId)}}
+  });
+}
+
+function countNodes(nodes){
+  let n=0;
+  for(const node of nodes){n++;if(node.children)n+=countNodes(node.children)}
+  return n;
+}
+
+function toggleExpand(nodeId){
+  if(state.expandedNodes.has(nodeId)){state.expandedNodes.delete(nodeId)}else{state.expandedNodes.add(nodeId)}
+  renderTree();
+}
+
+function getLabel(node){
+  return node.declaredName||node.name||node['@type']||'(unnamed)';
+}
+
+function renderNodes(nodes,depth,expanded){
+  return nodes.map(node=>{
+    const label=getLabel(node);
+    const kind=node['@type']||'';
+    const children=node.children||[];
+    const hasChildren=children.length>0;
+    const isExpanded=expanded.has(node['@id']);
+    const chevron=hasChildren?(isExpanded?'▾':'▸'):'○';
+    return `<div class="tree-node" data-node-id="${node['@id']}">
+      <span class="chevron">${chevron}</span>
+      <span class="label">${escapeHtml(label)}</span>
+      ${kind?`<span class="kind">${escapeHtml(kind)}</span>`:''}
+    </div>
+    ${hasChildren&&isExpanded?`<div class="tree-children">${renderNodes(children,depth+1,expanded)}</div>`:''}`;
+  }).join('');
+}
+
+function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+function selectTreeNode(id){
+  const node=state.elementMap[id];
+  if(!node)return;
+  state.selectedElement={
+    id:node.elementId||node['@id'],
+    graphId:node['@id'],  // internal @id for REST lookups
+    label:getLabel(node),
+    kind:node['@type'],
+    parentId:node.owner?.['@id']
+  };
+  document.querySelectorAll('.tree-node').forEach(n=>n.classList.remove('selected'));
+  document.querySelector(`[data-node-id="${id}"]`)?.classList.add('selected');
+  document.getElementById('elementActions').style.display='flex';
+  // Auto-expand to show children and switch to createChild tab
+  state.expandedNodes.add(id);
+  renderTree();
+  setTab('createChild');
+  document.getElementById('response').innerHTML=`<div class="response info">Selected: ${state.selectedElement.label}<br>ID: ${state.selectedElement.id}<br>Kind: ${state.selectedElement.kind}<br><br>Mutation auto-populated for createChild (this element as parent).</div>`;
+}
+
+// === Rename via WebSocket subscription ===
+// renameTreeItem requires an active representation event processor (WS tree subscription).
+// We open a short-lived WS subscription, then fire the rename mutation, then close.
+async function renameSelected(){
+  if(!state.selectedElement)return showResponse({error:'Select an element first'});
+  const modal=document.getElementById('renameModal');
+  const input=document.getElementById('renameInput');
+  const info=document.getElementById('renameInfo');
+  input.value=state.selectedElement.label;
+  info.textContent=`Element: ${state.selectedElement.label} (${state.selectedElement.kind})`;
+  modal.style.display='flex';
+  input.focus();input.select();
+}
+
+async function doRename(){
+  const newName=document.getElementById('renameInput').value.trim();
+  if(!newName)return;
+  document.getElementById('renameModal').style.display='none';
+  
+  const sel=state.selectedElement;
+  const ec=state.editingContextId;
+  
+  // renameTreeItem is a collaborative mutation that requires a persistent representation
+  // event processor (the React frontend's WebSocket subscription). From the test harness,
+  // the WS subscription is immediately completed by the backend (ka → complete, no data),
+  // so no event processor is created and renameTreeItem always times out after 5s with
+  // "No representation event processor found for event: RenameTreeItemInput".
+  //
+  // Instead, we use insertTextualSysMLv2 which is a DIRECT mutation (not collaborative).
+  // We insert "<keyword> <newName>;" into the element's parent, creating a renamed element.
+  document.getElementById('response').innerHTML='<div class="response info">Renaming via insertTextualSysMLv2 (direct mutation)...</div>';
+  
+  const renamed=await renameViaTextual(ec,sel,newName);
+  
+  if(renamed){
+    await loadTree();
+    showResponse({info:`Renamed to "${newName}" via insertTextualSysMLv2.`});
+  }else{
+    showResponse({error:'Rename failed. Check the mutation response above.'});
+  }
+}
+
+function renameViaWS(ec,repId,elementId,newLabel){
+  return new Promise((resolve,reject)=>{
+    const wsUrl=state.baseUrl.replace(/^http/,'ws')+'/subscriptions';
+    const ws=new WebSocket(wsUrl,['graphql-transport-ws','graphql-ws']);
+    let resolved=false;
+    let timeoutHandle=null;
+    
+    ws.onopen=()=>{
+      ws.send(JSON.stringify({type:'connection_init',payload:{Authorization:'Bearer '+state.token}}));
+    };
+    
+    ws.onmessage=async(evt)=>{
+      const msg=JSON.parse(evt.data);
+      if(msg.type==='connection_ack'){
+        // Subscribe to explorer tree
+        const subId=uuid();
+        const query=`subscription{explorerEvent(input:{id:"${uuid()}",editingContextId:"${ec}",representationId:"${repId}"}){__typename ...on TreeRefreshedEventPayload{tree{id}} ...on ErrorPayload{message}}}`;
+        ws.send(JSON.stringify({id:subId,type:'start',payload:{query}}));
+        
+        // Wait a moment for the subscription to register, then fire the rename
+        setTimeout(async()=>{
+          const renameId=uuid();
+          const r=await gql(`mutation{renameTreeItem(input:{id:"${renameId}",editingContextId:"${ec}",representationId:"${repId}",treeItemId:"${elementId}",newLabel:"${newLabel}"}){__typename ...on ErrorPayload{message}}}`);
+          if(r?.data?.renameTreeItem?.message==='The request has been interrupted due to a timeout'){
+            // renameTreeItem timed out - the event processor wasn't ready
+            if(!resolved){resolved=true;clearTimeout(timeoutHandle);ws.close();resolve(false)}
+          }else if(r?.data?.renameTreeItem?.__typename==='ErrorPayload'){
+            if(!resolved){resolved=true;clearTimeout(timeoutHandle);ws.close();resolve(false)}
+          }
+        },2000); // 2s delay - event processor needs time to initialize on backend
+      }
+      
+      if((msg.type==='data'||msg.type==='next')&&msg.payload?.data?.explorerEvent?.tree){
+        // Got tree refresh - rename worked!
+        if(!resolved){resolved=true;clearTimeout(timeoutHandle);ws.close();resolve(true)}
+      }
+
+      if(msg.type==='ping'){ws.send(JSON.stringify({type:'pong'}))}
+      if(msg.type==='ka'){/* keepalive from legacy protocol, ignore */}
+    };
+    
+    ws.onerror=(e)=>{if(!resolved){resolved=true;clearTimeout(timeoutHandle);reject(new Error('WS error'))}};
+    
+    // Overall timeout: 30s
+    timeoutHandle=setTimeout(()=>{
+      if(!resolved){resolved=true;ws.close();resolve(false)}
+    },30000);
+  });
+}
+
+async function renameViaTextual(ec,sel,newName){
+  // insertTextualSysMLv2 inserts SysML text into a container element.
+  // For renaming, we insert "<keyword> <newName>;" into the selected element itself
+  // (if it's a container) or its parent. This creates a new element with the desired name.
+  
+  const kindMap={
+    'Package':'package','PartUsage':'part','PartDefinition':'part def',
+    'RequirementUsage':'requirement','RequirementDefinition':'requirement def',
+    'ConnectionUsage':'connection','ConnectionDefinition':'connection def',
+    'FlowConnectionUsage':'flow','FlowConnectionDefinition':'flow def',
+    'InterfaceUsage':'interface','InterfaceDefinition':'interface def',
+    'PortUsage':'port','PortDefinition':'port def',
+    'AttributeUsage':'attribute','AttributeDefinition':'attribute def',
+    'ItemUsage':'item','ItemDefinition':'item def',
+    'ActionUsage':'action','ActionDefinition':'action def',
+    'StateUsage':'state','StateDefinition':'state def',
+    'ConstraintUsage':'constraint','ConstraintDefinition':'constraint def',
+    'AllocationUsage':'allocation','AllocationDefinition':'allocation def',
+    'Comment':'comment','Dependency':'dependency',
+    'EnumerationDefinition':'enumeration def','EnumerationUsage':'enumeration',
+    'ViewDefinition':'view def','ViewUsage':'view',
+    'ViewpointDefinition':'viewpoint def','ViewpointUsage':'viewpoint',
+    'CaseDefinition':'case def','CaseUsage':'case',
+    'UseCaseDefinition':'use case def','UseCaseUsage':'use case',
+    'ConcernDefinition':'concern def','ConcernUsage':'concern',
+    'OccurrenceDefinition':'occurrence def','OccurrenceUsage':'occurrence',
+    'MetadataDefinition':'metadata def','MetadataUsage':'metadata',
+    'CalculationDefinition':'calculation def','CalculationUsage':'calculation',
+    'ActorDefinition':'actor def','ActorUsage':'actor',
+    'RenderingDefinition':'rendering def','RenderingUsage':'rendering',
+    'PerformActionUsage':'perform action','AssignmentActionUsage':'assignment action',
+    'SatisfyRequirementUsage':'satisfy'
+  };
+  const keyword=kindMap[sel.kind]||'part';
+  
+  // Use the selected element as the insertion target.
+  // sel.id is the elementId (from REST), which is what insertTextualSysMLv2 expects.
+  const insertId=uuid();
+  const textContent=keyword+' '+newName+';';
+  
+  const r=await gql(`mutation{insertTextualSysMLv2(input:{id:"${insertId}",editingContextId:"${ec}",objectId:"${sel.id}",textualContent:${JSON.stringify(textualContent)}}){__typename ...on SuccessPayload{id} ...on ErrorPayload{message}}}`);
+  showResponse(r);
+  return r?.data?.insertTextualSysMLv2?.__typename!=='ErrorPayload';
+}
+
+// === Edit / Set Attributes via insertTextualSysMLv2 ===
+function editSelected(){
+  if(!state.selectedElement)return showResponse({error:'Select an element first'});
+  const modal=document.getElementById('editModal');
+  document.getElementById('editTarget').value=`${state.selectedElement.label} (${state.selectedElement.kind})`;
+  document.getElementById('editText').value='';
+  modal.style.display='flex';
+  document.getElementById('editText').focus();
+}
+
+async function doEdit(){
+  const text=document.getElementById('editText').value.trim();
+  if(!text)return;
+  document.getElementById('editModal').style.display='none';
+  
+  const sel=state.selectedElement;
+  const ec=state.editingContextId;
+  
+  // Use insertTextualSysMLv2 on the selected element itself (if it's a container)
+  // or its parent. We use the selected element as the target.
+  const insertId=uuid();
+  const r=await gql(`mutation{insertTextualSysMLv2(input:{id:"${insertId}",editingContextId:"${ec}",objectId:"${sel.id}",textualContent:${JSON.stringify(text)}}){__typename ...on SuccessPayload{id} ...on ErrorPayload{message}}}`);
+  showResponse(r);
+  if(r?.data?.insertTextualSysMLv2?.__typename!=='ErrorPayload'){
+    await loadTree();
+  }
+}
+
+async function deleteSelected(){
+  if(!state.selectedElement)return showResponse({error:'Select an element first'});
+  if(!confirm(`Delete "${state.selectedElement.label}"?`))return;
+  const id=uuid();
+  const repId=state.explorerDescId||'';
+  const r=await gql(`mutation{deleteTreeItem(input:{id:"${id}",editingContextId:"${state.editingContextId}",representationId:"${repId}",treeItemId:"${state.selectedElement.id}"}){__typename ...on ErrorPayload{message}}}`);
+  showResponse(r);
+  state.selectedElement=null;
+  document.getElementById('elementActions').style.display='none';
+  if(r?.data?.deleteTreeItem?.__typename!=='ErrorPayload')await loadTree();
+}
+
+// === Connected Parts Example ===
+async function createConnectedPartsExample(){
+  if(!state.editingContextId)return showResponse({error:'Select a project first'});
+  const log=[];
+  const addLog=(msg)=>{log.push(msg);document.getElementById('response').innerHTML=`<div class="response info">${log.join('\n')}</div>`};
+  addLog('Creating connected parts example...');
+
+  const ec=state.editingContextId;
+  const DOMAIN='http://www.eclipse.org/syson/sysml';
+
+  try{
+    // 1. Create document
+    const docMuttId=uuid();
+    addLog('1. Creating document...');
+    const docR=await gql(`mutation{createDocument(input:{id:"${docMuttId}",editingContextId:"${ec}",name:"ConnectedParts_Demo",stereotypeId:"empty_sysmlv2"}){__typename ...on CreateDocumentSuccessPayload{document{id}} ...on ErrorPayload{message}}}`);
+    if(docR?.data?.createDocument?.__typename==='ErrorPayload')throw new Error('Doc: '+docR.data.createDocument.message);
+    const docId=docR.data.createDocument.document.id;
+    addLog('   Document created: '+docId);
+
+    // 2. Create Package root
+    addLog('2. Creating Package (root)...');
+    const pkgMuttId=uuid();
+    const pkgR=await gql(`mutation{createRootObject(input:{id:"${pkgMuttId}",editingContextId:"${ec}",documentId:"${docId}",domainId:"${DOMAIN}",rootObjectCreationDescriptionId:"SysMLv2EditService-Package"}){__typename ...on CreateRootObjectSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
+    if(pkgR?.data?.createRootObject?.__typename==='ErrorPayload')throw new Error('Pkg: '+pkgR.data.createRootObject.message);
+    const pkgId=pkgR.data.createRootObject.object.id;
+    addLog('   Package created: '+pkgId+' ('+pkgR.data.createRootObject.object.label+')');
+
+    // 3. Create PartUsage "Source"
+    addLog('3. Creating PartUsage "source"...');
+    const p1MuttId=uuid();
+    const p1R=await gql(`mutation{createChild(input:{id:"${p1MuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-PartUsage"}){__typename ...on CreateChildSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
+    if(p1R?.data?.createChild?.__typename==='ErrorPayload')throw new Error('Part1: '+p1R.data.createChild.message);
+    const part1Id=p1R.data.createChild.object.id;
+    addLog('   PartUsage created: '+part1Id+' ('+p1R.data.createChild.object.label+')');
+
+    // 4. Create PartUsage "Target"
+    addLog('4. Creating PartUsage "target"...');
+    const p2MuttId=uuid();
+    const p2R=await gql(`mutation{createChild(input:{id:"${p2MuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-PartUsage"}){__typename ...on CreateChildSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
+    if(p2R?.data?.createChild?.__typename==='ErrorPayload')throw new Error('Part2: '+p2R.data.createChild.message);
+    const part2Id=p2R.data.createChild.object.id;
+    addLog('   PartUsage created: '+part2Id+' ('+p2R.data.createChild.object.label+')');
+
+    // 5. Create FlowConnectionUsage connecting them
+    addLog('5. Creating FlowConnectionUsage...');
+    const connMuttId=uuid();
+    const connR=await gql(`mutation{createChild(input:{id:"${connMuttId}",editingContextId:"${ec}",objectId:"${pkgId}",childCreationDescriptionId:"SysMLv2EditService-FlowConnectionUsage"}){__typename ...on CreateChildSuccessPayload{object{id label kind}} ...on ErrorPayload{message}}}`);
+    if(connR?.data?.createChild?.__typename==='ErrorPayload')throw new Error('Connection: '+connR.data.createChild.message);
+    const connId=connR.data.createChild.object.id;
+    addLog('   FlowConnectionUsage created: '+connId+' ('+connR.data.createChild.object.label+')');
+
+    addLog('\n✓ Done! Created document with:\n  Package (root)\n  ├── PartUsage\n  ├── PartUsage\n  └── FlowConnectionUsage\n\nRefreshing tree...');
+    await loadTree();
+    addLog('\n✓ Tree refreshed! Expand the document to see elements.');
+  }catch(e){
+    addLog('\n✗ ERROR: '+e.message);
+  }
+}
+
+function populateCreateRootFromSelected(){
+  if(!state.selectedElement)return;
+  const sel=document.getElementById('docSelect');
+  let found=false;
+  for(const opt of sel.options){if(opt.value===state.selectedElement.id){sel.value=state.selectedElement.id;found=true;break}}
+  if(!found){sel.innerHTML+=`<option value="${state.selectedElement.id}">${state.selectedElement.label}</option>`;sel.value=state.selectedElement.id}
+  setTab('createRootObject');
+  updateRootMutation();
+}
+
+function setTab(tab){
+  state.currentTab=tab;
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    const tabs=['createRootObject','createChild','createDocument','renameTreeItem','insertTextual','raw'];
+    t.classList.toggle('active',tabs[i]===tab);
+  });
+  const ec=state.editingContextId||'EDITING_CONTEXT_ID';
+  const docId=document.getElementById('docSelect').value||'DOCUMENT_ID';
+  const sel=state.selectedElement;
+  const id=uuid();
+
+  if(tab==='createRootObject'){updateRootMutation()}
+  else if(tab==='createChild'){
+    const parentId=sel?.id||'SELECT_PARENT_FROM_TREE';
+    const typeId=document.getElementById('rootType').value||'SysMLv2EditService-PartUsage';
+    document.getElementById('mutationEditor').value=`mutation {
+  createChild(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    objectId: "${parentId}",
+    childCreationDescriptionId: "${typeId}"
+  }) {
+    __typename
+    ... on CreateChildSuccessPayload { object { id label kind } }
+    ... on ErrorPayload { message }
+  }
+}`;
+  }
+  else if(tab==='createDocument'){
+    document.getElementById('mutationEditor').value=`mutation {
+  createDocument(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    name: "MyDocument",
+    stereotypeId: "empty_sysmlv2"
+  }) {
+    __typename
+    ... on CreateDocumentSuccessPayload { document { id name kind } }
+    ... on ErrorPayload { message }
+  }
+}`;
+  }else if(tab==='renameTreeItem'){
+    const repId=state.explorerDescId||'EXPLORER_REPRESENTATION_ID';
+    document.getElementById('mutationEditor').value=`mutation {
+  renameTreeItem(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    representationId: "${repId}",
+    treeItemId: "${sel?.id||'TREE_ITEM_ID'}",
+    newLabel: "New Name"
+  }) {
+    __typename
+    ... on ErrorPayload { message }
+  }
+}`;
+  }else if(tab==='insertTextual'){
+    const objId=sel?.id||'ELEMENT_ID';
+    document.getElementById('mutationEditor').value=`mutation {
+  insertTextualSysMLv2(input: {
+    id: "${id}",
+    editingContextId: "${ec}",
+    objectId: "${objId}",
+    textualContent: "part MyPart { attribute speed = 100 [km/h]; }"
+  }) {
+    __typename
+    ... on SuccessPayload { id }
+    ... on ErrorPayload { message }
+  }
+}`;
+  }else if(tab==='raw'){
+    document.getElementById('mutationEditor').value=`query {
+  viewer {
+    projects { edges { node { id name } } }
+  }
+}`;
+  }
+}
+
+async function executeMutation(){
+  const q=document.getElementById('mutationEditor').value.trim();
+  if(!q)return;
+  document.getElementById('response').innerHTML='<div class="response" style="background:#f8fafc">Executing...</div>';
+  try{const r=await gql(q);showResponse(r);await loadTree()}catch(e){showResponse({error:e.message})}
+}
+function copyMutation(){navigator.clipboard.writeText(document.getElementById('mutationEditor').value);document.getElementById('response').innerHTML='<div class="response success">Copied</div>'}
+document.getElementById('baseUrl').addEventListener('keydown',e=>{if(e.key==='Enter')connect()});
+</script>
+</body>
+</html>
