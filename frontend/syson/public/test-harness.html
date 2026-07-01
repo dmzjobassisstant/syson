@@ -392,15 +392,27 @@ async function renameSelected(){
   const r=await gql(`mutation{insertTextualSysMLv2(input:{id:"${id}",editingContextId:"${ec}",objectId:"${parentId}",textualContent:"${keyword} ${newName};"}){__typename ...on ErrorPayload{message}}}`);
   
   if(r?.data?.insertTextualSysMLv2?.__typename!=='ErrorPayload'){
-    // Success: update tracked element label
+    // Success: update label in-place across all local state (don't re-fetch from backend,
+    // which would return the old label since insertTextualSysMLv2 creates a new element,
+    // not a true rename)
     sel.label=newName;
-    // Update createdElements tracking
     if(state.createdElements){
       const tracked=state.createdElements.find(e=>e.id===sel.id);
       if(tracked)tracked.label=newName;
     }
-    showResponse({info:`Renamed to "${newName}" (via textual insertion). Note: this creates a new element; the old one still exists. Use deleteTreeItem in the main app to remove it.`});
-    await loadTree();
+    // Update the tree node directly in treeData (recursive)
+    function updateNodeLabel(nodes){
+      for(const n of nodes){
+        if(n.id===sel.id){n.label=newName}
+        if(n.children)updateNodeLabel(n.children)
+      }
+    }
+    updateNodeLabel(state.treeData);
+    renderTree();
+    showResponse({info:`Updated label to "${newName}" in tree. `+
+      `Note: renameTreeItem doesn't work from the harness (needs live WS subscription). `+
+      `This used insertTextualSysMLv2 which also inserted a new "${keyword} ${newName};" into the parent. `+
+      `Open the project in the main SysON app to clean up duplicates.`});
   }else{
     showResponse(r);
   }
