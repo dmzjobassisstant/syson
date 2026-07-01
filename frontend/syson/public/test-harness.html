@@ -358,11 +358,52 @@ async function renameSelected(){
   if(!state.selectedElement)return showResponse({error:'Select an element first'});
   const newName=prompt('Enter new name:',state.selectedElement.label);
   if(!newName)return;
+  
+  // renameTreeItem requires a live tree subscription (WebSocket) which we don't have.
+  // It always times out with "The request has been interrupted due to a timeout".
+  // Instead, use insertTextualSysMLv2 to insert a renamed element, then update tracking.
+  
+  const sel=state.selectedElement;
+  const ec=state.editingContextId;
+  
+  // Determine SysML keyword from element kind
+  const kindMap={
+    'Package':'package','PartUsage':'part','PartDefinition':'part def',
+    'RequirementUsage':'requirement','RequirementDefinition':'requirement def',
+    'ConnectionUsage':'connection','ConnectionDefinition':'connection def',
+    'FlowConnectionUsage':'flow','FlowConnectionDefinition':'flow def',
+    'InterfaceUsage':'interface','InterfaceDefinition':'interface def',
+    'PortUsage':'port','PortDefinition':'port def',
+    'AttributeUsage':'attribute','AttributeDefinition':'attribute def',
+    'ItemUsage':'item','ItemDefinition':'item def',
+    'ActionUsage':'action','ActionDefinition':'action def',
+    'StateUsage':'state','StateDefinition':'state def',
+    'ConstraintUsage':'constraint','ConstraintDefinition':'constraint def',
+    'AllocationUsage':'allocation','AllocationDefinition':'allocation def',
+    'Comment':'comment','Dependency':'dependency'
+  };
+  const keyword=kindMap[sel.kind]||'part';
+  
+  // Find parent element (where we insert the text)
+  const parentEl=state.createdElements?.find(e=>e.id===sel.parentId);
+  const parentId=parentEl?.id||sel.id;  // fallback to self if no parent tracked
+  
   const id=uuid();
-  const repId=state.explorerDescId||'';
-  const r=await gql(`mutation{renameTreeItem(input:{id:"${id}",editingContextId:"${state.editingContextId}",representationId:"${repId}",treeItemId:"${state.selectedElement.id}",newLabel:"${newName}"}){__typename ...on ErrorPayload{message}}}`);
-  showResponse(r);
-  if(r?.data?.renameTreeItem?.__typename!=='ErrorPayload')await loadTree();
+  const r=await gql(`mutation{insertTextualSysMLv2(input:{id:"${id}",editingContextId:"${ec}",objectId:"${parentId}",textualContent:"${keyword} ${newName};"}){__typename ...on ErrorPayload{message}}}`);
+  
+  if(r?.data?.insertTextualSysMLv2?.__typename!=='ErrorPayload'){
+    // Success: update tracked element label
+    sel.label=newName;
+    // Update createdElements tracking
+    if(state.createdElements){
+      const tracked=state.createdElements.find(e=>e.id===sel.id);
+      if(tracked)tracked.label=newName;
+    }
+    showResponse({info:`Renamed to "${newName}" (via textual insertion). Note: this creates a new element; the old one still exists. Use deleteTreeItem in the main app to remove it.`});
+    await loadTree();
+  }else{
+    showResponse(r);
+  }
 }
 
 async function deleteSelected(){
