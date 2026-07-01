@@ -1987,39 +1987,6 @@
     setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s'; setTimeout(function() { toast.remove(); }, 500); }, 3000);
   }
 
-  function injectHistoryButton() {
-    if (!state.token) return;
-
-    // Strategy: inject a History button into the Explorer panel header,
-    // so it works regardless of whether the Details panel has content.
-    var observer = new MutationObserver(function(mutations) {
-      // Don't add twice
-      if (document.getElementById('syson-history-btn')) return;
-
-      // Look for the Explorer view header
-      var explorerView = document.querySelector('[data-testid="view-Explorer"]');
-      if (!explorerView) return;
-
-      // Find or create a toolbar row at the top of the Explorer
-      var toolbar = explorerView.querySelector('[class*="toolbar"], [class*="Toolbar"], [class*="header"], [class*="Header"]');
-      if (!toolbar) {
-        // Create a mini toolbar
-        toolbar = document.createElement('div');
-        toolbar.style.cssText = 'display:flex;justify-content:flex-end;padding:4px 8px;border-bottom:1px solid #333;';
-        explorerView.insertBefore(toolbar, explorerView.firstChild);
-      }
-
-      var btn = document.createElement('button');
-      btn.id = 'syson-history-btn';
-      btn.textContent = '📜 History';
-      btn.title = 'View change history for the selected element';
-      btn.style.cssText = 'padding:2px 8px;font-size:11px;background:#261e58;color:#fff;border:1px solid #3a2f6b;border-radius:3px;cursor:pointer;vertical-align:middle;';
-      btn.addEventListener('click', function() { showElementHistory(); });
-      toolbar.appendChild(btn);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-
   function getElementIdFromPanel() {
     // 1. Check URL search params (?selection=..., ?objectId=...)
     var params = new URLSearchParams(window.location.search);
@@ -2621,7 +2588,7 @@
       + '  color: #94a3b8 !important;'
       + '  cursor: not-allowed !important;'
       + '}'
-      + '#syson-readonly-banner ~ * button:not(#syson-history-btn):not(#syson-readonly-banner button) {'
+      + '#syson-readonly-banner ~ * button:not(#syson-readonly-banner button) {'
       + '  pointer-events: none !important;'
       + '  opacity: 0.5 !important;'
       + '  cursor: not-allowed !important;'
@@ -2696,11 +2663,10 @@
     }, 4 * 60 * 60 * 1000);
     // Mount user bar after DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); injectHistoryButton(); injectElementLockUI(); mountBranchMenu(); });
+      document.addEventListener('DOMContentLoaded', function() { mountUserBar(); handleAdminDeepLink(); injectElementLockUI(); mountBranchMenu(); });
     } else {
       mountUserBar();
       handleAdminDeepLink();
-      injectHistoryButton();
       injectElementLockUI();
       mountBranchMenu();
     }
