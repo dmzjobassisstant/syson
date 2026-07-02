@@ -88,6 +88,22 @@ FlowConnectionUsage, EnumerationDefinition
 - Only use CLARIFY if the request is genuinely impossible to understand.
 - For a one-word prompt like "Create", create a reasonable default (e.g., a Package) rather than asking.
 
+## Requirement Elements — IMPORTANT
+
+SysON stores requirement properties as child elements:
+- `RequirementUsage: BoilReq` → the requirement itself
+  - `AttributeUsage: reqId` → the requirement ID (e.g. "REQ-001")
+  - `AttributeUsage: text` → the requirement BODY/TEXT (the description)
+
+When the user asks to update a requirement's TEXT or body:
+  → Find the `AttributeUsage: text` child of the requirement in the ID reference
+  → Use UPDATE_ELEMENT with that child's element_id and new_body
+
+When the user asks to update a requirement's LABEL or NAME:
+  → Use UPDATE_ELEMENT with the RequirementUsage element_id and new_label
+
+The ID reference shows parent context: `AttributeUsage: text → <id> (parent: BoilRequirement)`
+
 ## SysML Syntax Quick Reference
 
 ```

@@ -196,7 +196,7 @@ class CommandExecutor:
         if response.action == ActionType.IMPORT:
             return self._execute_import(response, ec_id, project_id, model)
         elif response.action == ActionType.UPDATE:
-            return self._execute_update(response, ec_id)
+            return self._execute_update(response, ec_id, model)
         elif response.action == ActionType.CLARIFY:
             return {"success": True, "action": "CLARIFY", "message": response.chat_feedback}
         else:
@@ -254,13 +254,32 @@ class CommandExecutor:
             err = msgs[0].get('body', 'Unknown error') if msgs else 'Unknown error'
             return {"success": False, "action": "IMPORT", "error": err}
 
-    def _execute_update(self, response: StructuredResponse, ec_id: str) -> dict:
+    def _execute_update(self, response: StructuredResponse, ec_id: str, model: dict = None) -> dict:
         """Execute UPDATE action — run each command sequentially."""
         results = []
         all_success = True
 
+        # Build a name→id lookup from the model for smart resolution
+        named_by_id = {}
+        if model and model.get('named_elements'):
+            for name, eid, etype, parent in model['named_elements']:
+                named_by_id[eid] = (name, etype, parent)
+
         for i, cmd in enumerate(response.commands):
             try:
+                # SMART RESOLUTION: if updating new_body on a RequirementUsage,
+                # auto-redirect to its text child attribute
+                if cmd.type == "UPDATE_ELEMENT" and cmd.new_body and cmd.element_id in named_by_id:
+                    target_name, target_type, target_parent = named_by_id[cmd.element_id]
+                    if target_type == "RequirementUsage":
+                        # Find the text child of this requirement
+                        for name, eid, etype, parent in model['named_elements']:
+                            if etype == "AttributeUsage" and name == "text" and parent == target_name:
+                                logger.info(f"Auto-resolving RequirementUsage '{target_name}' → text child {eid}")
+                                cmd.element_id = eid
+                                cmd.new_label = ""
+                                break
+
                 if cmd.type == "ADD_CHILD":
                     r = self._exec_add_child(cmd, ec_id)
                 elif cmd.type == "UPDATE_ELEMENT":
