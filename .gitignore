@@ -91,3 +91,4 @@ coverage/
 
 # ANTLR
 .antlr
+__pycache__/
