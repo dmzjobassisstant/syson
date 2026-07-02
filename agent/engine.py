@@ -146,10 +146,28 @@ class AgentEngine:
 
         # Current model state (from cached data)
         if model and model_text:
-            if len(model_text) > 4000:
-                model_text = model_text[:4000] + "\n... (truncated, showing first 4000 chars)"
+            if len(model_text) > 16000:
+                model_text = model_text[:16000] + "\n... (truncated, showing first 16000 chars)"
             parts.append(f"\n\n## Current Model State ({model['total_count']} elements)\n")
             parts.append(f"```\n{model_text}\n```")
+            # Add a flat reference of all named elements for ID lookups during UPDATE
+            if model.get('named_elements'):
+                id_refs = []
+                # Group children under parents for clearer context
+                shown_ids = set()
+                for name, eid, etype, parent_name in sorted(model['named_elements'], key=lambda x: (x[3] or '\uffff', x[0].lower())):
+                    if eid in shown_ids:
+                        continue
+                    shown_ids.add(eid)
+                    if parent_name:
+                        id_refs.append(f"  {etype}: {name} → {eid}  (parent: {parent_name})")
+                    else:
+                        id_refs.append(f"  {etype}: {name} → {eid}")
+                parts.append(f"\n## Element ID Reference ({len(id_refs)} named elements)\n")
+                parts.append("Use these IDs for <element_id>. For requirements, use the RequirementUsage ID (NOT child attributes).\n")
+                if len(id_refs) > 150:
+                    id_refs = id_refs[:150]
+                parts.append("```\n" + "\n".join(id_refs) + "\n```")
             if ec_id:
                 parts.append(f"\nEditing Context ID: {ec_id}")
         elif ec_id:

@@ -102,6 +102,22 @@ class SysOnApiClient:
             'ReferenceUsage'
         }
 
+        # Build named elements list for ID reference lookups
+        named_elements = []
+        for e in elements:
+            etype = e['@type']
+            if etype not in HIDDEN_TYPES:
+                name = e.get('name') or e.get('declaredName') or ''
+                if name:
+                    # Resolve parent name
+                    owner = e.get('owner') or {}
+                    owner_id = owner.get('@id') if isinstance(owner, dict) else None
+                    parent_name = ''
+                    if owner_id and owner_id in by_id:
+                        p = by_id[owner_id]
+                        parent_name = p.get('name') or p.get('declaredName') or ''
+                    named_elements.append((name, e['@id'], etype, parent_name))
+
         def build_tree(node, depth=0, max_depth=5):
             if depth > max_depth:
                 return None
@@ -144,7 +160,8 @@ class SysOnApiClient:
         return {
             'elements': tree,
             'all_ids': list(all_ids),
-            'total_count': len(elements)
+            'total_count': len(elements),
+            'named_elements': named_elements,
         }
 
     def model_tree_to_text(self, tree: list[dict], indent: int = 0) -> str:
