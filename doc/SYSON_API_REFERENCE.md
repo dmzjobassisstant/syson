@@ -251,7 +251,7 @@ mutation {
 ### Mutations — SysMLv2 Code Import
 
 #### insertTextualSysMLv2
-Imports SysMLv2 textual code into an existing element. Uses the SysMLv2 parser to convert text to EMF elements.
+Imports SysMLv2 textual code into an existing element. Uses a two-phase parser pipeline to convert text to EMF elements.
 
 ```graphql
 mutation {
@@ -268,17 +268,26 @@ mutation {
 }
 ```
 
+**Parser Architecture (two-phase):**
+
+1. **Phase 1 — Parse to JSON AST:** The `SysmlToAst` class invokes an external Node.js tool (`syside-cli.js` from the sysml-2ls project) which parses the full SysMLv2 textual syntax into a JSON AST. This tool implements the complete OMG SysMLv2 grammar.
+2. **Phase 2 — AST to EMF:** The `AstTreeParser` + `EClassifierTranslator` + `EAttributeTranslator` + `EReferenceComputer` convert the JSON AST into SysML EMF model objects (`SysmlFactory.eINSTANCE.create(...)`).
+
+The `DirectEdit.g4` ANTLR grammar in the codebase is only for direct editing of element labels in diagrams — it is a subset, not the full model parser.
+
 **Capabilities:**
 - Parses full SysMLv2 textual syntax (packages, definitions, usages, relationships)
 - Can insert multi-line, multi-element text
 - Creates EMF elements as children of the specified parent element
 - Supports all SysMLv2 constructs (part, port, flow, connection, requirement, etc.)
+- Returns transformation messages (warnings, errors) in the payload
 
 **Limitations:**
-- Must target an existing parent element (typically a Package or document root)
+- Requires the `syside-cli.js` Node.js tool to be available in the Docker container
+- Must target an existing parent element (typically a Package or document root Namespace)
 - Cannot create root-level packages without a parent container
-- Parse errors are returned as messages in the payload
 - Proxy resolution errors occur when referencing undefined types (e.g., `part p : FakeType;`)
+- Parser version mismatch: the ANTLR runtime version in SysON may differ from the tool that generated the parser (non-fatal warning)
 
 **This mutation CAN import a full model from SysMLv2 code** — pass the complete model text as `textualContent` targeting the root Namespace or a Package.
 

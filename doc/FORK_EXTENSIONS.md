@@ -3,7 +3,11 @@
 Detailed comparison of what this fork adds compared to upstream SysON (eclipse-syson/syson) and Sirius Web (eclipse-sirius/sirius-web). Organized for conflict management during upstream rebase/merge.
 
 **Branch:** `rbac`
-**Upstream commit baseline:** `540ea78c86ab9b3af3acc9413a6e51dd7e795a19`
+**Upstream fork-point commit:** `540ea78c86ab9b3af3acc9413a6e51dd7e795a19`
+**Fork version:** `2025.6.1` (upstream is now at `2026.5.0` — 502 commits ahead)
+**Custom commits on rbac:** 69
+**Files added by fork:** 314
+**Upstream files modified in-place:** 6
 
 ---
 
@@ -135,6 +139,19 @@ All extensions are designed as **additive sidecars** — they run alongside the 
 | `ChatController` | AI chat interface (stub) | Low |
 | `SysmlValidationController` | SysML code validation | Low |
 
+### 8. Database Migrations That Modify Upstream Tables
+
+**Risk level: HIGH** — these are the most dangerous migrations for rebase
+
+| Migration | Action | Risk |
+|-----------|--------|------|
+| V9 | Adds `is_read_only` column to upstream `document` table | **HIGH** — modifies core Sirius table |
+| V10–V11 | Adds columns to `representation_metadata` / `representation_content` | **HIGH** — modifies core Sirius tables |
+| V12 | Creates a global PostgreSQL `CREATE CAST` | **HIGH** — affects entire database |
+| V1–V8, V13–V20 | Creates `syson_*` tables only | Low — additive |
+
+**On rebase:** Review all V9–V12 migrations. If upstream has added the same columns or changed these tables, the migrations will fail. Must reconcile manually.
+
 ---
 
 ## Conflict Resolution Strategy
@@ -180,15 +197,14 @@ The `-o` (offline) flag prevents GitHub Packages authentication failures.
 
 ## Files Modified vs Added (Summary)
 
-### Modified upstream files (conflict-prone):
-1. `backend/application/syson-application/src/main/java/.../auth/SecurityConfig.java`
-2. `backend/application/syson-sysml-import/src/main/resources/schema/syson-import.graphqls`
-3. `backend/application/syson-application/src/main/resources/application.properties` (Flyway/Liquibase settings)
+### Modified upstream files (conflict-prone — all 6):
+1. `backend/application/syson-application/pom.xml` — adds dependencies for auth/VC/persistence modules
+2. `backend/application/syson-application/src/main/resources/application.properties` — Flyway/Liquibase/JWT settings
+3. `backend/application/syson-sysml-import/src/main/resources/schema/syson-import.graphqls` — adds 4 mutation definitions
+4. `frontend/syson/index.html` — adds `<script src="/auth.js">` injection
+5. Two favicon files — cosmetic
 
 ### Added files (conflict-free):
-- ~60+ Java classes in `org.eclipse.syson.auth.*`, `org.eclipse.syson.vc.*`, `org.eclipse.syson.persistence.*`, `org.eclipse.syson.sysml.dto.*`, `org.eclipse.syson.sysml.datafetchers.*`
-- `frontend/syson/public/auth.js`
-- `frontend/syson/public/test-harness.html`
-- `doc/` directory with all documentation
-- Multiple `.graphqls` schema extensions
-- Liquibase migration XMLs (fork-specific changeset IDs)
+- **314 files** across 7 modules: auth (~60 classes), VC (~40 classes), persistence (~15 classes), direct mutations (12 classes), GraphQL compat (7 data fetchers), frontend (auth.js 3,671 lines + test harness), documentation
+- 20 Liquibase migration XMLs (fork-specific changeset IDs)
+- 4 GraphQL schema extension files (`.graphqls`)
