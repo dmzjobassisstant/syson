@@ -62,8 +62,8 @@ public class MutationUpdateElementDataFetcher implements IDataFetcherWithFieldCo
         Object argument = environment.getArgument(INPUT_ARGUMENT);
         var input = this.objectMapper.convertValue(argument, UpdateElementInput.class);
 
-        this.logger.info("updateElement mutation: editingContextId={}, elementId={}, newLabel={}",
-                input.editingContextId(), input.elementId(), input.newLabel());
+        this.logger.info("updateElement mutation: editingContextId={}, elementId={}, newLabel={}, newBody={}, properties={}",
+                input.editingContextId(), input.elementId(), input.newLabel(), input.newBody(), input.properties());
 
         return this.exceptionWrapper.wrapMono(
                 () -> this.editingContextDispatcher.dispatchMutation(input.editingContextId(), input)

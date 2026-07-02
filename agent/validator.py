@@ -30,6 +30,7 @@ class Command:
     new_label: str = ""
     new_short_name: str = ""
     new_body: str = ""
+    new_value: str = ""   # For updating LiteralString values (e.g., requirement text)
     relationship_type: str = ""
     source_element_id: str = ""
     target_element_ids: str = ""
@@ -48,8 +49,8 @@ class Command:
         elif self.type == "UPDATE_ELEMENT":
             if not self.element_id:
                 errors.append("UPDATE_ELEMENT requires element_id")
-            if not any([self.new_label, self.new_short_name, self.new_body]):
-                errors.append("UPDATE_ELEMENT requires at least one of: new_label, new_short_name, new_body")
+            if not any([self.new_label, self.new_short_name, self.new_body, self.new_value]):
+                errors.append("UPDATE_ELEMENT requires at least one of: new_label, new_short_name, new_body, new_value")
         elif self.type == "DELETE_ELEMENT":
             if not self.element_id:
                 errors.append("DELETE_ELEMENT requires element_id")
@@ -240,6 +241,8 @@ class OutputValidator:
                     cmd.new_short_name = text
                 elif tag == "new_body":
                     cmd.new_body = text
+                elif tag == "new_value":
+                    cmd.new_value = text
                 elif tag == "relationship_type":
                     cmd.relationship_type = text
                     if cmd.relationship_type not in VALID_RELATIONSHIP_TYPES:

@@ -268,11 +268,10 @@ class CommandExecutor:
         for i, cmd in enumerate(response.commands):
             try:
                 # SMART RESOLUTION: if updating new_body on a RequirementUsage,
-                # auto-redirect to its text child attribute
+                # auto-redirect to its text child attribute (handler detects AttributeUsage)
                 if cmd.type == "UPDATE_ELEMENT" and cmd.new_body and cmd.element_id in named_by_id:
                     target_name, target_type, target_parent = named_by_id[cmd.element_id]
                     if target_type == "RequirementUsage":
-                        # Find the text child of this requirement
                         for name, eid, etype, parent in model['named_elements']:
                             if etype == "AttributeUsage" and name == "text" and parent == target_name:
                                 logger.info(f"Auto-resolving RequirementUsage '{target_name}' → text child {eid}")
@@ -332,6 +331,8 @@ class CommandExecutor:
             fields.append(f'newShortName:{json.dumps(cmd.new_short_name)}')
         if cmd.new_body:
             fields.append(f'newBody:{json.dumps(cmd.new_body)}')
+        if cmd.new_value:
+            fields.append(f'properties:[{{key:"value",value:{json.dumps(cmd.new_value)}}}]')
         
         mut_id = str(uuid.uuid4())
         query = f'''mutation {{

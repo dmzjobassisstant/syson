@@ -147,12 +147,30 @@ public class UpdateElementEventHandler implements IEditingContextEventHandler {
     }
 
     /**
-     * Updates or creates the body/description comment on an element.
-     * In SysML, the "body" of an element is stored in a Documentation Comment
-     * owned by the element via a OwningMembership.
+     * Updates or creates the body/description of an element.
+     * For AttributeUsage elements, updates the LiteralString value.
+     * For other elements, updates the Documentation Comment.
      */
     private void updateBody(Element element, String body) {
-        // Find existing documentation comment
+        // For AttributeUsage: update the LiteralString value directly
+        if (element instanceof org.eclipse.syson.sysml.AttributeUsage) {
+            var existingLit = element.getOwnedElement().stream()
+                    .filter(org.eclipse.syson.sysml.LiteralString.class::isInstance)
+                    .map(org.eclipse.syson.sysml.LiteralString.class::cast)
+                    .findFirst();
+            if (existingLit.isPresent()) {
+                existingLit.get().setValue(body);
+            } else {
+                var lit = org.eclipse.syson.sysml.SysmlFactory.eINSTANCE.createLiteralString();
+                lit.setValue(body);
+                var fv = org.eclipse.syson.sysml.SysmlFactory.eINSTANCE.createFeatureValue();
+                fv.getOwnedRelatedElement().add(lit);
+                element.getOwnedRelationship().add(fv);
+            }
+            return;
+        }
+
+        // For other elements: update/create a Documentation Comment
         var existingDoc = element.getOwnedElement().stream()
                 .filter(Comment.class::isInstance)
                 .map(Comment.class::cast)
@@ -163,12 +181,8 @@ public class UpdateElementEventHandler implements IEditingContextEventHandler {
         if (existingDoc.isPresent()) {
             existingDoc.get().setBody(body);
         } else {
-            // Create a new documentation comment
-            // We use the EMF factory to create the Comment
             var comment = org.eclipse.syson.sysml.SysmlFactory.eINSTANCE.createComment();
             comment.setBody(body);
-
-            // Create OwningMembership to attach the comment to the element
             var membership = org.eclipse.syson.sysml.SysmlFactory.eINSTANCE.createOwningMembership();
             membership.getOwnedRelatedElement().add(comment);
             element.getOwnedRelationship().add(membership);
@@ -179,6 +193,7 @@ public class UpdateElementEventHandler implements IEditingContextEventHandler {
      * Applies arbitrary key-value properties to an element.
      * Currently supports setting declaredName and declaredShortName via the
      * properties map (alternative to newLabel/newShortName fields).
+     * Also supports "value" to update the LiteralString value of AttributeUsages.
      */
     private void applyProperties(Element element, List<UpdateElementInput.KeyValueInput> properties) {
         for (var kv : properties) {
@@ -191,6 +206,24 @@ public class UpdateElementEventHandler implements IEditingContextEventHandler {
                 } else {
                     element.setDeclaredShortName(kv.value());
                 }
+            }
+            if ("value".equals(kv.key())) {
+                // Update the LiteralString child's value (e.g., AttributeUsage text)
+                element.getOwnedElement().stream()
+                    .filter(org.eclipse.syson.sysml.LiteralString.class::isInstance)
+                    .map(org.eclipse.syson.sysml.LiteralString.class::cast)
+                    .findFirst()
+                    .ifPresentOrElse(
+                        lit -> lit.setValue(kv.value()),
+                        () -> {
+                            // No LiteralString exists yet — create one
+                            var lit = org.eclipse.syson.sysml.SysmlFactory.eINSTANCE.createLiteralString();
+                            lit.setValue(kv.value());
+                            var membership = org.eclipse.syson.sysml.SysmlFactory.eINSTANCE.createFeatureValue();
+                            membership.getOwnedRelatedElement().add(lit);
+                            element.getOwnedRelationship().add(membership);
+                        }
+                    );
             }
         }
     }
