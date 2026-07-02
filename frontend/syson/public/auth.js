@@ -493,14 +493,11 @@
         '<button id="syson-bd-diff-bp" class="bd-btn-diff">Diff vs Branch Point</button>' +
         '<button id="syson-bd-diff-parent" class="bd-btn-diff-main">Diff vs Parent</button>' +
         '</div></div></div>' +
-        '<button id="syson-chat-btn" title="Open LLM Chat" style="border:1px solid #3b82f6;border-radius:4px;background:#261e58;color:#e2e8f0;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Roboto,\'Helvetica Neue\',Arial,sans-serif;line-height:1;white-space:nowrap;">Chat</button>' +
-        '<button id="syson-test-btn" title="Sirius Web Protocol Test Harness" style="border:1px solid #10b981;border-radius:4px;background:#065f46;color:#d1fae5;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Roboto,\'Helvetica Neue\',Arial,sans-serif;line-height:1;white-space:nowrap;">🧪 Test</button>';
+        '<button id="syson-chat-btn" title="Open LLM Chat" style="border:1px solid #3b82f6;border-radius:4px;background:#261e58;color:#e2e8f0;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Roboto,\'Helvetica Neue\',Arial,sans-serif;line-height:1;white-space:nowrap;">Chat</button>';
       bar.style.display = 'flex';
       document.getElementById('syson-save-btn-ub').addEventListener('click', triggerSave);
       var chatBtn = document.getElementById('syson-chat-btn');
       if (chatBtn) chatBtn.addEventListener('click', openChatModal);
-      var testBtn = document.getElementById('syson-test-btn');
-      if (testBtn) testBtn.addEventListener('click', openTestHarness);
       var menuBtn = document.getElementById('syson-menu-trigger');
       var menuWrapper = document.getElementById('syson-menu-wrapper');
       var menuDD = document.getElementById('syson-menu-dd');
@@ -3153,58 +3150,65 @@
     projectId: null
   };
 
-  function chatProcess(projectId, prompt, branchId, clientConfig) {
-    clientConfig = clientConfig || {};
-    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/process', {
+  // Agent service — proxied through nginx at /api/agent/ to avoid mixed-content blocking
+  var AGENT_URL = '';  // same-origin — nginx proxies /api/agent/ to port 5000
+
+  function agentProcess(projectId, prompt, conversationId) {
+    return _origFetch(AGENT_URL + '/api/agent/process', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
       body: JSON.stringify({
+        projectId: projectId,
         prompt: prompt,
-        branchId: branchId || null,
-        conversationId: _chatState.activeConversationId || null,
-        apiEndpoint: clientConfig.apiEndpoint || '',
-        apiKey: clientConfig.apiKey || '',
-        model: clientConfig.model || ''
+        conversationId: conversationId || null,
+        sysonToken: state.token
       })
     }).then(function(r) { return r.json(); });
   }
 
-  function chatGenerate(projectId, prompt, loadAsLibrary) {
-    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
-      body: JSON.stringify({ prompt: prompt, loadAsLibrary: loadAsLibrary || false })
-    }).then(function(r) { return r.json(); });
-  }
-
-  function chatModify(projectId, prompt, branchId) {
-    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/modify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
-      body: JSON.stringify({ prompt: prompt, branchId: branchId || null })
-    }).then(function(r) { return r.json(); });
-  }
-
-  function chatExecute(projectId, changes, branchId) {
-    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
-      body: JSON.stringify({ changes: changes, branchId: branchId || null })
-    }).then(function(r) { return r.json(); });
-  }
-
-  function chatConversations(projectId) {
-    return _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/conversations', {
+  function agentConversations(projectId) {
+    return _origFetch(AGENT_URL + '/api/agent/conversations?projectId=' + encodeURIComponent(projectId), {
       headers: { 'Authorization': 'Bearer ' + state.token }
     }).then(function(r) { return r.json(); });
   }
 
-  function validateSysml(source, fileId) {
-    return _origFetch(API_BASE + '/api/v1/sysml/validate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
-      body: JSON.stringify({ source: source, fileId: fileId || 'model.sysml' })
+  function agentGetConversation(projectId, convId) {
+    return _origFetch(AGENT_URL + '/api/agent/conversation/' + convId + '?projectId=' + encodeURIComponent(projectId), {
+      headers: { 'Accept': 'application/json' }
     }).then(function(r) { return r.json(); });
+  }
+
+  function agentDeleteConversation(convId) {
+    return _origFetch(AGENT_URL + '/api/agent/conversation/' + convId, {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' }
+    }).then(function(r) { return r.json(); });
+  }
+
+  function agentGetSettings() {
+    return _origFetch(AGENT_URL + '/api/agent/settings').then(function(r) { return r.json(); });
+  }
+
+  function agentSaveSettings(endpoint, apiKey, model, sysonUrl) {
+    return _origFetch(AGENT_URL + '/api/agent/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        llm_endpoint: endpoint || undefined,
+        llm_api_key: apiKey || undefined,
+        llm_model: model || undefined,
+        syson_url: sysonUrl || undefined
+      })
+    }).then(function(r) { return r.json(); });
+  }
+
+  // Legacy stubs (kept for backward compat, redirect to agent service)
+  function chatProcess(projectId, prompt, branchId, clientConfig) {
+    return agentProcess(projectId, prompt, _chatState.activeConversationId);
+  }
+
+  function chatConversations(projectId) {
+    return agentConversations(projectId);
   }
 
   function openChatModal() {
@@ -3263,16 +3267,15 @@
 
     var inputHTML =
       '<div style="border-top:1px solid #e0e0e0;padding:12px 16px;background:#fafafa;">' +
-        '<div style="display:grid;grid-template-columns:1fr 170px 150px;gap:8px;margin-bottom:8px;align-items:center;">' +
-          '<input id="syson-chat-api-endpoint" placeholder="LLM API endpoint (OpenAI-compatible)" style="padding:7px 9px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.75rem;outline:none;" />' +
-          '<input id="syson-chat-model" placeholder="Model" style="padding:7px 9px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.75rem;outline:none;" />' +
-          '<input id="syson-chat-api-key" placeholder="API key" type="password" style="padding:7px 9px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.75rem;outline:none;" />' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+          '<span id="syson-agent-status" style="font-size:0.72rem;color:' + CHAT_STYLE.lightText + ';">Checking agent\u2026</span>' +
+          '<button id="syson-agent-settings-btn" style="margin-left:auto;padding:3px 10px;font-size:0.7rem;font-weight:600;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';background:#fff;color:' + CHAT_STYLE.text + ';cursor:pointer;">Settings</button>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
-          '<textarea id="syson-chat-input" rows="2" placeholder="Describe the model or change. The LLM decides: new .sysml model, reusable library, or Sirius command sequence…" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.85rem;resize:none;outline:none;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();document.getElementById(\'syson-chat-send\').click();}"></textarea>' +
+          '<textarea id="syson-chat-input" rows="2" placeholder="Describe what you want to build or change\u2026" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.85rem;resize:none;outline:none;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();document.getElementById(\'syson-chat-send\').click();}"></textarea>' +
           '<button id="syson-chat-send" style="padding:8px 18px;font-size:0.8rem;font-weight:700;border:none;border-radius:' + CHAT_STYLE.radius + ';background:' + CHAT_STYLE.primary + ';color:#fff;cursor:pointer;">Send</button>' +
         '</div>' +
-        '<div style="margin-top:7px;font-size:0.72rem;color:' + CHAT_STYLE.lightText + ';">Action is inferred from the system prompt contract: .sysml model, reusable library, or Sirius Web commands. Feedback from &lt;chat_feedback&gt; is displayed here.</div>' +
+        '<div style="margin-top:7px;font-size:0.72rem;color:' + CHAT_STYLE.lightText + ';">The agent decides: generate new .sysml code (import) or issue incremental API commands (update). All changes preserve model history.</div>' +
       '</div>';
 
     chatArea.innerHTML = headerHTML + messagesHTML + inputHTML;
@@ -3286,11 +3289,116 @@
     backdrop.addEventListener('click', closeChatModal);
     document.getElementById('syson-chat-new-btn').addEventListener('click', newChatConversation);
     hydrateChatClientConfig();
+    checkAgentStatus();
 
     document.getElementById('syson-chat-send').addEventListener('click', sendChatMessage);
     document.getElementById('syson-chat-input').focus();
+    var settingsBtn = document.getElementById('syson-agent-settings-btn');
+    if (settingsBtn) settingsBtn.addEventListener('click', openSettingsModal);
 
     loadChatConversations(projectId);
+  }
+
+  function checkAgentStatus() {
+    var statusEl = document.getElementById('syson-agent-status');
+    if (!statusEl) return;
+    agentGetSettings().then(function(cfg) {
+      if (cfg.api_key_set && cfg.llm_endpoint) {
+        statusEl.innerHTML = '<span style="color:#4ade80;">\u2713</span> Agent ready (' + escapeHtml(cfg.llm_model || 'default model') + ')';
+        statusEl.style.color = '#4ade80';
+      } else {
+        statusEl.innerHTML = '<span style="color:#f87171;">\u26a0</span> Not configured \u2014 click Settings';
+        statusEl.style.color = '#f87171';
+      }
+    }).catch(function() {
+      statusEl.innerHTML = '<span style="color:#f87171;">\u2717</span> Agent service unreachable (port 5000)';
+      statusEl.style.color = '#f87171';
+    });
+  }
+
+  function openSettingsModal() {
+    var existing = document.getElementById('syson-settings-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'syson-settings-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:center;justify-content:center;font-family:' + CHAT_STYLE.font + ';';
+
+    var backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.55);';
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'position:relative;background:#fff;border-radius:8px;width:min(500px,90vw);padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.3);z-index:1;';
+
+    panel.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+        '<span style="font-size:1.1rem;font-weight:700;color:' + CHAT_STYLE.text + ';">Agent Settings</span>' +
+        '<button id="syson-settings-close" style="background:none;border:none;font-size:1.4rem;color:' + CHAT_STYLE.lightText + ';cursor:pointer;line-height:1;">\u00d7</button>' +
+      '</div>' +
+      '<div id="syson-settings-loading" style="text-align:center;padding:20px;color:' + CHAT_STYLE.lightText + ';">Loading\u2026</div>' +
+      '<div id="syson-settings-form" style="display:none;">' +
+        '<div style="margin-bottom:14px;">' +
+          '<label style="display:block;font-size:0.8rem;font-weight:600;color:' + CHAT_STYLE.text + ';margin-bottom:4px;">LLM API Endpoint</label>' +
+          '<input id="syson-settings-endpoint" placeholder="https://api.openai.com/v1/chat/completions" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.82rem;box-sizing:border-box;" />' +
+          '<div style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';margin-top:3px;">Any OpenAI-compatible endpoint.</div>' +
+        '</div>' +
+        '<div style="margin-bottom:14px;">' +
+          '<label style="display:block;font-size:0.8rem;font-weight:600;color:' + CHAT_STYLE.text + ';margin-bottom:4px;">Model Name</label>' +
+          '<input id="syson-settings-model" placeholder="gpt-4o / claude-3.5-sonnet / glm-4-flash" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.82rem;box-sizing:border-box;" />' +
+        '</div>' +
+        '<div style="margin-bottom:14px;">' +
+          '<label style="display:block;font-size:0.8rem;font-weight:600;color:' + CHAT_STYLE.text + ';margin-bottom:4px;">API Key</label>' +
+          '<input id="syson-settings-apikey" type="password" placeholder="Enter new key to replace (stored securely, never shown)" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.82rem;box-sizing:border-box;" />' +
+          '<div id="syson-settings-key-status" style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';margin-top:3px;"></div>' +
+        '</div>' +
+        '<div style="margin-bottom:14px;">' +
+          '<label style="display:block;font-size:0.8rem;font-weight:600;color:' + CHAT_STYLE.text + ';margin-bottom:4px;">SysON Backend URL</label>' +
+          '<input id="syson-settings-sysonurl" placeholder="http://localhost:8080" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.82rem;box-sizing:border-box;" />' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;">' +
+          '<button id="syson-settings-cancel" style="padding:8px 16px;font-size:0.82rem;font-weight:600;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';background:transparent;color:' + CHAT_STYLE.lightText + ';cursor:pointer;">Cancel</button>' +
+          '<button id="syson-settings-save" style="padding:8px 18px;font-size:0.82rem;font-weight:700;border:none;border-radius:' + CHAT_STYLE.radius + ';background:' + CHAT_STYLE.primary + ';color:#fff;cursor:pointer;">Save</button>' +
+        '</div>' +
+      '</div>';
+
+    overlay.appendChild(backdrop);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    document.getElementById('syson-settings-close').addEventListener('click', function() { overlay.remove(); });
+    backdrop.addEventListener('click', function() { overlay.remove(); });
+    document.getElementById('syson-settings-cancel').addEventListener('click', function() { overlay.remove(); });
+
+    // Load current settings
+    agentGetSettings().then(function(cfg) {
+      document.getElementById('syson-settings-loading').style.display = 'none';
+      var form = document.getElementById('syson-settings-form');
+      form.style.display = 'block';
+      document.getElementById('syson-settings-endpoint').value = cfg.llm_endpoint || '';
+      document.getElementById('syson-settings-model').value = cfg.llm_model || '';
+      document.getElementById('syson-settings-sysonurl').value = cfg.syson_url || '';
+      var keyStatus = document.getElementById('syson-settings-key-status');
+      keyStatus.textContent = cfg.api_key_set ? 'Key is set (enter new key to replace)' : 'No key set';
+      keyStatus.style.color = cfg.api_key_set ? '#4ade80' : '#f87171';
+    });
+
+    document.getElementById('syson-settings-save').addEventListener('click', function() {
+      var endpoint = document.getElementById('syson-settings-endpoint').value.trim();
+      var model = document.getElementById('syson-settings-model').value.trim();
+      var apiKey = document.getElementById('syson-settings-apikey').value.trim();
+      var sysonUrl = document.getElementById('syson-settings-sysonurl').value.trim();
+      var saveBtn = document.getElementById('syson-settings-save');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving\u2026';
+      agentSaveSettings(endpoint, apiKey, model, sysonUrl).then(function(r) {
+        overlay.remove();
+        checkAgentStatus();
+      }).catch(function(err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+        alert('Failed to save: ' + err.message);
+      });
+    });
   }
 
   function closeChatModal() {
@@ -3326,9 +3434,12 @@
       var bg = isActive ? 'rgba(38,30,88,0.08)' : 'transparent';
       var fw = isActive ? '700' : '400';
       var preview = (conv.lastMessage || '').substring(0, 50);
-      return '<div class="syson-chat-conv-item" data-conv-id="' + escapeHtml(conv.id) + '" style="padding:10px 16px;cursor:pointer;background:' + bg + ';border-bottom:1px solid #eee;font-weight:' + fw + ';">' +
-        '<div style="font-size:0.82rem;color:' + CHAT_STYLE.text + ';">' + escapeHtml(conv.title || 'Chat ' + (conv.id || '').substring(0, 6)) + '</div>' +
-        '<div style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(preview) + '</div>' +
+      return '<div class="syson-chat-conv-item" data-conv-id="' + escapeHtml(conv.id) + '" style="padding:10px 16px;cursor:pointer;background:' + bg + ';border-bottom:1px solid #eee;font-weight:' + fw + ';display:flex;align-items:center;gap:8px;">' +
+        '<div style="flex:1;min-width:0;" onclick="event.stopPropagation();">' +
+          '<div style="font-size:0.82rem;color:' + CHAT_STYLE.text + ';">' + escapeHtml(conv.title || 'Chat ' + (conv.id || '').substring(0, 6)) + '</div>' +
+          '<div style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(preview) + '</div>' +
+        '</div>' +
+        '<button class="syson-chat-del-btn" data-conv-id="' + escapeHtml(conv.id) + '" style="flex-shrink:0;background:none;border:none;color:#cbd5e1;font-size:1rem;cursor:pointer;line-height:1;padding:2px 4px;border-radius:3px;" title="Delete conversation" onclick="event.stopPropagation();">\u00d7</button>' +
         '</div>';
     }).join('');
     var items = list.querySelectorAll('.syson-chat-conv-item');
@@ -3338,6 +3449,28 @@
         loadConversation(_chatState.projectId, convId);
       });
     }
+    // Delete button handlers
+    var delBtns = list.querySelectorAll('.syson-chat-del-btn');
+    for (var j = 0; j < delBtns.length; j++) {
+      delBtns[j].addEventListener('click', function(e) {
+        var convId = this.getAttribute('data-conv-id');
+        if (confirm('Delete this conversation?')) {
+          deleteConversation(convId);
+        }
+      });
+    }
+  }
+
+  function deleteConversation(convId) {
+    var projectId = _chatState.projectId;
+    agentDeleteConversation(convId).then(function() {
+      if (_chatState.activeConversationId === convId) {
+        newChatConversation();
+      }
+      loadChatConversations(projectId);
+    }).catch(function(err) {
+      alert('Failed to delete: ' + escapeHtml(err.message));
+    });
   }
 
   function newChatConversation() {
@@ -3365,9 +3498,7 @@
     }
     renderConversationList(_chatState.conversations);
 
-    _origFetch(API_BASE + '/api/v1/projects/' + projectId + '/chat/conversations/' + convId, {
-      headers: { 'Authorization': 'Bearer ' + state.token }
-    }).then(function(r) { return r.json(); })
+    agentGetConversation(projectId, convId)
       .then(function(data) {
         _chatState.messages = data.messages || [];
         renderChatMessages(_chatState.messages);
@@ -3401,6 +3532,14 @@
     var maxW = '75%';
     var content = escapeHtml(msg.content || '').replace(/\n/g, '<br>');
 
+    var thinkingHTML = '';
+    if (msg.thinking) {
+      thinkingHTML = '<div style="margin-top:8px;padding:6px 8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:3px;">' +
+        '<div style="font-size:0.7rem;font-weight:700;color:#3b82f6;margin-bottom:3px;">Agent Thinking:</div>' +
+        '<div style="font-size:0.7rem;color:#666;">' + escapeHtml(msg.thinking).replace(/\n/g, '<br>') + '</div>' +
+      '</div>';
+    }
+
     var validationHTML = '';
     if (msg.validationErrors && msg.validationErrors.length) {
       validationHTML = '<div style="margin-top:8px;padding:6px 8px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:3px;">' +
@@ -3424,9 +3563,28 @@
         '</div>';
     }
 
+    var debugHTML = '';
+    if (msg.debug) {
+      var d = msg.debug;
+      var debugId = 'debug-' + Math.random().toString(36).substring(2, 8);
+      debugHTML =
+        '<div style="margin-top:8px;">' +
+          '<button onclick="(function(){ var el=document.getElementById(\'' + debugId + '\'); el.style.display=el.style.display===\'none\'?\'block\':\'none\'; })()" style="padding:3px 8px;font-size:0.65rem;font-weight:700;border:1px solid #94a3b8;border-radius:3px;background:#f8fafc;color:#64748b;cursor:pointer;">' +
+            '\u2699 Debug: ' + (d.retries || 0) + ' retries | Action: ' + escapeHtml(d.parsed_action || '?') + ' | Truncated: ' + (d.truncated ? 'Yes' : 'No') +
+          '</button>' +
+          '<div id="' + debugId + '" style="display:none;margin-top:6px;padding:8px;background:#1e293b;border-radius:4px;font-size:0.65rem;max-height:300px;overflow-y:auto;color:#e2e8f0;line-height:1.3;">' +
+            '<div><b>Raw LLM Response</b> (' + (d.raw_llm_response ? d.raw_llm_response.length + ' chars' : 'none') + '):</div>' +
+            '<pre style="margin:4px 0;white-space:pre-wrap;word-break:break-word;color:#94a3b8;">' + escapeHtml((d.raw_llm_response || '').substring(0, 3000)) + '</pre>' +
+            (d.validation_errors && d.validation_errors.length ? '<div style="color:#f87171;"><b>Validation Errors:</b> ' + escapeHtml(JSON.stringify(d.validation_errors)) + '</div>' : '') +
+            '<div><b>Execution:</b></div>' +
+            '<pre style="margin:4px 0;white-space:pre-wrap;word-break:break-word;color:#a5b4fc;">' + escapeHtml(JSON.stringify(d.execution_raw || {}, null, 1)) + '</pre>' +
+          '</div>' +
+        '</div>';
+    }
+
     return '<div style="display:flex;justify-content:' + align + ';">' +
       '<div style="max-width:' + maxW + ';padding:10px 14px;border-radius:12px;background:' + bg + ';color:' + color + ';font-size:0.85rem;line-height:1.45;word-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,0.08);">' +
-        content + validationHTML + changesHTML +
+        content + thinkingHTML + validationHTML + changesHTML + debugHTML +
         (msg.createdAt ? '<div style="font-size:0.65rem;opacity:0.6;margin-top:4px;text-align:' + (isUser ? 'right' : 'left') + ';">' + escapeHtml(msg.createdAt) + '</div>' : '') +
       '</div>' +
     '</div>';
@@ -3441,33 +3599,9 @@
     renderChatMessages(_chatState.messages);
   }
 
-  function readChatClientConfig() {
-    var endpoint = document.getElementById('syson-chat-api-endpoint');
-    var key = document.getElementById('syson-chat-api-key');
-    var model = document.getElementById('syson-chat-model');
-    var config = {
-      apiEndpoint: endpoint ? endpoint.value.trim() : '',
-      apiKey: key ? key.value.trim() : '',
-      model: model ? model.value.trim() : ''
-    };
-    try {
-      localStorage.setItem('syson-chat-api-endpoint', config.apiEndpoint);
-      localStorage.setItem('syson-chat-model', config.model);
-      if (config.apiKey) localStorage.setItem('syson-chat-api-key', config.apiKey);
-    } catch (e) {}
-    return config;
-  }
-
-  function hydrateChatClientConfig() {
-    try {
-      var endpoint = document.getElementById('syson-chat-api-endpoint');
-      var key = document.getElementById('syson-chat-api-key');
-      var model = document.getElementById('syson-chat-model');
-      if (endpoint) endpoint.value = localStorage.getItem('syson-chat-api-endpoint') || '';
-      if (key) key.value = localStorage.getItem('syson-chat-api-key') || '';
-      if (model) model.value = localStorage.getItem('syson-chat-model') || '';
-    } catch (e) {}
-  }
+  // Legacy config functions — now stubs (settings managed server-side via Settings modal)
+  function readChatClientConfig() { return {}; }
+  function hydrateChatClientConfig() {}
 
   function sendChatMessage() {
     var input = document.getElementById('syson-chat-input');
@@ -3475,7 +3609,6 @@
     var prompt = input.value.trim();
     if (!prompt) return;
 
-    var clientConfig = readChatClientConfig();
     var projectId = _chatState.projectId;
 
     input.value = '';
@@ -3494,22 +3627,26 @@
       }
     }
 
-    var branchId = localStorage.getItem('syson-vc-branch-' + projectId) || '';
-
-    chatProcess(projectId, prompt, branchId, clientConfig).then(function(result) {
+    agentProcess(projectId, prompt, _chatState.activeConversationId).then(function(result) {
       finishSend();
       if (result.conversationId) _chatState.activeConversationId = result.conversationId;
-      var content = result.message || result.content || result.text || JSON.stringify(result);
+
+      var content = result.response || result.chat_feedback || result.error || JSON.stringify(result);
       var extra = {};
-      if (result.validationResult && result.validationResult.errors && result.validationResult.errors.length) {
-        extra.validationErrors = result.validationResult.errors;
+
+      if (result.thinking) {
+        content = result.response;
+        extra.thinking = result.thinking;
       }
-      if (result.changes && result.changes.length) {
-        extra.proposedChanges = result.changes;
+      if (result.action && result.action !== 'CLARIFY') {
+        var icon = result.action === 'IMPORT' ? '\ud83d\udce5' : result.action === 'UPDATE' ? '\u270f\ufe0f' : result.action === 'ERROR' ? '\u274c' : '';
+        if (icon) content = icon + ' ' + content;
       }
-      if (result.sysmlText) {
-        content += '\n\n.sysml source returned (' + result.sysmlText.length + ' chars).';
+      // Attach debug info if available
+      if (result.debug) {
+        extra.debug = result.debug;
       }
+
       addChatMessage('assistant', content, extra);
       loadChatConversations(projectId);
     }).catch(function(err) {
