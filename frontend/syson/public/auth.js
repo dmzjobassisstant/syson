@@ -2316,7 +2316,7 @@
   function injectLockContextMenu() {
     // Remove existing lock menu if any
     document.addEventListener('contextmenu', function(e) {
-      var target = e.target.closest('[class*="tree-item"], [class*="TreeItem"], [class*="treeNode"], [role="treeitem"]');
+      var target = e.target.closest('[class*="tree-item"], [class*="TreeItem"], [class*="treeItem"], [class*="treeNode"], [role="treeitem"]');
       if (!target) return;
 
       var projectId = getProjectIdFromUrl();
@@ -3152,6 +3152,50 @@
 
   // Agent service — proxied through nginx at /api/agent/ to avoid mixed-content blocking
   var AGENT_URL = '';  // same-origin — nginx proxies /api/agent/ to port 5000
+  var HERMES_URL = ''; // same-origin — nginx proxies /api/hermes/ to port 5000 (which proxies to Hermes:8642)
+
+  // ═══ Hermes chat functions (primary) ═══
+
+  function hermesCreateSession(title) {
+    return _origFetch(HERMES_URL + '/api/hermes/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ title: title || 'SysON Chat' })
+    }).then(function(r) { return r.json(); });
+  }
+
+  function hermesChat(sessionId, message) {
+    return _origFetch(HERMES_URL + '/api/hermes/sessions/' + sessionId + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ message: message })
+    }).then(function(r) { return r.json(); });
+  }
+
+  function hermesListSessions() {
+    return _origFetch(HERMES_URL + '/api/hermes/sessions', {
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) { return r.json(); });
+  }
+
+  function hermesGetSession(sessionId) {
+    return _origFetch(HERMES_URL + '/api/hermes/sessions/' + sessionId, {
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) { return r.json(); });
+  }
+
+  function hermesDeleteSession(sessionId) {
+    return _origFetch(HERMES_URL + '/api/hermes/sessions/' + sessionId, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) { return r.json(); });
+  }
+
+  function hermesHealth() {
+    return _origFetch(HERMES_URL + '/api/hermes/health').then(function(r) { return r.json(); });
+  }
+
+  // ═══ Legacy agent functions (fallback) ═══
 
   function agentProcess(projectId, prompt, conversationId) {
     return _origFetch(AGENT_URL + '/api/agent/process', {
@@ -3304,7 +3348,13 @@
     if (!statusEl) return;
     agentGetSettings().then(function(cfg) {
       if (cfg.api_key_set && cfg.llm_endpoint) {
-        statusEl.innerHTML = '<span style="color:#4ade80;">\u2713</span> Agent ready (' + escapeHtml(cfg.llm_model || 'default model') + ')';
+        var hermesBadge = '';
+        if (cfg.hermes && cfg.hermes.running) {
+          hermesBadge = ' <span style="font-size:0.72rem;color:#60a5fa;background:rgba(96,165,250,0.12);padding:1px 6px;border-radius:3px;">Hermes \u2713</span>';
+        } else {
+          hermesBadge = ' <span style="font-size:0.72rem;color:#f59e0b;background:rgba(245,158,11,0.12);padding:1px 6px;border-radius:3px;">Hermes off</span>';
+        }
+        statusEl.innerHTML = '<span style="color:#4ade80;">\u2713</span> Agent ready (' + escapeHtml(cfg.llm_model || 'default model') + ')' + hermesBadge;
         statusEl.style.color = '#4ade80';
       } else {
         statusEl.innerHTML = '<span style="color:#f87171;">\u26a0</span> Not configured \u2014 click Settings';
@@ -3340,7 +3390,7 @@
         '<div style="margin-bottom:14px;">' +
           '<label style="display:block;font-size:0.8rem;font-weight:600;color:' + CHAT_STYLE.text + ';margin-bottom:4px;">LLM API Endpoint</label>' +
           '<input id="syson-settings-endpoint" placeholder="https://api.openai.com/v1/chat/completions" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.82rem;box-sizing:border-box;" />' +
-          '<div style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';margin-top:3px;">Any OpenAI-compatible endpoint.</div>' +
+          '<div style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';margin-top:3px;">Any OpenAI-compatible endpoint. Used by both the legacy agent and Hermes.</div>' +
         '</div>' +
         '<div style="margin-bottom:14px;">' +
           '<label style="display:block;font-size:0.8rem;font-weight:600;color:' + CHAT_STYLE.text + ';margin-bottom:4px;">Model Name</label>' +
@@ -3354,6 +3404,11 @@
         '<div style="margin-bottom:14px;">' +
           '<label style="display:block;font-size:0.8rem;font-weight:600;color:' + CHAT_STYLE.text + ';margin-bottom:4px;">SysON Backend URL</label>' +
           '<input id="syson-settings-sysonurl" placeholder="http://localhost:8080" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.82rem;box-sizing:border-box;" />' +
+        '</div>' +
+        '<div id="syson-settings-hermes-info" style="margin-bottom:14px;padding:10px 12px;background:#f0f4ff;border-radius:' + CHAT_STYLE.radius + ';border:1px solid #c7d2fe;font-size:0.75rem;color:#3730a3;line-height:1.5;">' +
+          '<div style="font-weight:700;margin-bottom:4px;">\u2194 Hermes Agent Container</div>' +
+          '<div id="syson-settings-hermes-status">Checking Hermes status\u2026</div>' +
+          '<div style="margin-top:4px;color:#6366f1;">Saving settings will sync the API key to the Hermes container and restart it automatically.</div>' +
         '</div>' +
         '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;">' +
           '<button id="syson-settings-cancel" style="padding:8px 16px;font-size:0.82rem;font-weight:600;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';background:transparent;color:' + CHAT_STYLE.lightText + ';cursor:pointer;">Cancel</button>' +
@@ -3380,6 +3435,17 @@
       var keyStatus = document.getElementById('syson-settings-key-status');
       keyStatus.textContent = cfg.api_key_set ? 'Key is set (enter new key to replace)' : 'No key set';
       keyStatus.style.color = cfg.api_key_set ? '#4ade80' : '#f87171';
+
+      // Show Hermes status
+      var hermesEl = document.getElementById('syson-settings-hermes-status');
+      if (hermesEl) {
+        if (cfg.hermes && cfg.hermes.running) {
+          hermesEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">&#x2705; Running</span> — Gateway on port 8642' +
+            (cfg.hermes.container_status ? '<br><span style="color:#6b7280;font-size:0.7rem;">' + escapeHtml(cfg.hermes.container_status) + '</span>' : '');
+        } else {
+          hermesEl.innerHTML = '<span style="color:#ea580c;font-weight:600;">&#x26a0; Not running</span> — will start when you save settings with an API key';
+        }
+      }
     });
 
     document.getElementById('syson-settings-save').addEventListener('click', function() {
@@ -3390,9 +3456,33 @@
       var saveBtn = document.getElementById('syson-settings-save');
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving\u2026';
+
+      // Update Hermes status during save
+      var hermesEl = document.getElementById('syson-settings-hermes-status');
+      if (hermesEl) {
+        hermesEl.innerHTML = '<span style="color:#6366f1;">Syncing to Hermes\u2026</span>';
+      }
+
       agentSaveSettings(endpoint, apiKey, model, sysonUrl).then(function(r) {
-        overlay.remove();
-        checkAgentStatus();
+        // Show Hermes sync result before closing
+        if (r.hermes && r.hermes.synced) {
+          saveBtn.textContent = 'Saved \u2713';
+          saveBtn.style.background = '#16a34a';
+          if (hermesEl) {
+            hermesEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">&#x2705; Synced &amp; restarted</span> — Hermes is live on port 8642';
+          }
+          setTimeout(function() { overlay.remove(); checkAgentStatus(); }, 2000);
+        } else if (r.hermes && r.hermes.message) {
+          saveBtn.textContent = 'Saved (Hermes issue)';
+          saveBtn.style.background = '#f59e0b';
+          if (hermesEl) {
+            hermesEl.innerHTML = '<span style="color:#ea580c;">&#x26a0; ' + escapeHtml(r.hermes.message) + '</span>';
+          }
+          setTimeout(function() { overlay.remove(); checkAgentStatus(); }, 4000);
+        } else {
+          overlay.remove();
+          checkAgentStatus();
+        }
       }).catch(function(err) {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save';
@@ -3414,11 +3504,26 @@
     var list = document.getElementById('syson-chat-conv-list');
     if (!list) return;
 
-    chatConversations(projectId).then(function(convs) {
-      _chatState.conversations = convs || [];
-      renderConversationList(convs || []);
+    // Try Hermes sessions first
+    hermesListSessions().then(function(data) {
+      var sessions = (data && data.data) || [];
+      _chatState.conversations = sessions.map(function(s) {
+        return {
+          id: s.id,
+          title: s.title || 'Untitled',
+          lastMessage: (s.last_message || s.message_count > 0 ? s.message_count + ' messages' : ''),
+          isHermes: true
+        };
+      });
+      renderConversationList(_chatState.conversations);
     }).catch(function(err) {
-      if (list) list.innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;font-size:0.8rem;">Failed to load: ' + escapeHtml(err.message) + '</div>';
+      // Fall back to old agent conversations
+      chatConversations(projectId).then(function(convs) {
+        _chatState.conversations = convs || [];
+        renderConversationList(convs || []);
+      }).catch(function() {
+        list.innerHTML = '<div style="text-align:center;padding:20px;color:' + CHAT_STYLE.lightText + ';font-size:0.8rem;">No conversations yet.</div>';
+      });
     });
   }
 
@@ -3463,19 +3568,30 @@
 
   function deleteConversation(convId) {
     var projectId = _chatState.projectId;
-    agentDeleteConversation(convId).then(function() {
+    // Try Hermes delete first, fall back to old agent
+    hermesDeleteSession(convId).then(function() {
       if (_chatState.activeConversationId === convId) {
         newChatConversation();
       }
       loadChatConversations(projectId);
-    }).catch(function(err) {
-      alert('Failed to delete: ' + escapeHtml(err.message));
+    }).catch(function() {
+      agentDeleteConversation(convId).then(function() {
+        if (_chatState.activeConversationId === convId) {
+          newChatConversation();
+        }
+        loadChatConversations(projectId);
+      }).catch(function(err) {
+        alert('Failed to delete: ' + escapeHtml(err.message));
+      });
     });
   }
 
   function newChatConversation() {
     _chatState.activeConversationId = null;
     _chatState.messages = [];
+    renderChatMessages([]);
+    var input = document.getElementById('syson-chat-input');
+    if (input) input.focus();
     var messages = document.getElementById('syson-chat-messages');
     if (messages) {
       messages.innerHTML =
@@ -3498,13 +3614,26 @@
     }
     renderConversationList(_chatState.conversations);
 
-    agentGetConversation(projectId, convId)
+    // Try Hermes session first
+    hermesGetSession(convId)
       .then(function(data) {
-        _chatState.messages = data.messages || [];
+        var session = data.session || data;
+        var msgs = session.messages || data.messages || [];
+        _chatState.messages = msgs.map(function(m) {
+          return { role: m.role, content: m.content, isHermes: true };
+        });
         renderChatMessages(_chatState.messages);
       })
-      .catch(function(err) {
-        if (messages) messages.innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;font-size:0.8rem;">Failed: ' + escapeHtml(err.message) + '</div>';
+      .catch(function() {
+        // Fall back to old agent
+        agentGetConversation(projectId, convId)
+          .then(function(data) {
+            _chatState.messages = data.messages || [];
+            renderChatMessages(_chatState.messages);
+          })
+          .catch(function(err) {
+            if (messages) messages.innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;font-size:0.8rem;">Failed: ' + escapeHtml(err.message) + '</div>';
+          });
       });
   }
 
@@ -3530,7 +3659,22 @@
     var bg = isUser ? CHAT_STYLE.primary : '#e0e0e0';
     var color = isUser ? '#ffffff' : CHAT_STYLE.text;
     var maxW = '75%';
-    var content = escapeHtml(msg.content || '').replace(/\n/g, '<br>');
+    // Handle Hermes content blocks (array of {type:"text", text:"..."})
+    // and plain strings uniformly.
+    var rawContent = msg.content || '';
+    var content;
+    if (Array.isArray(rawContent)) {
+      content = rawContent.map(function(b) {
+        if (b && typeof b === 'object' && b.type === 'text') return b.text || '';
+        if (b && typeof b === 'object' && b.type === 'tool_use') return '\\ud83d\\udd27 ' + (b.name || 'tool');
+        if (b && typeof b === 'object' && b.type === 'tool_result') return '\\ud83d\\udce4 Result';
+        if (typeof b === 'string') return b;
+        return JSON.stringify(b);
+      }).join('\\n');
+    } else {
+      content = String(rawContent);
+    }
+    content = escapeHtml(content).replace(/\\n/g, '<br>');
 
     var thinkingHTML = '';
     if (msg.thinking) {
@@ -3627,32 +3771,67 @@
       }
     }
 
-    agentProcess(projectId, prompt, _chatState.activeConversationId).then(function(result) {
-      finishSend();
-      if (result.conversationId) _chatState.activeConversationId = result.conversationId;
+    // ═══ Try Hermes first, fall back to old agent ═══
+    if (_chatState.activeConversationId) {
+      // Existing Hermes session — send message directly
+      hermesChat(_chatState.activeConversationId, prompt).then(function(result) {
+        finishSend();
+        if (result.conversationId || result.session_id) {
+          _chatState.activeConversationId = result.conversationId || result.session_id;
+        }
+        var content = result.response || result.error || 'No response';
+        addChatMessage('assistant', content, { hermes: true });
+        renderHermesBadge(true);
+      }).catch(function(err) {
+        finishSend();
+        // Fallback to old agent
+        agentProcess(projectId, prompt, null).then(function(result) {
+          if (result.conversationId) _chatState.activeConversationId = result.conversationId;
+          else if (result.conversation_id) _chatState.activeConversationId = result.conversation_id;
+          var content = result.response || result.chat_feedback || result.error || JSON.stringify(result);
+          addChatMessage('assistant', content);
+          renderHermesBadge(false);
+        }).catch(function(err2) {
+          addChatMessage('assistant', '\u274c Error: ' + escapeHtml(err2.message));
+        });
+      });
+    } else {
+      // No active session — create a Hermes session first
+      hermesCreateSession(prompt.substring(0, 50)).then(function(sessResp) {
+        var sessionId = sessResp.session ? sessResp.session.id : sessResp.id;
+        if (!sessionId) throw new Error('Failed to create session');
 
-      var content = result.response || result.chat_feedback || result.error || JSON.stringify(result);
-      var extra = {};
+        _chatState.activeConversationId = sessionId;
 
-      if (result.thinking) {
-        content = result.response;
-        extra.thinking = result.thinking;
-      }
-      if (result.action && result.action !== 'CLARIFY') {
-        var icon = result.action === 'IMPORT' ? '\ud83d\udce5' : result.action === 'UPDATE' ? '\u270f\ufe0f' : result.action === 'ERROR' ? '\u274c' : '';
-        if (icon) content = icon + ' ' + content;
-      }
-      // Attach debug info if available
-      if (result.debug) {
-        extra.debug = result.debug;
-      }
+        // Now send the actual message
+        return hermesChat(sessionId, prompt);
+      }).then(function(result) {
+        finishSend();
+        var content = result.response || result.error || 'No response';
+        addChatMessage('assistant', content, { hermes: true });
+        renderHermesBadge(true);
+      }).catch(function(err) {
+        // Hermes failed — fall back to old agent
+        finishSend();
+        agentProcess(projectId, prompt, null).then(function(result) {
+          if (result.conversationId) _chatState.activeConversationId = result.conversationId;
+          else if (result.conversation_id) _chatState.activeConversationId = result.conversation_id;
+          var content = result.response || result.chat_feedback || result.error || JSON.stringify(result);
+          addChatMessage('assistant', content);
+          renderHermesBadge(false);
+        }).catch(function(err2) {
+          addChatMessage('assistant', '\u274c Error: ' + escapeHtml(err2.message));
+        });
+      });
+    }
+  }
 
-      addChatMessage('assistant', content, extra);
-      loadChatConversations(projectId);
-    }).catch(function(err) {
-      finishSend();
-      addChatMessage('assistant', '\u274c Error: ' + escapeHtml(err.message));
-    });
+  function renderHermesBadge(isHermes) {
+    var badgeEl = document.getElementById('syson-agent-status');
+    if (!badgeEl) return;
+    if (isHermes) {
+      badgeEl.innerHTML += ' <span style="font-size:0.72rem;color:#60a5fa;background:rgba(96,165,250,0.12);padding:1px 6px;border-radius:3px;">Hermes</span>';
+    }
   }
 
   // ═══ Change Approval Panel ═══

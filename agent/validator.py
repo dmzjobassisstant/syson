@@ -35,6 +35,14 @@ class Command:
     source_element_id: str = ""
     target_element_ids: str = ""
     operation: str = ""
+    # Diagram commands
+    representation_id: str = ""
+    diagram_type: str = ""      # Friendly name like "General View"
+    diagram_name: str = ""
+    object_id: str = ""         # Parent object for CREATE_DIAGRAM
+    object_ids: str = ""        # Comma-separated for PLACE_ELEMENTS
+    position_x: str = ""
+    position_y: str = ""
 
     def validate(self) -> list[str]:
         """Return list of validation errors (empty = valid)."""
@@ -63,6 +71,24 @@ class Command:
                 errors.append("MANAGE_RELATIONSHIP requires target_element_ids")
             if self.operation not in ("ADD", "REMOVE"):
                 errors.append(f"MANAGE_RELATIONSHIP operation must be ADD or REMOVE, got '{self.operation}'")
+        elif self.type == "CREATE_DIAGRAM":
+            if not self.object_id:
+                errors.append("CREATE_DIAGRAM requires object_id (parent package)")
+            if not self.diagram_type:
+                errors.append("CREATE_DIAGRAM requires diagram_type (e.g. 'General View')")
+            if not self.diagram_name:
+                errors.append("CREATE_DIAGRAM requires diagram_name")
+        elif self.type == "PLACE_ELEMENTS":
+            if not self.representation_id:
+                errors.append("PLACE_ELEMENTS requires representation_id (the diagram)")
+            if not self.object_ids:
+                errors.append("PLACE_ELEMENTS requires object_ids (comma-separated element IDs)")
+        elif self.type == "DELETE_DIAGRAM":
+            if not self.representation_id:
+                errors.append("DELETE_DIAGRAM requires representation_id")
+        elif self.type == "LAYOUT_DIAGRAM":
+            if not self.representation_id:
+                errors.append("LAYOUT_DIAGRAM requires representation_id")
         else:
             errors.append(f"Unknown command type: '{self.type}'")
         return errors
@@ -255,10 +281,24 @@ class OutputValidator:
                     cmd.target_element_ids = text
                 elif tag == "operation":
                     cmd.operation = text
+                elif tag == "representation_id":
+                    cmd.representation_id = text
+                elif tag == "diagram_type":
+                    cmd.diagram_type = text
+                elif tag == "diagram_name":
+                    cmd.diagram_name = text
+                elif tag == "object_id":
+                    cmd.object_id = text
+                elif tag == "object_ids":
+                    cmd.object_ids = text
+                elif tag == "position_x":
+                    cmd.position_x = text
+                elif tag == "position_y":
+                    cmd.position_y = text
 
             # Check element IDs against known IDs if provided
             if known_ids:
-                for id_attr in [cmd.element_id, cmd.parent_element_id, cmd.source_element_id]:
+                for id_attr in [cmd.element_id, cmd.parent_element_id, cmd.source_element_id, cmd.object_id]:
                     if id_attr and id_attr not in known_ids:
                         result.errors.append(f"Element ID '{id_attr[:12]}...' not found in current model")
 

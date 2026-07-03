@@ -19,6 +19,7 @@ import sys
 import json
 import logging
 from pathlib import Path
+from typing import Optional
 from flask import Flask, request, jsonify
 
 # Ensure agent package is importable
@@ -126,11 +127,21 @@ def health():
 def get_settings():
     """Get settings — API key is NEVER returned. Only show whether it's set."""
     config = get_config()
+
+    # Include Hermes container status so the UI can show if Hermes is running
+    hermes_status = {"running": False}
+    try:
+        from hermes_settings_adapter import _get_hermes_status
+        hermes_status = _get_hermes_status()
+    except Exception:
+        pass
+
     return jsonify({
         'llm_endpoint': config['llm_endpoint'],
         'llm_model': config['llm_model'],
         'syson_url': config['syson_url'],
-        'api_key_set': bool(config['llm_api_key'])
+        'api_key_set': bool(config['llm_api_key']),
+        'hermes': hermes_status
     })
 
 
@@ -138,7 +149,7 @@ def get_settings():
 def set_settings():
     """Save settings. API key is stored as environment variable, never returned."""
     data = request.json or {}
-    
+
     settings = {}
     if 'llm_endpoint' in data:
         settings['llm_endpoint'] = data['llm_endpoint']
@@ -148,16 +159,33 @@ def set_settings():
         settings['llm_model'] = data['llm_model']
     if 'syson_url' in data:
         settings['syson_url'] = data['syson_url']
-    
+
     # Merge with existing
     existing = load_settings()
     existing.update(settings)
     save_settings(existing)
-    
+
+    # ── Hermes sync ──────────────────────────────────────────
+    # After saving to the old agent's settings file, propagate the
+    # API key + endpoint to the Hermes container stack so both
+    # systems share the same LLM credentials.
+    hermes_status = {"synced": False, "message": "Adapter not called"}
+    try:
+        from hermes_settings_adapter import sync_to_hermes
+        hermes_status = sync_to_hermes(existing)
+        logger.info(f"Hermes sync result: {hermes_status.get('message', '?')}")
+    except ImportError:
+        logger.warning("hermes_settings_adapter not found — Hermes sync skipped")
+        hermes_status = {"synced": False, "message": "Adapter module not installed"}
+    except Exception as e:
+        logger.exception("Hermes settings sync failed")
+        hermes_status = {"synced": False, "message": f"Sync error: {e}"}
+
     return jsonify({
         'status': 'ok',
         'message': 'Settings saved',
-        'api_key_set': bool(existing.get('llm_api_key'))
+        'api_key_set': bool(existing.get('llm_api_key')),
+        'hermes': hermes_status
     })
 
 
@@ -227,6 +255,155 @@ def delete_conversation(conv_id):
     mem = ConversationMemory(db_path)
     mem.delete_conversation(conv_id)
     return jsonify({'status': 'ok'})
+
+
+# ============================================================
+# Hermes Proxy — forwards chat to the Hermes API server (port 8642)
+# Keeps HERMES_AUTH_TOKEN server-side; browser never sees it.
+# ============================================================
+
+import urllib.request
+import urllib.error
+
+HERMES_API_URL = os.environ.get("HERMES_API_URL", "http://127.0.0.1:8642")
+
+
+def _get_hermes_auth_token() -> str:
+    """Read the Hermes API_SERVER_KEY from the .env file."""
+    env_path = Path(__file__).resolve().parent.parent / "hermes-integration" / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if line.startswith("HERMES_AUTH_TOKEN="):
+                token = line.split("=", 1)[1].strip()
+                if token and token != "changeme-to-a-long-random-string":
+                    return token
+    return ""
+
+
+def _hermes_request(method: str, path: str, body: Optional[dict] = None) -> tuple:
+    """Make an authenticated request to the Hermes API server. Returns (status_code, json_response)."""
+    token = _get_hermes_auth_token()
+    if not token:
+        return 503, {"error": "Hermes auth token not configured"}
+
+    url = f"{HERMES_API_URL}{path}"
+    data = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(
+        url, data=data, method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read())
+        except Exception:
+            err_body = {"error": str(e)}
+        return e.code, err_body
+    except urllib.error.URLError as e:
+        return 503, {"error": f"Hermes API unreachable: {e.reason}"}
+    except Exception as e:
+        return 502, {"error": str(e)}
+
+
+@app.route('/api/hermes/health', methods=['GET'])
+def hermes_health():
+    """Proxy health check to Hermes."""
+    status, body = _hermes_request("GET", "/health")
+    return jsonify(body), (200 if status == 200 else status)
+
+
+@app.route('/api/hermes/sessions', methods=['GET'])
+def hermes_list_sessions():
+    """List Hermes sessions."""
+    status, body = _hermes_request("GET", "/api/sessions")
+    return jsonify(body), (200 if status == 200 else status)
+
+
+@app.route('/api/hermes/sessions', methods=['POST'])
+def hermes_create_session():
+    """Create a new Hermes session."""
+    data = request.json or {}
+    title = data.get('title', 'SysON Chat')
+    status, body = _hermes_request("POST", "/api/sessions", {"title": title})
+    # If title conflict (400), retry with a unique suffix
+    if status == 400 and "already in use" in str(body).lower():
+        import uuid
+        unique_title = f"{title}-{uuid.uuid4().hex[:6]}"
+        status, body = _hermes_request("POST", "/api/sessions", {"title": unique_title})
+    # Accept 200 and 201 (Created) as success
+    return jsonify(body), (200 if status in (200, 201) else status)
+
+
+@app.route('/api/hermes/sessions/<session_id>', methods=['GET'])
+def hermes_get_session(session_id):
+    """Get a Hermes session with messages."""
+    status, body = _hermes_request("GET", f"/api/sessions/{session_id}")
+    return jsonify(body), (200 if status == 200 else status)
+
+
+@app.route('/api/hermes/sessions/<session_id>', methods=['DELETE'])
+def hermes_delete_session(session_id):
+    """Delete a Hermes session."""
+    status, body = _hermes_request("DELETE", f"/api/sessions/{session_id}")
+    return jsonify(body), (200 if status == 200 else status)
+
+
+@app.route('/api/hermes/sessions/<session_id>/chat', methods=['POST'])
+def hermes_session_chat(session_id):
+    """
+    Send a message to a Hermes session and return the assistant response.
+    This is the main chat endpoint — the frontend calls this instead of
+    the old /api/agent/process.
+    """
+    data = request.json or {}
+    message = data.get('message') or data.get('prompt') or ''
+    if not message:
+        return jsonify({'error': 'message is required'}), 400
+
+    status, body = _hermes_request("POST", f"/api/sessions/{session_id}/chat", {"message": message})
+
+    if status == 200:
+        # Normalize the response for the frontend.
+        # Hermes may return content as a string (plain text) or as an
+        # array of content blocks [{type: "text", text: "..."}, ...].
+        # Always extract plain text for the frontend.
+        msg_content = ''
+        if isinstance(body, dict):
+            msg = body.get('message', body)
+            raw = msg.get('content', '') if isinstance(msg, dict) else str(msg)
+            if isinstance(raw, str):
+                msg_content = raw
+            elif isinstance(raw, list):
+                msg_content = '\n'.join(
+                    b.get('text', '') if isinstance(b, dict) and b.get('type') == 'text'
+                    else str(b)
+                    for b in raw
+                )
+            else:
+                msg_content = str(raw)
+
+        return jsonify({
+            'response': msg_content,
+            'conversationId': session_id,
+            'session_id': session_id,
+            'success': True,
+            'hermes': True,
+            'usage': body.get('usage', {}) if isinstance(body, dict) else {}
+        })
+    else:
+        return jsonify(body), status
+
+
+@app.route('/api/hermes/sessions/<session_id>/messages', methods=['GET'])
+def hermes_session_messages(session_id):
+    """Get message history for a Hermes session."""
+    status, body = _hermes_request("GET", f"/api/sessions/{session_id}/messages")
+    return jsonify(body), (200 if status == 200 else status)
 
 
 # ============================================================

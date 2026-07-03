@@ -1,0 +1,57 @@
+model:
+  default: deepseek-chat
+  provider: custom
+  base_url: https://api.deepseek.com/v1
+  api_key: ${DEEPSEEK_API_KEY}
+  context_length: 64000
+agent:
+  max_turns: 30
+  tool_use_enforcement: strict
+  verify_on_stop: false
+  task_completion_guidance: true
+  parallel_tool_call_guidance: false
+toolsets:
+- mcp
+tool_loop_guardrails:
+  warnings_enabled: true
+  hard_stop_enabled: true
+  warn_after:
+    exact_failure: 2
+    same_tool_failure: 3
+    idempotent_no_progress: 2
+  hard_stop_after:
+    exact_failure: 4
+    same_tool_failure: 6
+    idempotent_no_progress: 4
+mcp_servers:
+  syson:
+    url: http://mcp-bridge:3001/mcp
+    timeout: 120
+    connect_timeout: 30
+compression:
+  enabled: true
+  threshold: 0.5
+  target_ratio: 0.25
+terminal:
+  backend: local
+  timeout: 30
+security:
+  tirith_enabled: true
+  website_blocklist:
+  - '*'
+platforms:
+  api_server:
+    enabled: true
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+auxiliary:
+  vision:
+    provider: custom
+    base_url: https://api.deepseek.com/v1
+    api_key: ${DEEPSEEK_API_KEY}
+display:
+  tool_progress: all
+plugins:
+  enabled: []
+_config_version: 33

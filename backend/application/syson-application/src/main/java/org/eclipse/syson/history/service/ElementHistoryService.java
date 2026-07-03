@@ -97,7 +97,7 @@ public class ElementHistoryService {
                 "SELECT content::jsonb -> 'content' -> 0 -> 'data' ->> 'elementId' " +
                 "FROM document d " +
                 "JOIN project_semantic_data psd ON d.semantic_data_id = psd.semantic_data_id " +
-                "WHERE d.id = ?::uuid AND psd.project_id = ?::uuid",
+                "WHERE d.id = ?::uuid AND psd.project_id = ?",
                 String.class, selectionId, projectId);
             resolved.addAll(rootElementIds);
 
@@ -106,7 +106,7 @@ public class ElementHistoryService {
                 "SELECT content::jsonb -> 'content' -> 0 ->> 'id' " +
                 "FROM document d " +
                 "JOIN project_semantic_data psd ON d.semantic_data_id = psd.semantic_data_id " +
-                "WHERE d.id = ?::uuid AND psd.project_id = ?::uuid",
+                "WHERE d.id = ?::uuid AND psd.project_id = ?",
                 String.class, selectionId, projectId);
             resolved.addAll(rootXmiIds);
 
@@ -119,7 +119,7 @@ public class ElementHistoryService {
                 "LATERAL jsonb_array_elements(d.content::jsonb -> 'content') AS doc_elem, " +
                 "LATERAL jsonb_array_elements(doc_elem -> 'data' -> 'ownedRelationship') AS rel_elem, " +
                 "LATERAL jsonb_array_elements(rel_elem -> 'data' -> 'ownedRelatedElement') AS elem " +
-                "WHERE psd.project_id = ?::uuid " +
+                "WHERE psd.project_id = ? " +
                 "AND (elem.value ->> 'id' = ? OR elem.value -> 'data' ->> 'elementId' = ?)",
                 String.class, projectId, selectionId, selectionId);
             resolved.addAll(elementIdsFromXmi);

@@ -7,6 +7,7 @@ Each command type maps to a specific mutation.
 
 import json
 import uuid
+import time
 import logging
 from typing import Optional
 from validator import StructuredResponse, Command, ActionType
@@ -258,6 +259,7 @@ class CommandExecutor:
         """Execute UPDATE action — run each command sequentially."""
         results = []
         all_success = True
+        last_diagram_id = ""  # Track diagram ID from CREATE_DIAGRAM for subsequent commands
 
         # Build a name→id lookup from the model for smart resolution
         named_by_id = {}
@@ -279,6 +281,22 @@ class CommandExecutor:
                                 cmd.new_label = ""
                                 break
 
+                # DIAGRAM CHAINING: if representation_id is a placeholder, use last diagram
+                is_placeholder = (
+                    not cmd.representation_id or
+                    'PLACEHOLDER' in cmd.representation_id.upper() or
+                    cmd.representation_id == 'DIAGRAM_ID'
+                )
+                if cmd.type in ('PLACE_ELEMENTS', 'LAYOUT_DIAGRAM', 'DELETE_DIAGRAM') and is_placeholder:
+                    if last_diagram_id:
+                        logger.info(f"Substituting placeholder diagram ID → {last_diagram_id}")
+                        cmd.representation_id = last_diagram_id
+                    else:
+                        results.append({"success": False, "error": "No diagram created yet — CREATE_DIAGRAM must come first",
+                                       "command_index": i, "command_type": cmd.type})
+                        all_success = False
+                        continue
+
                 if cmd.type == "ADD_CHILD":
                     r = self._exec_add_child(cmd, ec_id)
                 elif cmd.type == "UPDATE_ELEMENT":
@@ -287,12 +305,24 @@ class CommandExecutor:
                     r = self._exec_delete_element(cmd, ec_id)
                 elif cmd.type == "MANAGE_RELATIONSHIP":
                     r = self._exec_manage_relationship(cmd, ec_id)
+                elif cmd.type == "CREATE_DIAGRAM":
+                    r = self._exec_create_diagram(cmd, ec_id)
+                elif cmd.type == "PLACE_ELEMENTS":
+                    r = self._exec_place_elements(cmd, ec_id)
+                elif cmd.type == "DELETE_DIAGRAM":
+                    r = self._exec_delete_diagram(cmd, ec_id)
+                elif cmd.type == "LAYOUT_DIAGRAM":
+                    r = self._exec_layout_diagram(cmd, ec_id)
                 else:
                     r = {"success": False, "error": f"Unknown command type: {cmd.type}"}
                 
                 r['command_index'] = i
                 r['command_type'] = cmd.type
                 results.append(r)
+                
+                # Track diagram ID for chaining
+                if cmd.type == 'CREATE_DIAGRAM' and r.get('success') and r.get('diagram_id'):
+                    last_diagram_id = r['diagram_id']
                 if not r.get('success'):
                     all_success = False
             except Exception as e:
@@ -390,9 +420,105 @@ class CommandExecutor:
             return {"success": False, "error": result['errors'][0].get('message', 'GraphQL error')}
         
         payload = result.get('data', {}).get(mutation_name, {})
-        if payload.get('__typename') == 'SuccessPayload':
+        typename = payload.get('__typename', '')
+        if typename == 'SuccessPayload' or typename.endswith('SuccessPayload'):
             return {"success": True}
         else:
             msgs = payload.get('messages', [])
-            err = msgs[0].get('body', 'Unknown error') if msgs else payload.get('message', 'Unknown error')
+            err = msgs[0].get('body', 'Unknown error') if msgs else f'No messages, __typename={typename}'
             return {"success": False, "error": err}
+
+    # ── Diagram Commands ──────────────────────────────────────────
+
+    def _resolve_diagram_type_id(self, ec_id: str, object_id: str, friendly_name: str) -> str:
+        """Resolve a friendly diagram type name (e.g. 'General View') to a Sirius description ID."""
+        q = f'''query {{ viewer {{ editingContext(editingContextId:"{ec_id}") {{
+            representationDescriptions(objectId:"{object_id}") {{ edges {{ node {{ id label }} }} }}
+        }} }} }}'''
+        result = self.client.graphql(q)
+        if result.get('errors'):
+            raise RuntimeError(f"Failed to query diagram types: {result['errors'][0]['message']}")
+        edges = result['data']['viewer']['editingContext']['representationDescriptions']['edges']
+        for edge in edges:
+            if edge['node']['label'].lower() == friendly_name.lower():
+                return edge['node']['id']
+        available = [e['node']['label'] for e in edges]
+        raise RuntimeError(f"Diagram type '{friendly_name}' not found. Available: {', '.join(available)}")
+
+    def _exec_create_diagram(self, cmd: Command, ec_id: str) -> dict:
+        desc_id = self._resolve_diagram_type_id(ec_id, cmd.object_id, cmd.diagram_type)
+        mut_id = str(uuid.uuid4())
+        query = f'''mutation {{
+          createRepresentation(input:{{
+            id:"{mut_id}",
+            editingContextId:"{ec_id}",
+            objectId:"{cmd.object_id}",
+            representationDescriptionId:"{desc_id}",
+            representationName:{json.dumps(cmd.diagram_name)}
+          }}) {{
+            __typename
+            ... on CreateRepresentationSuccessPayload {{ representation {{ id label }} }}
+            ... on ErrorPayload {{ messages {{ body level }} }}
+          }}
+        }}'''
+        result = self.client.graphql(query)
+        if result.get('errors'):
+            return {"success": False, "error": result['errors'][0].get('message', 'GraphQL error')}
+        payload = result.get('data', {}).get('createRepresentation', {})
+        if payload.get('__typename') == 'CreateRepresentationSuccessPayload':
+            rep_id = payload.get('representation', {}).get('id', '')
+            return {"success": True, "diagram_id": rep_id, "message": f"Diagram '{cmd.diagram_name}' created (id={rep_id[:8]}...)"}
+        else:
+            msgs = payload.get('messages', [])
+            err = msgs[0].get('body', 'Unknown error') if msgs else 'Unknown error'
+            return {"success": False, "error": err}
+
+    def _exec_place_elements(self, cmd: Command, ec_id: str) -> dict:
+        ids = [t.strip() for t in cmd.object_ids.split(',') if t.strip()]
+        mut_id = str(uuid.uuid4())
+        x = float(cmd.position_x) if cmd.position_x else 200.0
+        y = float(cmd.position_y) if cmd.position_y else 150.0
+        query = f'''mutation {{
+          dropOnDiagram(input:{{
+            id:"{mut_id}",
+            editingContextId:"{ec_id}",
+            representationId:"{cmd.representation_id}",
+            objectIds:{json.dumps(ids)},
+            startingPositionX:{x},
+            startingPositionY:{y}
+          }}) {{
+            __typename
+            ... on DropOnDiagramSuccessPayload {{ __typename }}
+            ... on ErrorPayload {{ messages {{ body level }} }}
+          }}
+        }}'''
+        return self._check_success(query, 'dropOnDiagram')
+
+    def _exec_delete_diagram(self, cmd: Command, ec_id: str) -> dict:
+        mut_id = str(uuid.uuid4())
+        query = f'''mutation {{
+          deleteRepresentation(input:{{
+            id:"{mut_id}",
+            representationId:"{cmd.representation_id}"
+          }}) {{
+            __typename
+            ... on DeleteRepresentationSuccessPayload {{ __typename }}
+            ... on ErrorPayload {{ messages {{ body level }} }}
+          }}
+        }}'''
+        return self._check_success(query, 'deleteRepresentation')
+
+    def _exec_layout_diagram(self, cmd: Command, ec_id: str) -> dict:
+        mut_id = str(uuid.uuid4())
+        query = f'''mutation {{
+          arrangeAll(input:{{
+            id:"{mut_id}",
+            editingContextId:"{ec_id}",
+            representationId:"{cmd.representation_id}"
+          }}) {{
+            __typename
+            ... on SuccessPayload {{ messages {{ body level }} }}
+            ... on ErrorPayload {{ messages {{ body level }} }}
+          }}
+        }}'''
+        return self._check_success(query, 'arrangeAll')

@@ -65,6 +65,27 @@ package MyPackage {
       <target_element_ids>GRAPH_ID_1,GRAPH_ID_2</target_element_ids>
       <operation>ADD</operation>
     </command>
+    <command>
+      <type>CREATE_DIAGRAM</type>
+      <object_id>GRAPH_ID_OF_PACKAGE</object_id>
+      <diagram_type>General View</diagram_type>
+      <diagram_name>My Diagram</diagram_name>
+    </command>
+    <command>
+      <type>PLACE_ELEMENTS</type>
+      <representation_id>DIAGRAM_ID</representation_id>
+      <object_ids>ELEMENT_ID_1,ELEMENT_ID_2</object_ids>
+      <position_x>200</position_x>
+      <position_y>150</position_y>
+    </command>
+    <command>
+      <type>LAYOUT_DIAGRAM</type>
+      <representation_id>DIAGRAM_ID</representation_id>
+    </command>
+    <command>
+      <type>DELETE_DIAGRAM</type>
+      <representation_id>DIAGRAM_ID</representation_id>
+    </command>
   </commands>
 </syson-response>
 ```
@@ -86,6 +107,10 @@ package MyPackage {
 | UPDATE_ELEMENT | element_id, (new_label \| new_short_name \| new_body) | Rename/modify element |
 | DELETE_ELEMENT | element_id | Delete element |
 | MANAGE_RELATIONSHIP | relationship_type, source_element_id, target_element_ids, operation | Add/remove relationship |
+| CREATE_DIAGRAM | object_id, diagram_type, diagram_name | Create a new diagram on a package |
+| PLACE_ELEMENTS | representation_id, object_ids, (position_x, position_y) | Place elements on a diagram |
+| DELETE_DIAGRAM | representation_id | Delete a diagram |
+| LAYOUT_DIAGRAM | representation_id | Auto-layout a diagram |
 
 ## Element Types (for ADD_CHILD)
 PartUsage, Package, AttributeUsage, ItemUsage, PortUsage, ActionUsage, StateUsage,

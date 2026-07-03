@@ -1,0 +1,94 @@
+# ============================================================
+# Hermes Agent — SysON Sandbox Integration
+# Isolated microservice, zero open-internet access.
+# ============================================================
+version: "3.9"
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: syson-hermes
+    restart: unless-stopped
+    # Run as headless API server, not interactive CLI.
+    # No --no-supervise: let the s6 overlay supervise the gateway service.
+    # The container's CMD triggers s6 to start/manage the gateway.
+    command: ["gateway", "run"]
+    environment:
+      # --- Core ---
+      HERMES_DASHBOARD: "0"
+
+      # --- API Server auth ---
+      # API_SERVER_KEY is what external clients must send as Bearer token.
+      # HERMES_AUTH_TOKEN is used by the adapter to generate this value.
+      API_SERVER_KEY: "${HERMES_AUTH_TOKEN}"
+
+      # Bind to all interfaces so Docker port-forward can reach the API
+      API_SERVER_HOST: "0.0.0.0"
+
+      # --- LLM (DeepSeek — existing endpoint) ---
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"
+
+      # --- Network policy ---
+      # We do NOT block the proxy entirely — the agent needs to reach the LLM API (api.deepseek.com).
+      # Instead, isolation is enforced via:
+      #   1. website_blocklist: ["*"] in config.yaml — blocks ALL web browsing tools
+      #   2. Only the MCP toolset is enabled — no terminal, file, browser, web, or code execution
+      #   3. The only published port is 8642 (API server)
+      # This allows LLM API calls while preventing the agent from browsing or executing arbitrary code.
+
+      # --- SysON backend (internal network alias) ---
+      SYSON_BACKEND_URL: "http://syson-backend:8080"
+
+    networks:
+      - syson-internal
+
+    ports:
+      # Gateway API — the ONLY entry point.
+      # Your SaaS connects here to send chat messages.
+      - "8642:8642"
+
+    volumes:
+      # Mount our config.yaml and SOUL.md to HERMES_HOME (/opt/data).
+      # Individual file mounts so we don't clobber the container's own
+      # sessions/, logs/, skills/ etc.
+      - ./hermes-home/config.yaml:/opt/data/config.yaml
+      - ./hermes-home/SOUL.md:/opt/data/SOUL.md
+      - ./hermes-home/.env:/opt/data/.env
+      - ./hermes-home/cron:/opt/data/cron
+
+    depends_on:
+      - mcp-bridge
+
+  # ==========================================================
+  # MCP Bridge — translates SysON queries into MCP tools
+  # Speaks proper MCP JSON-RPC protocol via streamable HTTP
+  # Reads from PostgreSQL + GraphQL; writes via GraphQL mutations
+  # ==========================================================
+  mcp-bridge:
+    build:
+      context: ./mcp-bridge
+      dockerfile: Dockerfile
+    container_name: syson-mcp-bridge
+    restart: unless-stopped
+    environment:
+      SYSON_BACKEND_URL: "http://syson-backend:8080"
+      SYSON_USER: "admin"
+      SYSON_PASSWORD: "admin"
+      PG_HOST: "syson-pg"
+      PG_PORT: "5432"
+      PG_DB: "syson"
+      PG_USER: "syson"
+      PG_PASSWORD: "syson"
+    extra_hosts:
+      # SysON backend runs on host network (localhost:8080).
+      # Map syson-backend to the Docker host gateway so the bridge can reach it.
+      - "syson-backend:host-gateway"
+      - "syson-pg:host-gateway"
+    networks:
+      - syson-internal
+    # No ports exposed — only Hermes can reach it
+
+networks:
+  syson-internal:
+    driver: bridge
+    internal: false  # needs one-way out to reach syson on host, but proxy blocks internet
