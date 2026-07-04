@@ -33,6 +33,7 @@ import org.eclipse.syson.util.AQLUtils;
 import org.eclipse.syson.util.IDescriptionNameGenerator;
 import org.eclipse.syson.util.SysMLMetamodelHelper;
 import org.eclipse.syson.util.ViewConstants;
+import org.eclipse.syson.util.EdgeColorPalette;
 
 /**
  * Used to create the {@link Dependency} edge description.
@@ -110,8 +111,8 @@ public abstract class AbstractDependencyEdgeDescriptionProvider extends Abstract
     private EdgeStyle createEdgeStyle() {
         return this.diagramBuilderHelper.newEdgeStyle()
                 .borderSize(0)
-                .color(this.colorProvider.getColor(ViewConstants.DEFAULT_EDGE_COLOR))
-                .edgeWidth(1)
+                .color(this.colorProvider.getColor(EdgeColorPalette.DEPENDENCY_COLOR))
+                .edgeWidth(EdgeColorPalette.EDGE_WIDTH)
                 .lineStyle(LineStyle.DASH)
                 .sourceArrowStyle(ArrowStyle.NONE)
                 .targetArrowStyle(ArrowStyle.INPUT_ARROW)

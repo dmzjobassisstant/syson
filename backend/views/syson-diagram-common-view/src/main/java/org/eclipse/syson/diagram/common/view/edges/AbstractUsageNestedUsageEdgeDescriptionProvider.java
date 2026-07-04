@@ -35,6 +35,7 @@ import org.eclipse.syson.util.AQLConstants;
 import org.eclipse.syson.util.IDescriptionNameGenerator;
 import org.eclipse.syson.util.SysMLMetamodelHelper;
 import org.eclipse.syson.util.ViewConstants;
+import org.eclipse.syson.util.EdgeColorPalette;
 
 /**
  * Used to create the edge description between usages and their nested usages.
@@ -107,8 +108,8 @@ public abstract class AbstractUsageNestedUsageEdgeDescriptionProvider extends Ab
     private EdgeStyle createEdgeStyle() {
         return this.diagramBuilderHelper.newEdgeStyle()
                 .borderSize(0)
-                .color(this.colorProvider.getColor(ViewConstants.DEFAULT_EDGE_COLOR))
-                .edgeWidth(1)
+                .color(this.colorProvider.getColor(EdgeColorPalette.NESTED_COLOR))
+                .edgeWidth(EdgeColorPalette.EDGE_WIDTH)
                 .lineStyle(LineStyle.SOLID)
                 .sourceArrowStyle(ArrowStyle.FILL_DIAMOND)
                 .targetArrowStyle(ArrowStyle.NONE)
@@ -119,8 +120,8 @@ public abstract class AbstractUsageNestedUsageEdgeDescriptionProvider extends Ab
         return this.diagramBuilderHelper.newConditionalEdgeStyle()
                 .condition(AQLConstants.AQL + org.eclipse.sirius.components.diagrams.description.EdgeDescription.SEMANTIC_EDGE_TARGET + ".isReference")
                 .borderSize(0)
-                .color(this.colorProvider.getColor(ViewConstants.DEFAULT_EDGE_COLOR))
-                .edgeWidth(1)
+                .color(this.colorProvider.getColor(EdgeColorPalette.NESTED_COLOR))
+                .edgeWidth(EdgeColorPalette.EDGE_WIDTH)
                 .lineStyle(LineStyle.SOLID)
                 .sourceArrowStyle(ArrowStyle.DIAMOND)
                 .targetArrowStyle(ArrowStyle.NONE)

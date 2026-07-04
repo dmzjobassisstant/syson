@@ -33,6 +33,7 @@ import org.eclipse.syson.util.AQLConstants;
 import org.eclipse.syson.util.AQLUtils;
 import org.eclipse.syson.util.SysMLMetamodelHelper;
 import org.eclipse.syson.util.ViewConstants;
+import org.eclipse.syson.util.EdgeColorPalette;
 
 /**
  * Used to create an {@link FlowConnectionUsage} edge description.
@@ -110,8 +111,8 @@ public abstract class AbstractFlowConnectionUsageEdgeDescriptionProvider extends
     private EdgeStyle createEdgeStyle() {
         return this.diagramBuilderHelper.newEdgeStyle()
                 .borderSize(0)
-                .color(this.colorProvider.getColor(ViewConstants.DEFAULT_EDGE_COLOR))
-                .edgeWidth(1)
+                .color(this.colorProvider.getColor(EdgeColorPalette.FLOW_CONNECTION_COLOR))
+                .edgeWidth(EdgeColorPalette.EDGE_WIDTH)
                 .lineStyle(LineStyle.SOLID)
                 .sourceArrowStyle(ArrowStyle.NONE)
                 .targetArrowStyle(ArrowStyle.INPUT_FILL_CLOSED_ARROW)

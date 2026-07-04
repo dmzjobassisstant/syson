@@ -37,6 +37,9 @@ public class ViewConstants {
 
     public static final String DEFAULT_EDGE_COLOR = "black";
 
+    /** Default edge width — 2px for better visibility on high-DPI displays */
+    public static final int DEFAULT_EDGE_WIDTH = 2;
+
     public static final String DEFAULT_NOTE_WIDTH = "200";
 
     public static final String DEFAULT_NOTE_HEIGHT = "70";

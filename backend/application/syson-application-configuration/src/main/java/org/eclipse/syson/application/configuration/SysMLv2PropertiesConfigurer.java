@@ -157,23 +157,32 @@ public class SysMLv2PropertiesConfigurer implements IPropertiesDescriptionRegist
         form.setDomainType(domainType);
         form.setTitleExpression("SysON Details View");
 
-        PageDescription pageCore = FormFactory.eINSTANCE.createPageDescription();
-        pageCore.setName("SysON-DetailsView-Core");
-        pageCore.setDomainType(domainType);
-        pageCore.setPreconditionExpression("");
-        pageCore.setLabelExpression("Core");
-        pageCore.getGroups().add(this.createCorePropertiesGroup());
-        pageCore.getGroups().add(this.createVisibilityPropertyGroup());
-        pageCore.getGroups().add(this.createExtraRedefinitionPropertiesGroup());
-        pageCore.getGroups().add(this.createExtraStatesubactionMembershipKindPropertiesGroup());
-        pageCore.getGroups().add(this.createExtraSubclassificationPropertiesGroup());
-        pageCore.getGroups().add(this.createExtraSubsettingPropertiesGroup());
-        pageCore.getGroups().add(this.createExtraFeatureTypingPropertiesGroup());
-        pageCore.getGroups().add(this.createExtraRequirementConstraintMembershipPropertiesGroup());
-        pageCore.getGroups().add(this.createExtraAcceptActionUsagePropertiesGroup());
-        pageCore.getGroups().add(this.createExtraTransitionSourceTargetPropertiesGroup());
-        pageCore.getGroups().add(this.createFeatureValuePropertiesGroup());
+        // Page 1: Identity — name, shortName, isSufficient, comment, documentation
+        PageDescription pageIdentity = FormFactory.eINSTANCE.createPageDescription();
+        pageIdentity.setName("SysON-DetailsView-Identity");
+        pageIdentity.setDomainType(domainType);
+        pageIdentity.setPreconditionExpression("");
+        pageIdentity.setLabelExpression("Identity");
+        pageIdentity.getGroups().add(this.createCorePropertiesGroup());
+        pageIdentity.getGroups().add(this.createVisibilityPropertyGroup());
+        pageIdentity.getGroups().add(this.createFeatureValuePropertiesGroup());
 
+        // Page 2: Relationships — redefinition, subsetting, typing, classification, transition, etc.
+        PageDescription pageRelationships = FormFactory.eINSTANCE.createPageDescription();
+        pageRelationships.setName("SysON-DetailsView-Relationships");
+        pageRelationships.setDomainType(domainType);
+        pageRelationships.setPreconditionExpression("");
+        pageRelationships.setLabelExpression("Relationships");
+        pageRelationships.getGroups().add(this.createExtraRedefinitionPropertiesGroup());
+        pageRelationships.getGroups().add(this.createExtraSubsettingPropertiesGroup());
+        pageRelationships.getGroups().add(this.createExtraFeatureTypingPropertiesGroup());
+        pageRelationships.getGroups().add(this.createExtraSubclassificationPropertiesGroup());
+        pageRelationships.getGroups().add(this.createExtraStatesubactionMembershipKindPropertiesGroup());
+        pageRelationships.getGroups().add(this.createExtraRequirementConstraintMembershipPropertiesGroup());
+        pageRelationships.getGroups().add(this.createExtraAcceptActionUsagePropertiesGroup());
+        pageRelationships.getGroups().add(this.createExtraTransitionSourceTargetPropertiesGroup());
+
+        // Page 3: Advanced — all other structural features
         PageDescription pageAdvanced = FormFactory.eINSTANCE.createPageDescription();
         pageAdvanced.setName("SysON-DetailsView-Advanced");
         pageAdvanced.setDomainType(domainType);
@@ -181,7 +190,8 @@ public class SysMLv2PropertiesConfigurer implements IPropertiesDescriptionRegist
         pageAdvanced.setLabelExpression("Advanced");
         pageAdvanced.getGroups().add(this.createAdvancedPropertiesGroup());
 
-        form.getPages().add(pageCore);
+        form.getPages().add(pageIdentity);
+        form.getPages().add(pageRelationships);
         form.getPages().add(pageAdvanced);
 
         return form;

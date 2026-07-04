@@ -31,6 +31,7 @@ import org.eclipse.syson.sysml.BindingConnectorAsUsage;
 import org.eclipse.syson.sysml.SysmlPackage;
 import org.eclipse.syson.util.AQLConstants;
 import org.eclipse.syson.util.SysMLMetamodelHelper;
+import org.eclipse.syson.util.EdgeColorPalette;
 import org.eclipse.syson.util.ViewConstants;
 
 /**
@@ -109,8 +110,8 @@ public abstract class AbstractBindingConnectorAsUsageEdgeDescriptionProvider ext
     private EdgeStyle createEdgeStyle() {
         return this.diagramBuilderHelper.newEdgeStyle()
                 .borderSize(0)
-                .color(this.colorProvider.getColor(ViewConstants.DEFAULT_EDGE_COLOR))
-                .edgeWidth(1)
+                .color(this.colorProvider.getColor(EdgeColorPalette.BINDING_CONNECTOR_COLOR))
+                .edgeWidth(EdgeColorPalette.EDGE_WIDTH)
                 .lineStyle(LineStyle.SOLID)
                 .sourceArrowStyle(ArrowStyle.NONE)
                 .targetArrowStyle(ArrowStyle.NONE)

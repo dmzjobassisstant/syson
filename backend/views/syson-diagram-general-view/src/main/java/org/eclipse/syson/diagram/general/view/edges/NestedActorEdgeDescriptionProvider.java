@@ -31,6 +31,8 @@ import org.eclipse.sirius.components.view.diagram.SynchronizationPolicy;
 import org.eclipse.syson.diagram.common.view.edges.AbstractEdgeDescriptionProvider;
 import org.eclipse.syson.diagram.general.view.nodes.ActorNodeDescriptionProvider;
 import org.eclipse.syson.util.AQLConstants;
+import org.eclipse.syson.util.AQLUtils;
+import org.eclipse.syson.util.EdgeColorPalette;
 import org.eclipse.syson.util.IDescriptionNameGenerator;
 import org.eclipse.syson.util.SysMLMetamodelHelper;
 import org.eclipse.syson.util.ViewConstants;
@@ -92,8 +94,8 @@ public class NestedActorEdgeDescriptionProvider extends AbstractEdgeDescriptionP
     private EdgeStyle createEdgeStyle() {
         return this.diagramBuilderHelper.newEdgeStyle()
                 .borderSize(0)
-                .color(this.colorProvider.getColor(ViewConstants.DEFAULT_EDGE_COLOR))
-                .edgeWidth(1)
+                .color(this.colorProvider.getColor(EdgeColorPalette.NESTED_COLOR))
+                .edgeWidth(EdgeColorPalette.EDGE_WIDTH)
                 .lineStyle(LineStyle.SOLID)
                 .sourceArrowStyle(ArrowStyle.NONE)
                 .targetArrowStyle(ArrowStyle.NONE)

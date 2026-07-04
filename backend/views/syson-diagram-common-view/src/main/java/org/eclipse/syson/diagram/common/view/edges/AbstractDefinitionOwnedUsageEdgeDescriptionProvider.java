@@ -35,6 +35,7 @@ import org.eclipse.syson.util.AQLUtils;
 import org.eclipse.syson.util.IDescriptionNameGenerator;
 import org.eclipse.syson.util.SysMLMetamodelHelper;
 import org.eclipse.syson.util.ViewConstants;
+import org.eclipse.syson.util.EdgeColorPalette;
 
 /**
  * Used to create the edge description between definitions and their owned usages.
@@ -144,8 +145,8 @@ public abstract class AbstractDefinitionOwnedUsageEdgeDescriptionProvider extend
     private EdgeStyle createEdgeStyle() {
         return this.diagramBuilderHelper.newEdgeStyle()
                 .borderSize(0)
-                .color(this.colorProvider.getColor(ViewConstants.DEFAULT_EDGE_COLOR))
-                .edgeWidth(1)
+                .color(this.colorProvider.getColor(EdgeColorPalette.NESTED_COLOR))
+                .edgeWidth(EdgeColorPalette.EDGE_WIDTH)
                 .lineStyle(LineStyle.SOLID)
                 .sourceArrowStyle(ArrowStyle.FILL_DIAMOND)
                 .targetArrowStyle(ArrowStyle.NONE)

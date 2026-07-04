@@ -28,6 +28,7 @@ import org.eclipse.syson.sysml.Subclassification;
 import org.eclipse.syson.sysml.SysmlPackage;
 import org.eclipse.syson.util.AQLConstants;
 import org.eclipse.syson.util.SysMLMetamodelHelper;
+import org.eclipse.syson.util.EdgeColorPalette;
 import org.eclipse.syson.util.ViewConstants;
 
 /**
@@ -99,8 +100,8 @@ public abstract class AbstractSubclassificationEdgeDescriptionProvider extends A
     private EdgeStyle createEdgeStyle() {
         return this.diagramBuilderHelper.newEdgeStyle()
                 .borderSize(0)
-                .color(this.colorProvider.getColor(ViewConstants.DEFAULT_EDGE_COLOR))
-                .edgeWidth(1)
+                .color(this.colorProvider.getColor(EdgeColorPalette.SUBCLASSIFICATION_COLOR))
+                .edgeWidth(EdgeColorPalette.EDGE_WIDTH)
                 .lineStyle(LineStyle.SOLID)
                 .sourceArrowStyle(ArrowStyle.NONE)
                 .targetArrowStyle(ArrowStyle.INPUT_CLOSED_ARROW)
