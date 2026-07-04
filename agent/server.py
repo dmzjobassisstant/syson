@@ -406,6 +406,117 @@ def hermes_session_messages(session_id):
     return jsonify(body), (200 if status == 200 else status)
 
 
+@app.route('/api/hermes/skills', methods=['GET'])
+def hermes_list_skills():
+    """List available Hermes skills from the local filesystem."""
+    import glob
+
+    skills = []
+    # Search multiple possible skill directories
+    search_paths = [
+        str(Path(__file__).resolve().parent.parent / "hermes-integration" / "hermes-home" / "skills"),
+        str(Path.home() / ".hermes" / "skills"),
+    ]
+
+    for skills_root in search_paths:
+        if not os.path.isdir(skills_root):
+            continue
+        for skill_md in sorted(glob.glob(f"{skills_root}/**/SKILL.md", recursive=True)):
+            try:
+                with open(skill_md) as f:
+                    content = f.read(4096)
+
+                # Extract YAML frontmatter if present
+                name = ""
+                description = ""
+                category = ""
+                if content.startswith("---"):
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        frontmatter = parts[1]
+                        body = parts[2]
+                        for line in frontmatter.split("\n"):
+                            line = line.strip()
+                            if line.startswith("name:"):
+                                name = line.split(":", 1)[1].strip()
+                            elif line.startswith("description:"):
+                                description = line.split(":", 1)[1].strip()
+                            elif line.startswith("category:"):
+                                category = line.split(":", 1)[1].strip()
+                    else:
+                        body = content
+                else:
+                    body = content
+
+                # If no frontmatter name, derive from path
+                if not name:
+                    rel = os.path.relpath(skill_md, skills_root)
+                    parts_rel = rel.split(os.sep)
+                    if len(parts_rel) >= 2:
+                        name = parts_rel[-2]  # directory name
+                        if category == "":
+                            category = parts_rel[0] if len(parts_rel) > 1 else ""
+
+                # Extract first meaningful sentence as description fallback
+                if not description:
+                    for line in body.split("\n"):
+                        line = line.strip()
+                        if line and not line.startswith("#") and len(line) > 20:
+                            description = line[:200]
+                            break
+
+                skills.append({
+                    "name": name,
+                    "description": description,
+                    "category": category,
+                    "path": os.path.relpath(skill_md, skills_root),
+                })
+            except Exception:
+                continue
+
+    return jsonify({"skills": skills, "count": len(skills)})
+
+
+@app.route('/api/hermes/skills', methods=['POST'])
+def hermes_create_skill():
+    """Create a new Hermes skill file."""
+    data = request.json or {}
+    name = (data.get('name') or '').strip().lower().replace(' ', '-')
+    description = (data.get('description') or '').strip()
+    if not name:
+        return jsonify({"error": "Skill name is required"}), 400
+    if not description:
+        return jsonify({"error": "Skill description is required"}), 400
+
+    # Write to the hermes-integration skills dir if it exists, else host Hermes
+    skills_dir = Path(__file__).resolve().parent.parent / "hermes-integration" / "hermes-home" / "skills"
+    if not skills_dir.exists():
+        skills_dir = Path.home() / ".hermes" / "skills"
+
+    target = skills_dir / name
+    try:
+        os.makedirs(target, exist_ok=True)
+        skill_content = f"""---
+name: {name}
+description: {description}
+category: custom
+---
+
+# {name}
+
+{description}
+
+## Instructions
+
+- Add detailed instructions here for how the agent should behave when this skill is active.
+- Include step-by-step workflows, pitfalls to avoid, and verification steps.
+"""
+        (target / "SKILL.md").write_text(skill_content)
+        return jsonify({"status": "ok", "name": name, "path": str(target / "SKILL.md")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ============================================================
 # Main
 # ============================================================

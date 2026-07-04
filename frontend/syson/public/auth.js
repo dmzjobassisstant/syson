@@ -3147,7 +3147,8 @@
     activeConversationId: null,
     messages: [],
     mode: 'generate',
-    projectId: null
+    projectId: null,
+    attachedFiles: []  // {name, content, size}
   };
 
   // Agent service — proxied through nginx at /api/agent/ to avoid mixed-content blocking
@@ -3184,6 +3185,12 @@
     }).then(function(r) { return r.json(); });
   }
 
+  function hermesGetSessionMessages(sessionId) {
+    return _origFetch(HERMES_URL + '/api/hermes/sessions/' + sessionId + '/messages', {
+      headers: { 'Authorization': 'Bearer ' + state.token }
+    }).then(function(r) { return r.json(); });
+  }
+
   function hermesDeleteSession(sessionId) {
     return _origFetch(HERMES_URL + '/api/hermes/sessions/' + sessionId, {
       method: 'DELETE',
@@ -3193,6 +3200,18 @@
 
   function hermesHealth() {
     return _origFetch(HERMES_URL + '/api/hermes/health').then(function(r) { return r.json(); });
+  }
+
+  function hermesListSkills() {
+    return _origFetch(HERMES_URL + '/api/hermes/skills').then(function(r) { return r.json(); });
+  }
+
+  function hermesCreateSkill(name, description) {
+    return _origFetch(HERMES_URL + '/api/hermes/skills', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ name: name, description: description })
+    }).then(function(r) { return r.json(); });
   }
 
   // ═══ Legacy agent functions (fallback) ═══
@@ -3311,11 +3330,14 @@
 
     var inputHTML =
       '<div style="border-top:1px solid #e0e0e0;padding:12px 16px;background:#fafafa;">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
           '<span id="syson-agent-status" style="font-size:0.72rem;color:' + CHAT_STYLE.lightText + ';">Checking agent\u2026</span>' +
           '<button id="syson-agent-settings-btn" style="margin-left:auto;padding:3px 10px;font-size:0.7rem;font-weight:600;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';background:#fff;color:' + CHAT_STYLE.text + ';cursor:pointer;">Settings</button>' +
         '</div>' +
+        '<div id="syson-chat-attached-files" style="display:none;margin-bottom:6px;flex-wrap:wrap;gap:4px;"></div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<input type="file" id="syson-chat-file-input" multiple style="display:none;" />' +
+          '<button id="syson-chat-attach-btn" title="Attach files" style="flex-shrink:0;padding:6px 8px;font-size:0.85rem;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';background:#fff;color:' + CHAT_STYLE.lightText + ';cursor:pointer;line-height:1;">\ud83d\udcce</button>' +
           '<textarea id="syson-chat-input" rows="2" placeholder="Describe what you want to build or change\u2026" style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.85rem;resize:none;outline:none;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();document.getElementById(\'syson-chat-send\').click();}"></textarea>' +
           '<button id="syson-chat-send" style="padding:8px 18px;font-size:0.8rem;font-weight:700;border:none;border-radius:' + CHAT_STYLE.radius + ';background:' + CHAT_STYLE.primary + ';color:#fff;cursor:pointer;">Send</button>' +
         '</div>' +
@@ -3339,6 +3361,14 @@
     document.getElementById('syson-chat-input').focus();
     var settingsBtn = document.getElementById('syson-agent-settings-btn');
     if (settingsBtn) settingsBtn.addEventListener('click', openSettingsModal);
+
+    // File attachment setup
+    var attachBtn = document.getElementById('syson-chat-attach-btn');
+    var fileInput = document.getElementById('syson-chat-file-input');
+    if (attachBtn && fileInput) {
+      attachBtn.addEventListener('click', function() { fileInput.click(); });
+      fileInput.addEventListener('change', handleFileAttach);
+    }
 
     loadChatConversations(projectId);
   }
@@ -3378,7 +3408,7 @@
     backdrop.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.55);';
 
     var panel = document.createElement('div');
-    panel.style.cssText = 'position:relative;background:#fff;border-radius:8px;width:min(500px,90vw);padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.3);z-index:1;';
+    panel.style.cssText = 'position:relative;background:#fff;border-radius:8px;width:min(640px,94vw);max-height:85vh;display:flex;flex-direction:column;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.3);z-index:1;';
 
     panel.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
@@ -3386,7 +3416,7 @@
         '<button id="syson-settings-close" style="background:none;border:none;font-size:1.4rem;color:' + CHAT_STYLE.lightText + ';cursor:pointer;line-height:1;">\u00d7</button>' +
       '</div>' +
       '<div id="syson-settings-loading" style="text-align:center;padding:20px;color:' + CHAT_STYLE.lightText + ';">Loading\u2026</div>' +
-      '<div id="syson-settings-form" style="display:none;">' +
+      '<div id="syson-settings-form" style="display:none;overflow-y:auto;flex:1;">' +
         '<div style="margin-bottom:14px;">' +
           '<label style="display:block;font-size:0.8rem;font-weight:600;color:' + CHAT_STYLE.text + ';margin-bottom:4px;">LLM API Endpoint</label>' +
           '<input id="syson-settings-endpoint" placeholder="https://api.openai.com/v1/chat/completions" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';font-family:' + CHAT_STYLE.font + ';font-size:0.82rem;box-sizing:border-box;" />' +
@@ -3409,6 +3439,26 @@
           '<div style="font-weight:700;margin-bottom:4px;">\u2194 Hermes Agent Container</div>' +
           '<div id="syson-settings-hermes-status">Checking Hermes status\u2026</div>' +
           '<div style="margin-top:4px;color:#6366f1;">Saving settings will sync the API key to the Hermes container and restart it automatically.</div>' +
+        '</div>' +
+        // ═══ Skills Browser ═══
+        '<div style="margin-bottom:14px;border:1px solid #e0e0e0;border-radius:' + CHAT_STYLE.radius + ';overflow:hidden;">' +
+          '<div id="syson-settings-skills-header" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8f8f8;cursor:pointer;user-select:none;border-bottom:1px solid #e0e0e0;">' +
+            '<span style="font-size:0.85rem;font-weight:700;color:' + CHAT_STYLE.text + ';">\ud83e\udde0 Hermes Skills <span id="syson-settings-skills-count" style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';font-weight:400;"></span></span>' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<button id="syson-settings-new-skill-btn" style="padding:2px 8px;font-size:0.65rem;font-weight:700;border:1px solid #c7d2fe;border-radius:3px;background:#eef2ff;color:#4338ca;cursor:pointer;">+ New</button>' +
+              '<span id="syson-settings-skills-chevron" style="font-size:0.8rem;color:' + CHAT_STYLE.lightText + ';">\u25bc</span>' +
+            '</div>' +
+          '</div>' +
+          '<div id="syson-settings-skills-body" style="max-height:240px;overflow-y:auto;">' +
+            '<div style="text-align:center;padding:12px;color:' + CHAT_STYLE.lightText + ';font-size:0.72rem;">Loading skills\u2026</div>' +
+          '</div>' +
+          '<div id="syson-settings-skills-new" style="display:none;padding:8px 12px;border-top:1px solid #e0e0e0;background:#fafafa;">' +
+            '<div style="display:flex;gap:6px;">' +
+              '<input id="syson-settings-new-skill-name" placeholder="skill-name" style="flex:1;padding:5px 8px;border:1px solid #ddd;border-radius:3px;font-size:0.72rem;font-family:' + CHAT_STYLE.font + ';" />' +
+              '<button id="syson-settings-create-skill" style="padding:5px 12px;font-size:0.7rem;font-weight:700;border:none;border-radius:3px;background:' + CHAT_STYLE.primary + ';color:#fff;cursor:pointer;">Create</button>' +
+            '</div>' +
+            '<textarea id="syson-settings-new-skill-desc" placeholder="What should this skill teach the agent?" rows="2" style="width:100%;margin-top:6px;padding:5px 8px;border:1px solid #ddd;border-radius:3px;font-size:0.72rem;font-family:' + CHAT_STYLE.font + ';resize:vertical;box-sizing:border-box;"></textarea>' +
+          '</div>' +
         '</div>' +
         '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;">' +
           '<button id="syson-settings-cancel" style="padding:8px 16px;font-size:0.82rem;font-weight:600;border:1px solid #ddd;border-radius:' + CHAT_STYLE.radius + ';background:transparent;color:' + CHAT_STYLE.lightText + ';cursor:pointer;">Cancel</button>' +
@@ -3447,6 +3497,68 @@
         }
       }
     });
+
+    // Load skills after settings are shown
+    loadSettingsSkills();
+
+    // Skills header toggle
+    var skillsHeader = document.getElementById('syson-settings-skills-header');
+    if (skillsHeader) {
+      skillsHeader.addEventListener('click', function(e) {
+        // Don't toggle if clicking the New button
+        if (e.target && e.target.id === 'syson-settings-new-skill-btn') return;
+        var body = document.getElementById('syson-settings-skills-body');
+        var chev = document.getElementById('syson-settings-skills-chevron');
+        if (body && chev) {
+          var hidden = body.style.display === 'none';
+          body.style.display = hidden ? 'block' : 'none';
+          chev.textContent = hidden ? '\u25bc' : '\u25b6';
+        }
+      });
+    }
+
+    // New skill button: toggle the creation form
+    var newSkillBtn = document.getElementById('syson-settings-new-skill-btn');
+    if (newSkillBtn) {
+      newSkillBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var newSection = document.getElementById('syson-settings-skills-new');
+        if (newSection) {
+          newSection.style.display = newSection.style.display === 'block' ? 'none' : 'block';
+        }
+      });
+    }
+
+    // Create skill button
+    var createSkillBtn = document.getElementById('syson-settings-create-skill');
+    if (createSkillBtn) {
+      createSkillBtn.addEventListener('click', function() {
+        var nameInput = document.getElementById('syson-settings-new-skill-name');
+        var descInput = document.getElementById('syson-settings-new-skill-desc');
+        var name = (nameInput && nameInput.value || '').trim();
+        var desc = (descInput && descInput.value || '').trim();
+        if (!name) { alert('Enter a skill name.'); return; }
+        if (!desc) { alert('Enter a skill description.'); return; }
+        createSkillBtn.disabled = true;
+        createSkillBtn.textContent = 'Creating...';
+        hermesCreateSkill(name, desc).then(function(r) {
+          if (r.status === 'ok') {
+            if (nameInput) nameInput.value = '';
+            if (descInput) descInput.value = '';
+            var newSection = document.getElementById('syson-settings-skills-new');
+            if (newSection) newSection.style.display = 'none';
+            loadSettingsSkills();
+          } else {
+            alert('Failed: ' + (r.error || 'Unknown error'));
+          }
+        }).catch(function(err) {
+          alert('Error: ' + err.message);
+        }).finally(function() {
+          createSkillBtn.disabled = false;
+          createSkillBtn.textContent = 'Create';
+        });
+      });
+    }
 
     document.getElementById('syson-settings-save').addEventListener('click', function() {
       var endpoint = document.getElementById('syson-settings-endpoint').value.trim();
@@ -3488,6 +3600,50 @@
         saveBtn.textContent = 'Save';
         alert('Failed to save: ' + err.message);
       });
+    });
+  }
+
+  // ═══ Skills browser ═══
+
+  function loadSettingsSkills() {
+    hermesListSkills().then(function(data) {
+      var skills = (data && data.skills) || [];
+      var countEl = document.getElementById('syson-settings-skills-count');
+      if (countEl) countEl.textContent = '(' + skills.length + ')';
+      var body = document.getElementById('syson-settings-skills-body');
+      if (!body) return;
+      if (!skills.length) {
+        body.innerHTML = '<div style="text-align:center;padding:12px;color:' + CHAT_STYLE.lightText + ';font-size:0.72rem;">No skills found. Create one below.</div>';
+        return;
+      }
+      // Group by category
+      var cats = {};
+      for (var i = 0; i < skills.length; i++) {
+        var cat = skills[i].category || 'uncategorised';
+        if (!cats[cat]) cats[cat] = [];
+        cats[cat].push(skills[i]);
+      }
+      var html = '';
+      var catKeys = Object.keys(cats).sort();
+      for (var ci = 0; ci < catKeys.length; ci++) {
+        var catName = catKeys[ci];
+        var catSkills = cats[catName];
+        html += '<div style="padding:4px 12px;font-size:0.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;background:#f8f8f8;">' + escapeHtml(catName) + '</div>';
+        for (var si = 0; si < catSkills.length; si++) {
+          var s = catSkills[si];
+          html += '<div style="display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:0.72rem;">' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="font-weight:600;color:' + CHAT_STYLE.text + ';">' + escapeHtml(s.name) + '</div>' +
+              '<div style="color:' + CHAT_STYLE.lightText + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(s.description || '') + '</div>' +
+            '</div>' +
+            '<span style="flex-shrink:0;font-size:0.6rem;color:#cbd5e1;margin-left:6px;">' + escapeHtml(s.path || '') + '</span>' +
+            '</div>';
+        }
+      }
+      body.innerHTML = html;
+    }).catch(function() {
+      var body = document.getElementById('syson-settings-skills-body');
+      if (body) body.innerHTML = '<div style="text-align:center;padding:12px;color:#e74c3c;font-size:0.72rem;">Failed to load skills</div>';
     });
   }
 
@@ -3540,7 +3696,7 @@
       var fw = isActive ? '700' : '400';
       var preview = (conv.lastMessage || '').substring(0, 50);
       return '<div class="syson-chat-conv-item" data-conv-id="' + escapeHtml(conv.id) + '" style="padding:10px 16px;cursor:pointer;background:' + bg + ';border-bottom:1px solid #eee;font-weight:' + fw + ';display:flex;align-items:center;gap:8px;">' +
-        '<div style="flex:1;min-width:0;" onclick="event.stopPropagation();">' +
+        '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:0.82rem;color:' + CHAT_STYLE.text + ';">' + escapeHtml(conv.title || 'Chat ' + (conv.id || '').substring(0, 6)) + '</div>' +
           '<div style="font-size:0.7rem;color:' + CHAT_STYLE.lightText + ';margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(preview) + '</div>' +
         '</div>' +
@@ -3614,11 +3770,10 @@
     }
     renderConversationList(_chatState.conversations);
 
-    // Try Hermes session first
-    hermesGetSession(convId)
+    // Try Hermes session messages first
+    hermesGetSessionMessages(convId)
       .then(function(data) {
-        var session = data.session || data;
-        var msgs = session.messages || data.messages || [];
+        var msgs = (Array.isArray(data) ? data : (data.messages || data.data || []));
         _chatState.messages = msgs.map(function(m) {
           return { role: m.role, content: m.content, isHermes: true };
         });
@@ -3734,6 +3889,64 @@
     '</div>';
   }
 
+  // ═══ File attachment handlers ═══
+
+  function handleFileAttach(e) {
+    var files = e.target.files;
+    if (!files || !files.length) return;
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      // Skip files > 5MB
+      if (f.size > 5 * 1024 * 1024) {
+        alert('File too large: ' + f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + 'MB). Max 5MB.');
+        continue;
+      }
+      var reader = new FileReader();
+      reader.onload = (function(name, size) {
+        return function(ev) {
+          _chatState.attachedFiles.push({ name: name, content: ev.target.result, size: size });
+          renderAttachedFiles();
+        };
+      })(f.name, f.size);
+      reader.readAsText(f);
+    }
+    // Reset file input so same file can be re-selected
+    e.target.value = '';
+  }
+
+  function renderAttachedFiles() {
+    var container = document.getElementById('syson-chat-attached-files');
+    if (!container) return;
+    if (!_chatState.attachedFiles.length) {
+      container.style.display = 'none';
+      container.innerHTML = '';
+      return;
+    }
+    container.style.display = 'flex';
+    container.innerHTML = _chatState.attachedFiles.map(function(af, idx) {
+      var sizeStr = af.size < 1024 ? af.size + 'B' : af.size < 1024 * 1024 ? (af.size / 1024).toFixed(1) + 'KB' : (af.size / 1024 / 1024).toFixed(1) + 'MB';
+      return '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#e8ecf4;border-radius:99px;font-size:0.7rem;color:' + CHAT_STYLE.text + ';max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+        escapeHtml(af.name) + ' (' + sizeStr + ')' +
+        '<button onclick="_chatState.attachedFiles.splice(' + idx + ',1);renderAttachedFiles();" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:0.9rem;line-height:1;padding:0;">\u00d7</button>' +
+        '</span>';
+    }).join('');
+  }
+
+  function clearAttachedFiles() {
+    _chatState.attachedFiles = [];
+    renderAttachedFiles();
+  }
+
+  function buildFileContext() {
+    if (!_chatState.attachedFiles.length) return '';
+    var ctx = '\n\n[Attached Files]\n';
+    for (var i = 0; i < _chatState.attachedFiles.length; i++) {
+      var af = _chatState.attachedFiles[i];
+      ctx += '\n--- File: ' + af.name + ' ---\n' + af.content + '\n';
+    }
+    return ctx;
+  }
+
   function addChatMessage(role, content, extra) {
     var msg = { role: role, content: content };
     if (extra) {
@@ -3751,12 +3964,21 @@
     var input = document.getElementById('syson-chat-input');
     if (!input) return;
     var prompt = input.value.trim();
+    // Include attached file content as context
+    var fileCtx = buildFileContext();
+    var fullPrompt = prompt + fileCtx;
     if (!prompt) return;
 
     var projectId = _chatState.projectId;
 
     input.value = '';
+    clearAttachedFiles();
     addChatMessage('user', prompt);
+    if (fileCtx) {
+      // Show which files are attached in the chat bubble
+      var filenames = _chatState.attachedFiles.map(function(f) { return f.name; });
+      // Files already cleared, but the content is in the message
+    }
     addChatMessage('assistant', '\u23f3 Thinking\u2026', { isLoading: true });
 
     var sendBtn = document.getElementById('syson-chat-send');
@@ -3774,7 +3996,7 @@
     // ═══ Try Hermes first, fall back to old agent ═══
     if (_chatState.activeConversationId) {
       // Existing Hermes session — send message directly
-      hermesChat(_chatState.activeConversationId, prompt).then(function(result) {
+      hermesChat(_chatState.activeConversationId, fullPrompt).then(function(result) {
         finishSend();
         if (result.conversationId || result.session_id) {
           _chatState.activeConversationId = result.conversationId || result.session_id;
@@ -3785,7 +4007,7 @@
       }).catch(function(err) {
         finishSend();
         // Fallback to old agent
-        agentProcess(projectId, prompt, null).then(function(result) {
+        agentProcess(projectId, fullPrompt, null).then(function(result) {
           if (result.conversationId) _chatState.activeConversationId = result.conversationId;
           else if (result.conversation_id) _chatState.activeConversationId = result.conversation_id;
           var content = result.response || result.chat_feedback || result.error || JSON.stringify(result);
@@ -3804,7 +4026,7 @@
         _chatState.activeConversationId = sessionId;
 
         // Now send the actual message
-        return hermesChat(sessionId, prompt);
+        return hermesChat(sessionId, fullPrompt);
       }).then(function(result) {
         finishSend();
         var content = result.response || result.error || 'No response';
@@ -3813,7 +4035,7 @@
       }).catch(function(err) {
         // Hermes failed — fall back to old agent
         finishSend();
-        agentProcess(projectId, prompt, null).then(function(result) {
+        agentProcess(projectId, fullPrompt, null).then(function(result) {
           if (result.conversationId) _chatState.activeConversationId = result.conversationId;
           else if (result.conversation_id) _chatState.activeConversationId = result.conversation_id;
           var content = result.response || result.chat_feedback || result.error || JSON.stringify(result);
@@ -3983,5 +4205,79 @@
       addChatMessage('assistant', '\u2713 ' + executed.length + ' change(s) executed successfully.');
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // Edge UX Enhancement — better selection highlighting & interaction
+  // Injected at page load; patches ReactFlow edges via CSS + DOM observer.
+  // Addresses: smoothstep selection highlight not covering full path,
+  //            hard-to-click connectors.
+  // ---------------------------------------------------------------------------
+  (function initEdgeUXPatch() {
+    // 1. Inject CSS for better edge selection highlighting
+    var style = document.createElement('style');
+    style.id = 'syson-edge-ux';
+    style.textContent = [
+      // Wider hit area for edge interaction (invisible overlay)
+      '.react-flow__edge { cursor: pointer !important; }',
+      '.react-flow__edge .react-flow__edge-path { stroke-width: 2; }',
+      // Selection highlight: thicker, more visible
+      '.react-flow__edge.selected .react-flow__edge-path {',
+      '  stroke: #3b82f6 !important;',        // Bright blue selection
+      '  stroke-width: 3 !important;',          // Thicker when selected
+      '  filter: drop-shadow(0 0 4px rgba(59,130,246,0.5));',
+      '}',
+      // Hover state
+      '.react-flow__edge:hover .react-flow__edge-path {',
+      '  stroke-width: 3 !important;',
+      '}',
+      // Interaction overlay for edges — makes clicking easier
+      '.react-flow__edge .react-flow__edge-interaction {',
+      '  stroke-width: 12 !important;',        // 12px invisible hit area
+      '  cursor: pointer !important;',
+      '}',
+      // Edge label styling
+      '.react-flow__edge .react-flow__edgelabel-renderer {',
+      '  font-size: 11px;',
+      '  font-weight: 600;',
+      '  pointer-events: none;',               // Don't block edge clicks
+      '}',
+    ].join('\n');
+    document.head.appendChild(style);
+
+    // 2. DOM observer to patch edges as they render  
+    var observer = new MutationObserver(function() {
+      var edges = document.querySelectorAll('.react-flow__edge');
+      edges.forEach(function(edge) {
+        // Ensure edge has interaction layer (ReactFlow creates this)
+        var interaction = edge.querySelector('.react-flow__edge-interaction');
+        if (interaction) {
+          interaction.setAttribute('stroke-width', '12');
+        }
+        // Ensure edge path is visible
+        var path = edge.querySelector('.react-flow__edge-path');
+        if (path) {
+          if (!path.hasAttribute('data-syson-patched')) {
+            path.setAttribute('data-syson-patched', '1');
+          }
+        }
+      });
+    });
+
+    // Start observing once body exists
+    function startObserving() {
+      if (!document.body) {
+        setTimeout(startObserving, 100);
+        return;
+      }
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'data-testid']
+      });
+    }
+    startObserving();
+  })();
+
 
 })();

@@ -157,44 +157,102 @@ public class SysMLv2PropertiesConfigurer implements IPropertiesDescriptionRegist
         form.setDomainType(domainType);
         form.setTitleExpression("SysON Details View");
 
-        // Page 1: Identity — name, shortName, isSufficient, comment, documentation
-        PageDescription pageIdentity = FormFactory.eINSTANCE.createPageDescription();
-        pageIdentity.setName("SysON-DetailsView-Identity");
-        pageIdentity.setDomainType(domainType);
-        pageIdentity.setPreconditionExpression("");
-        pageIdentity.setLabelExpression("Identity");
-        pageIdentity.getGroups().add(this.createCorePropertiesGroup());
-        pageIdentity.getGroups().add(this.createVisibilityPropertyGroup());
-        pageIdentity.getGroups().add(this.createFeatureValuePropertiesGroup());
+        // Page 1: Essentials — identity, type, common relationships, docs
+        PageDescription pageEssentials = FormFactory.eINSTANCE.createPageDescription();
+        pageEssentials.setName("SysON-DetailsView-Essentials");
+        pageEssentials.setDomainType(domainType);
+        pageEssentials.setPreconditionExpression("");
+        pageEssentials.setLabelExpression("Essentials");
+        pageEssentials.getGroups().add(this.createCorePropertiesGroup());
+        pageEssentials.getGroups().add(this.createVisibilityPropertyGroup());
+        pageEssentials.getGroups().add(this.createFeatureValuePropertiesGroup());
+        // Key relationship refs inline (no separate group wrappers)
+        pageEssentials.getGroups().add(this.createTypeAndInheritanceGroup());
+        pageEssentials.getGroups().add(this.createRedefinitionAndSubsettingGroup());
 
-        // Page 2: Relationships — redefinition, subsetting, typing, classification, transition, etc.
-        PageDescription pageRelationships = FormFactory.eINSTANCE.createPageDescription();
-        pageRelationships.setName("SysON-DetailsView-Relationships");
-        pageRelationships.setDomainType(domainType);
-        pageRelationships.setPreconditionExpression("");
-        pageRelationships.setLabelExpression("Relationships");
-        pageRelationships.getGroups().add(this.createExtraRedefinitionPropertiesGroup());
-        pageRelationships.getGroups().add(this.createExtraSubsettingPropertiesGroup());
-        pageRelationships.getGroups().add(this.createExtraFeatureTypingPropertiesGroup());
-        pageRelationships.getGroups().add(this.createExtraSubclassificationPropertiesGroup());
-        pageRelationships.getGroups().add(this.createExtraStatesubactionMembershipKindPropertiesGroup());
-        pageRelationships.getGroups().add(this.createExtraRequirementConstraintMembershipPropertiesGroup());
-        pageRelationships.getGroups().add(this.createExtraAcceptActionUsagePropertiesGroup());
-        pageRelationships.getGroups().add(this.createExtraTransitionSourceTargetPropertiesGroup());
+        // Page 2: Details — specialized relations, transition, state, action, advanced features
+        PageDescription pageDetails = FormFactory.eINSTANCE.createPageDescription();
+        pageDetails.setName("SysON-DetailsView-Details");
+        pageDetails.setDomainType(domainType);
+        pageDetails.setPreconditionExpression("");
+        pageDetails.setLabelExpression("Details");
+        pageDetails.getGroups().add(this.createExtraSubclassificationPropertiesGroup());
+        pageDetails.getGroups().add(this.createExtraStatesubactionMembershipKindPropertiesGroup());
+        pageDetails.getGroups().add(this.createExtraTransitionSourceTargetPropertiesGroup());
+        pageDetails.getGroups().add(this.createExtraAcceptActionUsagePropertiesGroup());
+        pageDetails.getGroups().add(this.createExtraRequirementConstraintMembershipPropertiesGroup());
+        pageDetails.getGroups().add(this.createAdvancedPropertiesGroup());
 
-        // Page 3: Advanced — all other structural features
-        PageDescription pageAdvanced = FormFactory.eINSTANCE.createPageDescription();
-        pageAdvanced.setName("SysON-DetailsView-Advanced");
-        pageAdvanced.setDomainType(domainType);
-        pageAdvanced.setPreconditionExpression("");
-        pageAdvanced.setLabelExpression("Advanced");
-        pageAdvanced.getGroups().add(this.createAdvancedPropertiesGroup());
-
-        form.getPages().add(pageIdentity);
-        form.getPages().add(pageRelationships);
-        form.getPages().add(pageAdvanced);
+        form.getPages().add(pageEssentials);
+        form.getPages().add(pageDetails);
 
         return form;
+    }
+
+    /**
+     * Consolidated group: feature typing (Typed by) + subclassification (Specializes).
+     * These are the most common type/definition relationships users interact with.
+     */
+    private GroupDescription createTypeAndInheritanceGroup() {
+        GroupDescription group = FormFactory.eINSTANCE.createGroupDescription();
+        group.setDisplayMode(GroupDisplayMode.LIST);
+        group.setName("TypeAndInheritance");
+        group.setLabelExpression("");
+        group.setSemanticCandidatesExpression("aql:self");
+
+        // Typed by (FeatureTyping) — for features with a type
+        ReferenceWidgetDescription typedByWidget = ReferenceFactory.eINSTANCE.createReferenceWidgetDescription();
+        typedByWidget.setName("TypeWidget");
+        typedByWidget.setLabelExpression("Typed by");
+        typedByWidget.setReferenceNameExpression(SysmlPackage.eINSTANCE.getFeature_Type().getName());
+        typedByWidget.setReferenceOwnerExpression(AQLUtils.getSelfServiceCallExpression("getFeatureTypingOwnerExpression"));
+        typedByWidget.setIsEnabledExpression(AQL_NOT_SELF_IS_READ_ONLY);
+        ChangeContext setTypedByWidget = ViewFactory.eINSTANCE.createChangeContext();
+        setTypedByWidget.setExpression(AQLUtils.getSelfServiceCallExpression("handleFeatureTypingNewValue", ViewFormDescriptionConverter.NEW_VALUE));
+        typedByWidget.getBody().add(setTypedByWidget);
+
+        group.getChildren().add(typedByWidget);
+        return group;
+    }
+
+    /**
+     * Consolidated group: redefinition + subsetting.
+     * These are the most common specialization relationships.
+     */
+    private GroupDescription createRedefinitionAndSubsettingGroup() {
+        GroupDescription group = FormFactory.eINSTANCE.createGroupDescription();
+        group.setDisplayMode(GroupDisplayMode.LIST);
+        group.setName("RedefinitionSubsetting");
+        group.setLabelExpression("");
+        group.setSemanticCandidatesExpression("aql:self");
+
+        // Redefines
+        ReferenceWidgetDescription redefWidget = ReferenceFactory.eINSTANCE.createReferenceWidgetDescription();
+        redefWidget.setName("RedefWidget");
+        redefWidget.setLabelExpression("Redefines");
+        redefWidget.setReferenceNameExpression(SysmlPackage.eINSTANCE.getRedefinition_RedefinedFeature().getName());
+        redefWidget.setReferenceOwnerExpression("aql:self.ownedRelationship->filter(sysml::Redefinition)->first()");
+        redefWidget.setIsEnabledExpression(AQL_NOT_SELF_IS_READ_ONLY);
+        ChangeContext setRedefWidget = ViewFactory.eINSTANCE.createChangeContext();
+        setRedefWidget.setExpression("aql:self.handleReferenceWidgetNewValue('" + SysmlPackage.eINSTANCE.getRedefinition_RedefinedFeature().getName() + "', " + ViewFormDescriptionConverter.NEW_VALUE
+                + LabelConstants.CLOSE_PARENTHESIS);
+        redefWidget.getBody().add(setRedefWidget);
+
+        // Subsets
+        ReferenceWidgetDescription subsetsWidget = ReferenceFactory.eINSTANCE.createReferenceWidgetDescription();
+        subsetsWidget.setName("SubsetsWidget");
+        subsetsWidget.setLabelExpression("Subsets");
+        subsetsWidget.setReferenceNameExpression(SysmlPackage.eINSTANCE.getSubsetting_SubsettedFeature().getName());
+        subsetsWidget.setReferenceOwnerExpression("aql:self.ownedRelationship->select(r | r.oclIsTypeOf(sysml::Subsetting))->first()");
+        subsetsWidget.setIsEnabledExpression(AQL_NOT_SELF_IS_READ_ONLY);
+        ChangeContext setSubsetsWidget = ViewFactory.eINSTANCE.createChangeContext();
+        setSubsetsWidget.setExpression("aql:self.handleReferenceWidgetNewValue('" + SysmlPackage.eINSTANCE.getSubsetting_SubsettedFeature().getName() + "', " + ViewFormDescriptionConverter.NEW_VALUE
+                + LabelConstants.CLOSE_PARENTHESIS);
+        subsetsWidget.getBody().add(setSubsetsWidget);
+
+        group.getChildren().add(redefWidget);
+        group.getChildren().add(subsetsWidget);
+        return group;
     }
 
     /**
