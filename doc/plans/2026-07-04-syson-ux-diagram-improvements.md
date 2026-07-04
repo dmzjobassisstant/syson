@@ -83,6 +83,30 @@
 4. **Quick-add tools** — requires AQL service support in `DetailsViewService`, not implemented
 5. **`packages/reqif/package.json`** — non-critical `"type": "module"` warning in RM repo, unrelated
 
+### 4. Edge Routing Improvements (Connector Drawing)
+
+**Files affected:**
+- `frontend/syson/src/extensions/SysONEdgeRouting.ts` (**NEW**)
+- `frontend/syson/src/index.tsx` (import added)
+
+**What changed:**
+- Ported connector drawing algorithms from SysMLDiagramTool:
+  - `getEdgePoint()` — edge clipping to symbol boundaries (stops at box edge, not center)
+  - `computeBezierControlPoint()` — perpendicular-offset bezier for smooth curves
+    (cpX = (sx+ex)/2 - dy*0.2, cpY = (sy+ey)/2 + dx*0.2)
+  - `RELATIONSHIP_ROUTING` map — assigns ReactFlow routing per relationship type:
+    - Transitions/Succession → `bezier` (smooth curves like SysMLDiagramTool)
+    - Structural (Subsetting, Dependency, etc.) → `smoothstep` (orthogonal with curved corners)
+    - Flow/Value → `straight`
+- Runtime ReactFlow injection: patches `defaultEdgeOptions.type = 'smoothstep'` and
+  increases `interactionWidth` to 20px for easier clicking
+- All algorithms are visual-only — no KerML/SysMLv2 metamodel change
+
+**Merge conflict risk: LOW**
+- `SysONEdgeRouting.ts` is a NEW file — no upstream conflict possible
+- `index.tsx` import is additive (side-effect import)
+- Runtime injection uses `setInterval` with timeout to avoid blocking if ReactFlow not yet loaded
+
 ## Verification
 
 ```bash

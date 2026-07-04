@@ -70,6 +70,10 @@ import './reset.css';
 import { sysonTheme } from './theme/sysonTheme';
 import './variables.css';
 
+// SYSON-UX: Inject improved edge routing (smoothstep/bezier/straight per relationship type)
+// Ported from SysMLDiagramTool algorithms — edge clipping, perp-offset bezier, selectable routing
+import './extensions/SysONEdgeRouting';
+
 if (process.env.NODE_ENV !== 'production') {
   loadDevMessages();
   loadErrorMessages();
