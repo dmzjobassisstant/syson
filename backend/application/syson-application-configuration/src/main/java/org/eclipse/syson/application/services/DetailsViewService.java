@@ -19,6 +19,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiFunction;
 
+import org.eclipse.emf.common.util.BasicEList;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.Enumerator;
 import org.eclipse.emf.ecore.EAttribute;
@@ -114,6 +115,31 @@ public class DetailsViewService {
 
     public List<EStructuralFeature> getCoreFeatures(Element element) {
         return new CoreFeaturesSwitch().doSwitch(element);
+    }
+
+    /**
+     * Returns the inherited memberships of this element if it is a Type (Definition/Usage).
+     * This populates the "Inherited" section in the properties panel, showing
+     * features inherited from supertypes via Subclassification.
+     * Returns empty list for non-Type elements.
+     */
+    public List<Membership> getInheritedMembershipsForDisplay(Element element) {
+        if (element instanceof Type type) {
+            // Get inherited memberships, excluding already-owned ones
+            return type.inheritedMemberships(new BasicEList<>(), new BasicEList<>(), false);
+        }
+        return List.of();
+    }
+
+    /**
+     * Returns the owned features of this element, filtered to only show
+     * feature memberships (not other relationship memberships).
+     */
+    public List<FeatureMembership> getOwnedFeatureMemberships(Element element) {
+        if (element instanceof Type type) {
+            return type.getOwnedFeatureMembership();
+        }
+        return List.of();
     }
 
     public boolean setNewValue(Element element, EStructuralFeature eStructuralFeature, Object newValue) {
